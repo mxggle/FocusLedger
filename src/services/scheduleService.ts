@@ -65,5 +65,23 @@ export const scheduleService = {
 
       await taskTemplateRepository.setOccurrenceTask(occurrence.id, task.id);
     }
+  },
+
+  async skipOccurrenceForTask(taskId: string): Promise<void> {
+    const task = await taskRepository.getById(taskId);
+    if (!task) {
+      throw new Error("Task not found");
+    }
+    if (!task.template_id || !task.due_date) {
+      throw new Error("Only generated plan tasks can be skipped");
+    }
+
+    const droppedAt = new Date().toISOString();
+    await taskRepository.updateTask(task.id, {
+      status: "dropped",
+      completed_at: null,
+      dropped_at: droppedAt
+    });
+    await taskTemplateRepository.skipOccurrence(task.template_id, task.due_date, task.id);
   }
 };

@@ -212,5 +212,32 @@ export const taskTemplateRepository = {
       new Date().toISOString(),
       occurrenceId
     ]);
+  },
+
+  async skipOccurrence(templateId: string, date: string, taskId: string | null = null): Promise<TemplateOccurrence> {
+    let occurrence = await this.getOccurrence(templateId, date);
+    if (!occurrence) {
+      occurrence = await this.createOccurrence(templateId, date, taskId);
+    }
+
+    const db = await getDatabase();
+    const now = new Date().toISOString();
+    const nextTaskId = occurrence.task_id ?? taskId;
+
+    await db.execute(
+      `UPDATE template_occurrences
+       SET task_id = $1,
+        skipped_at = $2,
+        updated_at = $3
+       WHERE template_id = $4 AND date = $5`,
+      [nextTaskId, now, now, templateId, date]
+    );
+
+    return {
+      ...occurrence,
+      task_id: nextTaskId,
+      skipped_at: now,
+      updated_at: now
+    };
   }
 };

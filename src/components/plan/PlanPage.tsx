@@ -1,5 +1,6 @@
 import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { validateTemplateSchedule } from "../../services/scheduleConflictService";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
 import type { RecurrenceType, TaskPriority, TaskTemplate } from "../../types";
@@ -41,6 +42,11 @@ function toggleDay(days: number[], day: number): number[] {
   return days.includes(day) ? days.filter((value) => value !== day) : [...days, day].sort((a, b) => a - b);
 }
 
+function parseEstimate(value: string): number | null {
+  const parsed = Number(value);
+  return value && Number.isFinite(parsed) ? parsed : null;
+}
+
 function DayPicker({ days, onChange }: { days: number[]; onChange: (days: number[]) => void }) {
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -73,6 +79,21 @@ export function PlanPage() {
   const [endTime, setEndTime] = useState("");
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>("daily");
   const [recurrenceDays, setRecurrenceDays] = useState([1, 2, 3, 4, 5]);
+  const validation = useMemo(
+    () =>
+      validateTemplateSchedule(
+        {
+          title,
+          planned_start_time: startTime,
+          planned_end_time: endTime || null,
+          estimated_minutes: parseEstimate(estimate),
+          recurrence_type: recurrenceType,
+          recurrence_days: recurrenceType === "weekly" ? recurrenceDays : []
+        },
+        templates
+      ),
+    [endTime, estimate, recurrenceDays, recurrenceType, startTime, templates, title]
+  );
 
   useEffect(() => {
     setCategoryId(defaultCategoryId || "inbox");
@@ -84,7 +105,7 @@ export function PlanPage() {
       title,
       category_id: categoryId || "inbox",
       priority,
-      estimated_minutes: estimate ? Number(estimate) : null,
+      estimated_minutes: parseEstimate(estimate),
       planned_start_time: startTime,
       planned_end_time: endTime || null,
       recurrence_type: recurrenceType,
@@ -160,8 +181,14 @@ export function PlanPage() {
             </div>
           ) : null}
 
+          {!validation.ok ? (
+            <div className="mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              {validation.message}
+            </div>
+          ) : null}
+
           <div className="mt-4 flex justify-end">
-            <Button type="submit" disabled={!title.trim() || !startTime}>
+            <Button type="submit" disabled={!title.trim() || !startTime || !validation.ok}>
               <Plus className="h-4 w-4" />
               Add plan
             </Button>
@@ -196,13 +223,31 @@ function PlanItem({ template }: { template: TaskTemplate }) {
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>(template.recurrence_type);
   const [recurrenceDays, setRecurrenceDays] = useState(template.recurrence_days);
   const category = categories.find((item) => item.id === template.category_id);
+  const templates = useTaskStore((state) => state.scheduleTemplates);
+  const validation = useMemo(
+    () =>
+      validateTemplateSchedule(
+        {
+          ...template,
+          title,
+          planned_start_time: startTime,
+          planned_end_time: endTime || null,
+          estimated_minutes: parseEstimate(estimate),
+          recurrence_type: recurrenceType,
+          recurrence_days: recurrenceType === "weekly" ? recurrenceDays : []
+        },
+        templates,
+        template.id
+      ),
+    [endTime, estimate, recurrenceDays, recurrenceType, startTime, template, templates, title]
+  );
 
   async function saveEdit() {
     await updateTemplate(template.id, {
       title,
       category_id: categoryId,
       priority,
-      estimated_minutes: estimate ? Number(estimate) : null,
+      estimated_minutes: parseEstimate(estimate),
       planned_start_time: startTime,
       planned_end_time: endTime || null,
       recurrence_type: recurrenceType,
@@ -259,12 +304,17 @@ function PlanItem({ template }: { template: TaskTemplate }) {
             <DayPicker days={recurrenceDays} onChange={setRecurrenceDays} />
           </div>
         ) : null}
+        {!validation.ok ? (
+          <div className="mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            {validation.message}
+          </div>
+        ) : null}
         <div className="mt-4 flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
             <X className="h-4 w-4" />
             Cancel
           </Button>
-          <Button type="button" onClick={saveEdit} disabled={!title.trim() || !startTime}>
+          <Button type="button" onClick={saveEdit} disabled={!title.trim() || !startTime || !validation.ok}>
             <Check className="h-4 w-4" />
             Save
           </Button>
@@ -281,6 +331,7 @@ function PlanItem({ template }: { template: TaskTemplate }) {
             <div className="text-sm font-semibold">{formatTimeRange(template)}</div>
             <h3 className="truncate text-sm font-semibold">{template.title}</h3>
             <Badge>{formatRecurrence(template)}</Badge>
+            {!validation.ok ? <Badge className="bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-200">Conflict</Badge> : null}
             {!template.enabled ? <Badge className="bg-zinc-100 text-zinc-600">Off</Badge> : null}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">

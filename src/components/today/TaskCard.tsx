@@ -1,8 +1,10 @@
-import { Check, Pencil, Play, RotateCcw, Trash2, X } from "lucide-react";
-import { useState } from "react";
+import { CalendarX, Check, Pencil, Play, RotateCcw, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { validateTaskSchedule } from "../../services/scheduleConflictService";
 import { useTaskStore } from "../../stores/taskStore";
 import { getLiveTaskSeconds, useTimerStore } from "../../stores/timerStore";
 import type { Task, TaskPriority } from "../../types";
+import { toDateKey } from "../../utils/date";
 import { formatDurationCompact } from "../../utils/duration";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -16,13 +18,25 @@ const statusClass = {
   dropped: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-200"
 };
 
+function timeToSortOrder(time: string): number {
+  const [hours = "0", minutes = "0"] = time.split(":");
+  return Number(hours) * 60 + Number(minutes);
+}
+
+function parseEstimate(value: string): number | null {
+  const parsed = Number(value);
+  return value && Number.isFinite(parsed) ? parsed : null;
+}
+
 export function TaskCard({ task }: { task: Task }) {
   const categories = useTaskStore((state) => state.categories);
+  const tasks = useTaskStore((state) => state.allTasks);
   const activeEntry = useTaskStore((state) => state.activeEntry);
   const closedTaskDurations = useTaskStore((state) => state.closedTaskDurations);
   const startTask = useTaskStore((state) => state.startTask);
   const completeTask = useTaskStore((state) => state.completeTask);
   const dropTask = useTaskStore((state) => state.dropTask);
+  const skipPlannedTask = useTaskStore((state) => state.skipPlannedTask);
   const deleteTask = useTaskStore((state) => state.deleteTask);
   const updateTask = useTaskStore((state) => state.updateTask);
   const now = useTimerStore((state) => state.now);
@@ -30,11 +44,38 @@ export function TaskCard({ task }: { task: Task }) {
   const [title, setTitle] = useState(task.title);
   const [estimate, setEstimate] = useState(task.estimated_minutes?.toString() ?? "");
   const [priority, setPriority] = useState<TaskPriority>(task.priority);
+  const [plannedStart, setPlannedStart] = useState(task.planned_start_time ?? "");
+  const [plannedEnd, setPlannedEnd] = useState(task.planned_end_time ?? "");
   const category = categories.find((item) => item.id === task.category_id);
   const elapsedSeconds = getLiveTaskSeconds(task.id, activeEntry, closedTaskDurations, now);
+  const isTodayPlanTask = Boolean(task.template_id && task.due_date === toDateKey());
   const plannedTime = task.planned_end_time
     ? `${task.planned_start_time}-${task.planned_end_time}`
     : task.planned_start_time;
+  const validation = useMemo(
+    () =>
+      isTodayPlanTask
+        ? validateTaskSchedule(
+            {
+              ...task,
+              planned_start_time: plannedStart,
+              planned_end_time: plannedEnd || null,
+              estimated_minutes: parseEstimate(estimate)
+            },
+            tasks,
+            task.id
+          )
+        : { ok: true as const },
+    [estimate, isTodayPlanTask, plannedEnd, plannedStart, task, tasks]
+  );
+
+  useEffect(() => {
+    setTitle(task.title);
+    setEstimate(task.estimated_minutes?.toString() ?? "");
+    setPriority(task.priority);
+    setPlannedStart(task.planned_start_time ?? "");
+    setPlannedEnd(task.planned_end_time ?? "");
+  }, [task.id, task.title, task.estimated_minutes, task.priority, task.planned_start_time, task.planned_end_time]);
 
   async function handleStart() {
     const result = await startTask(task.id);
@@ -51,8 +92,15 @@ export function TaskCard({ task }: { task: Task }) {
   async function saveEdit() {
     await updateTask(task.id, {
       title,
-      estimated_minutes: estimate ? Number(estimate) : null,
-      priority
+      estimated_minutes: parseEstimate(estimate),
+      priority,
+      ...(isTodayPlanTask
+        ? {
+            planned_start_time: plannedStart,
+            planned_end_time: plannedEnd || null,
+            sort_order: timeToSortOrder(plannedStart)
+          }
+        : {})
     });
     setEditing(false);
   }
@@ -76,11 +124,26 @@ export function TaskCard({ task }: { task: Task }) {
               </Select>
             </Field>
           </div>
+          {isTodayPlanTask ? (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Today start">
+                <Input type="time" value={plannedStart} onChange={(event) => setPlannedStart(event.target.value)} />
+              </Field>
+              <Field label="Today end">
+                <Input type="time" value={plannedEnd} onChange={(event) => setPlannedEnd(event.target.value)} />
+              </Field>
+            </div>
+          ) : null}
+          {!validation.ok ? (
+            <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              {validation.message}
+            </div>
+          ) : null}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={saveEdit} disabled={!title.trim()}>
+            <Button type="button" onClick={saveEdit} disabled={!title.trim() || (isTodayPlanTask && (!plannedStart || !validation.ok))}>
               Save
             </Button>
           </div>
@@ -101,7 +164,10 @@ export function TaskCard({ task }: { task: Task }) {
             {elapsedSeconds > 0 ? <span>{formatDurationCompact(elapsedSeconds)} actual</span> : null}
           </div>
         </div>
-        <Badge className={statusClass[task.status]}>{task.status}</Badge>
+        <div className="flex flex-wrap justify-end gap-1.5">
+          {!validation.ok ? <Badge className="bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-200">Time conflict</Badge> : null}
+          <Badge className={statusClass[task.status]}>{task.status}</Badge>
+        </div>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {task.status === "paused" ? (
@@ -124,6 +190,12 @@ export function TaskCard({ task }: { task: Task }) {
         <Button type="button" size="icon" variant="secondary" onClick={() => void dropTask(task.id)}>
           <X className="h-4 w-4" />
         </Button>
+        {isTodayPlanTask ? (
+          <Button type="button" size="sm" variant="ghost" onClick={() => void skipPlannedTask(task.id)}>
+            <CalendarX className="h-4 w-4" />
+            Skip today
+          </Button>
+        ) : null}
         <Button type="button" size="icon" variant="ghost" onClick={() => void deleteTask(task.id)}>
           <Trash2 className="h-4 w-4" />
         </Button>

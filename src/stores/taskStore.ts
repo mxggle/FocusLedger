@@ -4,6 +4,7 @@ import { initializeDatabase } from "../db/client";
 import { taskRepository } from "../db/taskRepository";
 import { taskTemplateRepository } from "../db/taskTemplateRepository";
 import { timeEntryRepository } from "../db/timeEntryRepository";
+import { validateTaskSchedule, validateTemplateSchedule } from "../services/scheduleConflictService";
 import { scheduleService } from "../services/scheduleService";
 import { calculateDateRangeStats, calculateTodayStats } from "../services/statsService";
 import type {
@@ -60,6 +61,7 @@ type TaskState = {
   stopActiveTask: (outcome: StopOutcome, input: StopSessionInput) => Promise<void>;
   completeTask: (taskId: string, note?: string) => Promise<void>;
   dropTask: (taskId: string) => Promise<void>;
+  skipPlannedTask: (taskId: string) => Promise<void>;
 };
 
 async function getClosedDurations(tasks: Task[]): Promise<Record<string, number>> {
@@ -202,6 +204,22 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   updateTask: async (id, input) => {
     try {
+      if (
+        input.planned_start_time !== undefined ||
+        input.planned_end_time !== undefined ||
+        input.estimated_minutes !== undefined ||
+        input.due_date !== undefined ||
+        input.status !== undefined
+      ) {
+        const existingTask = get().allTasks.find((task) => task.id === id) ?? (await taskRepository.getById(id));
+        if (existingTask) {
+          const tasksForValidation = get().allTasks.length > 0 ? get().allTasks : await taskRepository.getAll();
+          const validation = validateTaskSchedule({ ...existingTask, ...input }, tasksForValidation, id);
+          if (!validation.ok) {
+            throw new Error(validation.message);
+          }
+        }
+      }
       await taskRepository.updateTask(id, input);
       await get().refresh();
     } catch (error) {
@@ -227,6 +245,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       if (!input.planned_start_time) {
         throw new Error("Start time is required");
       }
+      const validation = validateTemplateSchedule({ ...input, recurrence_days: input.recurrence_days ?? [] }, get().scheduleTemplates);
+      if (!validation.ok) {
+        throw new Error(validation.message);
+      }
       await taskTemplateRepository.createTemplate(input);
       await get().refresh();
       useUiStore.getState().addToast({ kind: "success", title: "Plan item added" });
@@ -237,6 +259,13 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   updateScheduleTemplate: async (id, input) => {
     try {
+      const existingTemplate = get().scheduleTemplates.find((template) => template.id === id) ?? (await taskTemplateRepository.getById(id));
+      if (existingTemplate) {
+        const validation = validateTemplateSchedule({ ...existingTemplate, ...input }, get().scheduleTemplates, id);
+        if (!validation.ok) {
+          throw new Error(validation.message);
+        }
+      }
       await taskTemplateRepository.updateTemplate(id, input);
       await get().refresh();
       useUiStore.getState().addToast({ kind: "success", title: "Plan item updated" });
@@ -347,6 +376,20 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       await get().refresh();
     } catch (error) {
       reportError("Task could not be dropped", error);
+    }
+  },
+
+  skipPlannedTask: async (taskId) => {
+    try {
+      const activeEntry = await timeEntryRepository.getActiveEntry();
+      if (activeEntry?.task_id === taskId) {
+        await timeEntryRepository.closeEntry(activeEntry.id);
+      }
+      await scheduleService.skipOccurrenceForTask(taskId);
+      await get().refresh();
+      useUiStore.getState().addToast({ kind: "success", title: "Plan task skipped for today" });
+    } catch (error) {
+      reportError("Plan task could not be skipped", error);
     }
   }
 }));
