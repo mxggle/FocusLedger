@@ -18,6 +18,7 @@ export function TodayLog() {
             const start = new Date(entry.start_at);
             const end = entry.end_at ? new Date(entry.end_at) : now;
             const duration = entry.duration_seconds ?? Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
+            const estimateSeconds = (entry.task_estimated_minutes ?? 0) * 60;
             return (
               <div key={entry.id} className="rounded-md border bg-background p-3 text-sm">
                 <div className="flex items-start justify-between gap-3">
@@ -27,7 +28,10 @@ export function TodayLog() {
                       {format(start, "HH:mm")} - {entry.end_at ? format(end, "HH:mm") : "now"} · {entry.category_name ?? "Inbox"}
                     </div>
                   </div>
-                  <div className="shrink-0 text-xs font-semibold">{formatDurationCompact(duration)}</div>
+                  <div className="shrink-0 text-xs font-semibold tabular-nums">
+                    Duration {formatDurationCompact(duration)}
+                    {estimateSeconds > 0 ? ` / Estimate ${formatDurationCompact(estimateSeconds)}` : " / No estimate"}
+                  </div>
                 </div>
                 {entry.note ? <div className="mt-2 text-xs text-muted-foreground">{entry.note}</div> : null}
               </div>

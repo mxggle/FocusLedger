@@ -4,6 +4,7 @@ import { validateTemplateSchedule } from "../../services/scheduleConflictService
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
 import type { RecurrenceType, TaskPriority, TaskTemplate } from "../../types";
+import { formatDurationCompact } from "../../utils/duration";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Field, Input, Select } from "../ui/Field";
@@ -337,7 +338,7 @@ function PlanItem({ template }: { template: TaskTemplate }) {
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>{category?.name ?? "Inbox"}</span>
             <span>{template.priority}</span>
-            {template.estimated_minutes ? <span>{template.estimated_minutes} min estimate</span> : null}
+            {template.estimated_minutes ? <span>Estimate {formatDurationCompact(template.estimated_minutes * 60)}</span> : null}
           </div>
         </div>
         <div className="flex items-center gap-2">

@@ -14,6 +14,7 @@ export type TimeEntry = {
 
 export type TimeEntryWithTask = TimeEntry & {
   task_title: string;
+  task_estimated_minutes: number | null;
   category_id: string | null;
   category_name: string | null;
   category_color: string | null;

@@ -28,6 +28,10 @@ function parseEstimate(value: string): number | null {
   return value && Number.isFinite(parsed) ? parsed : null;
 }
 
+function minimumEstimateMinutes(elapsedSeconds: number): number {
+  return Math.max(1, Math.ceil(elapsedSeconds / 60));
+}
+
 export function TaskCard({ task }: { task: Task }) {
   const categories = useTaskStore((state) => state.categories);
   const tasks = useTaskStore((state) => state.allTasks);
@@ -48,6 +52,10 @@ export function TaskCard({ task }: { task: Task }) {
   const [plannedEnd, setPlannedEnd] = useState(task.planned_end_time ?? "");
   const category = categories.find((item) => item.id === task.category_id);
   const elapsedSeconds = getLiveTaskSeconds(task.id, activeEntry, closedTaskDurations, now);
+  const estimateSeconds = (task.estimated_minutes ?? 0) * 60;
+  const parsedEstimate = parseEstimate(estimate);
+  const minimumEstimate = minimumEstimateMinutes(elapsedSeconds);
+  const estimateTooSmall = parsedEstimate !== null && parsedEstimate < minimumEstimate;
   const isTodayPlanTask = Boolean(task.template_id && task.due_date === toDateKey());
   const plannedTime = task.planned_end_time
     ? `${task.planned_start_time}-${task.planned_end_time}`
@@ -114,7 +122,12 @@ export function TaskCard({ task }: { task: Task }) {
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Estimate">
-              <Input type="number" min="1" value={estimate} onChange={(event) => setEstimate(event.target.value)} />
+              <Input
+                type="number"
+                min={minimumEstimate}
+                value={estimate}
+                onChange={(event) => setEstimate(event.target.value)}
+              />
             </Field>
             <Field label="Priority">
               <Select value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)}>
@@ -139,11 +152,20 @@ export function TaskCard({ task }: { task: Task }) {
               {validation.message}
             </div>
           ) : null}
+          {estimateTooSmall ? (
+            <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              Estimate cannot be less than time already spent ({formatDurationCompact(elapsedSeconds)}).
+            </div>
+          ) : null}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={saveEdit} disabled={!title.trim() || (isTodayPlanTask && (!plannedStart || !validation.ok))}>
+            <Button
+              type="button"
+              onClick={saveEdit}
+              disabled={!title.trim() || estimateTooSmall || (isTodayPlanTask && (!plannedStart || !validation.ok))}
+            >
               Save
             </Button>
           </div>
@@ -163,6 +185,12 @@ export function TaskCard({ task }: { task: Task }) {
             {task.estimated_minutes ? <span>{task.estimated_minutes} min estimate</span> : null}
             {elapsedSeconds > 0 ? <span>{formatDurationCompact(elapsedSeconds)} actual</span> : null}
           </div>
+          {(task.estimated_minutes || elapsedSeconds > 0) ? (
+            <div className="mt-2 text-xs font-semibold tabular-nums">
+              Used {formatDurationCompact(elapsedSeconds)}
+              {estimateSeconds > 0 ? ` / Estimate ${formatDurationCompact(estimateSeconds)}` : " / No estimate"}
+            </div>
+          ) : null}
         </div>
         <div className="flex flex-wrap justify-end gap-1.5">
           {!validation.ok ? <Badge className="bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-200">Time conflict</Badge> : null}

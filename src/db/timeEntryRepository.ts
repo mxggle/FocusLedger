@@ -151,6 +151,7 @@ export const timeEntryRepository = {
       `SELECT
         time_entries.*,
         tasks.title AS task_title,
+        tasks.estimated_minutes AS task_estimated_minutes,
         tasks.category_id AS category_id,
         categories.name AS category_name,
         categories.color AS category_color

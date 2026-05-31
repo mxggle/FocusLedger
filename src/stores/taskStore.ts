@@ -22,6 +22,7 @@ import type {
   UpdateTaskInput
 } from "../types";
 import { getRecentDateKeys, startOfDateKey, toDateKey } from "../utils/date";
+import { formatDurationCompact } from "../utils/duration";
 import { useSettingsStore } from "./settingsStore";
 import { useTimerStore } from "./timerStore";
 import { useUiStore } from "./uiStore";
@@ -84,6 +85,10 @@ function reportError(title: string, error: unknown): void {
     title,
     description: error instanceof Error ? error.message : "Unknown error"
   });
+}
+
+function minimumEstimateMinutes(elapsedSeconds: number): number {
+  return Math.max(1, Math.ceil(elapsedSeconds / 60));
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
@@ -213,6 +218,16 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       ) {
         const existingTask = get().allTasks.find((task) => task.id === id) ?? (await taskRepository.getById(id));
         if (existingTask) {
+          if (input.estimated_minutes !== undefined && input.estimated_minutes !== null) {
+            const elapsedSeconds = await timeEntryRepository.getTaskDurationSeconds(id);
+            const minimumEstimate = minimumEstimateMinutes(elapsedSeconds);
+            if (input.estimated_minutes < minimumEstimate) {
+              throw new Error(
+                `Estimate cannot be less than time already spent (${formatDurationCompact(elapsedSeconds)}).`
+              );
+            }
+          }
+
           const tasksForValidation = get().allTasks.length > 0 ? get().allTasks : await taskRepository.getAll();
           const validation = validateTaskSchedule({ ...existingTask, ...input }, tasksForValidation, id);
           if (!validation.ok) {
