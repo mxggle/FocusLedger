@@ -1,6 +1,75 @@
+use tauri::{
+    menu::{MenuBuilder, PredefinedMenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Manager,
+};
+
+const TRAY_ID: &str = "focusledger-status";
+
+#[tauri::command]
+fn update_tray_status(app: AppHandle, title: Option<String>, tooltip: String) -> Result<(), String> {
+    let tray = app
+        .tray_by_id(TRAY_ID)
+        .ok_or_else(|| "FocusLedger tray icon was not initialized".to_string())?;
+
+    // Windows does not display tray titles, but macOS shows this in the menu bar.
+    tray.set_title(title.as_deref()).map_err(|error| error.to_string())?;
+    tray.set_tooltip(Some(tooltip)).map_err(|error| error.to_string())
+}
+
+fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            let menu = MenuBuilder::new(app)
+                .text("show", "Show FocusLedger")
+                .separator()
+                .item(&PredefinedMenuItem::quit(app, Some("Quit FocusLedger"))?)
+                .build()?;
+
+            let mut tray = TrayIconBuilder::with_id(TRAY_ID)
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .tooltip("FocusLedger")
+                .on_menu_event(|app, event| {
+                    if event.id().as_ref() == "show" {
+                        show_main_window(app);
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    let should_show = matches!(
+                        event,
+                        TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } | TrayIconEvent::DoubleClick {
+                            button: MouseButton::Left,
+                            ..
+                        }
+                    );
+
+                    if should_show {
+                        show_main_window(tray.app_handle());
+                    }
+                });
+
+            if let Some(icon) = app.default_window_icon().cloned() {
+                tray = tray.icon(icon);
+            }
+
+            tray.build(app)?;
+            Ok(())
+        })
         .plugin(tauri_plugin_sql::Builder::default().build())
+        .invoke_handler(tauri::generate_handler![update_tray_status])
         .run(tauri::generate_context!())
         .expect("error while running FocusLedger");
 }
