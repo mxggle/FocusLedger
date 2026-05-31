@@ -32,6 +32,9 @@ export function TaskCard({ task }: { task: Task }) {
   const [priority, setPriority] = useState<TaskPriority>(task.priority);
   const category = categories.find((item) => item.id === task.category_id);
   const elapsedSeconds = getLiveTaskSeconds(task.id, activeEntry, closedTaskDurations, now);
+  const plannedTime = task.planned_end_time
+    ? `${task.planned_start_time}-${task.planned_end_time}`
+    : task.planned_start_time;
 
   async function handleStart() {
     const result = await startTask(task.id);
@@ -92,6 +95,7 @@ export function TaskCard({ task }: { task: Task }) {
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold">{task.title}</h3>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            {plannedTime ? <span>{plannedTime}</span> : null}
             <span>{category?.name ?? "Inbox"}</span>
             {task.estimated_minutes ? <span>{task.estimated_minutes} min estimate</span> : null}
             {elapsedSeconds > 0 ? <span>{formatDurationCompact(elapsedSeconds)} actual</span> : null}

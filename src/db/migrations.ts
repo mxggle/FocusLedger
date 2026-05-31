@@ -49,11 +49,40 @@ const SCHEMA_STATEMENTS = [
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS task_templates (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    category_id TEXT,
+    priority TEXT NOT NULL DEFAULT 'medium',
+    estimated_minutes INTEGER,
+    planned_start_time TEXT NOT NULL,
+    planned_end_time TEXT,
+    recurrence_type TEXT NOT NULL,
+    recurrence_days TEXT NOT NULL DEFAULT '[]',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (category_id) REFERENCES categories(id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS template_occurrences (
+    id TEXT PRIMARY KEY,
+    template_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    task_id TEXT,
+    skipped_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (template_id) REFERENCES task_templates(id) ON DELETE CASCADE
+  )`,
   `CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_tasks_due_status ON tasks(due_date, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_task_templates_enabled ON task_templates(enabled)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_template_occurrences_date
+    ON template_occurrences(template_id, date)`,
   `CREATE INDEX IF NOT EXISTS idx_time_entries_task ON time_entries(task_id)`,
   `CREATE INDEX IF NOT EXISTS idx_time_entries_range ON time_entries(start_at, end_at)`,
   `UPDATE time_entries
@@ -75,8 +104,27 @@ export async function runMigrations(db: SqlDatabase): Promise<void> {
     await db.execute(statement);
   }
 
+  await ensureTaskScheduleColumns(db);
+  await db.execute("CREATE INDEX IF NOT EXISTS idx_tasks_template_due ON tasks(template_id, due_date)");
   await seedDefaultCategories(db);
   await seedDefaultSettings(db);
+}
+
+async function ensureTaskScheduleColumns(db: SqlDatabase): Promise<void> {
+  const columns = await db.select<Array<{ name: string }>>("PRAGMA table_info(tasks)");
+  const existing = new Set(columns.map((column) => column.name));
+  const additions: Array<[string, string]> = [
+    ["template_id", "ALTER TABLE tasks ADD COLUMN template_id TEXT"],
+    ["planned_start_time", "ALTER TABLE tasks ADD COLUMN planned_start_time TEXT"],
+    ["planned_end_time", "ALTER TABLE tasks ADD COLUMN planned_end_time TEXT"],
+    ["sort_order", "ALTER TABLE tasks ADD COLUMN sort_order INTEGER"]
+  ];
+
+  for (const [column, statement] of additions) {
+    if (!existing.has(column)) {
+      await db.execute(statement);
+    }
+  }
 }
 
 async function seedDefaultCategories(db: SqlDatabase): Promise<void> {

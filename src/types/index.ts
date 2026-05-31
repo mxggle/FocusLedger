@@ -1,4 +1,11 @@
 export type { Category } from "./category";
+export type {
+  CreateTaskTemplateInput,
+  RecurrenceType,
+  TaskTemplate,
+  TemplateOccurrence,
+  UpdateTaskTemplateInput
+} from "./schedule";
 export type { AppSettings, AppTheme } from "./settings";
 export { DEFAULT_SETTINGS } from "./settings";
 export type { CategoryStats, DailyStats, TodayStats } from "./stats";

@@ -2,16 +2,18 @@ import { BarChart3, CalendarDays, CheckSquare, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { HistoryPage } from "./components/history/HistoryPage";
 import { AppShell } from "./components/layout/AppShell";
+import { PlanPage } from "./components/plan/PlanPage";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { TodayPage } from "./components/today/TodayPage";
 import { ToastViewport } from "./components/ui/ToastViewport";
 import { useSettingsStore } from "./stores/settingsStore";
 import { useTaskStore } from "./stores/taskStore";
 
-type RouteId = "today" | "history" | "settings";
+type RouteId = "today" | "plan" | "history" | "settings";
 
 const routes = [
   { id: "today" as const, label: "Today", icon: CheckSquare },
+  { id: "plan" as const, label: "Plan", icon: CalendarDays },
   { id: "history" as const, label: "History", icon: BarChart3 },
   { id: "settings" as const, label: "Settings", icon: Settings }
 ];
@@ -57,6 +59,8 @@ export default function App() {
           </div>
         ) : route === "today" ? (
           <TodayPage />
+        ) : route === "plan" ? (
+          <PlanPage />
         ) : route === "history" ? (
           <HistoryPage />
         ) : (

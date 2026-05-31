@@ -2,16 +2,21 @@ import { create } from "zustand";
 import { categoryRepository } from "../db/categoryRepository";
 import { initializeDatabase } from "../db/client";
 import { taskRepository } from "../db/taskRepository";
+import { taskTemplateRepository } from "../db/taskTemplateRepository";
 import { timeEntryRepository } from "../db/timeEntryRepository";
+import { scheduleService } from "../services/scheduleService";
 import { calculateDateRangeStats, calculateTodayStats } from "../services/statsService";
 import type {
   Category,
+  CreateTaskTemplateInput,
   CreateTaskInput,
   DailyStats,
   StopSessionInput,
   Task,
+  TaskTemplate,
   TimeEntry,
   TimeEntryWithTask,
+  UpdateTaskTemplateInput,
   TodayStats,
   UpdateTaskInput
 } from "../types";
@@ -30,6 +35,7 @@ type TaskState = {
   selectedDate: string;
   tasks: Task[];
   allTasks: Task[];
+  scheduleTemplates: TaskTemplate[];
   categories: Category[];
   todayEntries: TimeEntryWithTask[];
   selectedDateEntries: TimeEntryWithTask[];
@@ -45,6 +51,9 @@ type TaskState = {
   createTask: (input: CreateTaskInput) => Promise<void>;
   updateTask: (id: string, input: UpdateTaskInput) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
+  createScheduleTemplate: (input: CreateTaskTemplateInput) => Promise<void>;
+  updateScheduleTemplate: (id: string, input: UpdateTaskTemplateInput) => Promise<void>;
+  deleteScheduleTemplate: (id: string) => Promise<void>;
   startTask: (taskId: string, options?: { stopCurrent?: boolean }) => Promise<StartTaskResult>;
   pauseActiveTask: () => Promise<void>;
   resumeTask: (taskId: string, options?: { stopCurrent?: boolean }) => Promise<StartTaskResult>;
@@ -82,6 +91,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   selectedDate: toDateKey(),
   tasks: [],
   allTasks: [],
+  scheduleTemplates: [],
   categories: [],
   todayEntries: [],
   selectedDateEntries: [],
@@ -117,9 +127,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     const selectedDate = get().selectedDate;
     const todayDate = toDateKey();
     const now = new Date();
-    const [tasks, allTasks, categories, todayEntries, selectedDateEntries, activeEntry] = await Promise.all([
+    await scheduleService.generateTasksForDate(todayDate);
+
+    const [tasks, allTasks, scheduleTemplates, categories, todayEntries, selectedDateEntries, activeEntry] = await Promise.all([
       taskRepository.getTodayTasks(todayDate),
       taskRepository.getAll(),
+      taskTemplateRepository.getAll(),
       categoryRepository.getAll(),
       timeEntryRepository.getEntriesForDate(todayDate, now.toISOString()),
       timeEntryRepository.getEntriesForDate(selectedDate, now.toISOString()),
@@ -156,6 +169,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     set({
       tasks,
       allTasks,
+      scheduleTemplates,
       categories,
       todayEntries,
       selectedDateEntries,
@@ -202,6 +216,42 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       useUiStore.getState().addToast({ kind: "success", title: "Task deleted" });
     } catch (error) {
       reportError("Task could not be deleted", error);
+    }
+  },
+
+  createScheduleTemplate: async (input) => {
+    try {
+      if (!input.title.trim()) {
+        throw new Error("Plan title is required");
+      }
+      if (!input.planned_start_time) {
+        throw new Error("Start time is required");
+      }
+      await taskTemplateRepository.createTemplate(input);
+      await get().refresh();
+      useUiStore.getState().addToast({ kind: "success", title: "Plan item added" });
+    } catch (error) {
+      reportError("Plan item could not be created", error);
+    }
+  },
+
+  updateScheduleTemplate: async (id, input) => {
+    try {
+      await taskTemplateRepository.updateTemplate(id, input);
+      await get().refresh();
+      useUiStore.getState().addToast({ kind: "success", title: "Plan item updated" });
+    } catch (error) {
+      reportError("Plan item could not be updated", error);
+    }
+  },
+
+  deleteScheduleTemplate: async (id) => {
+    try {
+      await taskTemplateRepository.deleteTemplate(id);
+      await get().refresh();
+      useUiStore.getState().addToast({ kind: "success", title: "Plan item deleted" });
+    } catch (error) {
+      reportError("Plan item could not be deleted", error);
     }
   },
 

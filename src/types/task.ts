@@ -10,6 +10,10 @@ export type Task = {
   priority: TaskPriority;
   estimated_minutes: number | null;
   due_date: string | null;
+  template_id: string | null;
+  planned_start_time: string | null;
+  planned_end_time: string | null;
+  sort_order: number | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
@@ -23,8 +27,24 @@ export type CreateTaskInput = {
   priority?: TaskPriority;
   estimated_minutes?: number | null;
   due_date?: string | null;
+  template_id?: string | null;
+  planned_start_time?: string | null;
+  planned_end_time?: string | null;
+  sort_order?: number | null;
 };
 
 export type UpdateTaskInput = Partial<
-  Pick<Task, "title" | "description" | "category_id" | "priority" | "estimated_minutes" | "due_date" | "status">
+  Pick<
+    Task,
+    | "title"
+    | "description"
+    | "category_id"
+    | "priority"
+    | "estimated_minutes"
+    | "due_date"
+    | "status"
+    | "planned_start_time"
+    | "planned_end_time"
+    | "sort_order"
+  >
 >;
