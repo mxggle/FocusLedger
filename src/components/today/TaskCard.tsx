@@ -1,5 +1,19 @@
-import { CalendarX, Check, Inbox, Pencil, Play, RotateCcw, Trash2, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { addDays } from "date-fns";
+import {
+  CalendarClock,
+  CalendarPlus,
+  CalendarX,
+  Check,
+  Inbox,
+  MoreHorizontal,
+  Pencil,
+  Play,
+  RotateCcw,
+  Trash2,
+  X,
+  type LucideIcon
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { validateTaskSchedule } from "../../services/scheduleConflictService";
 import { useTaskStore } from "../../stores/taskStore";
 import { getLiveTaskSeconds, useTimerStore } from "../../stores/timerStore";
@@ -40,6 +54,7 @@ export function TaskCard({ task }: { task: Task }) {
   const startTask = useTaskStore((state) => state.startTask);
   const completeTask = useTaskStore((state) => state.completeTask);
   const dropTask = useTaskStore((state) => state.dropTask);
+  const rescheduleTask = useTaskStore((state) => state.rescheduleTask);
   const moveTaskToBacklog = useTaskStore((state) => state.moveTaskToBacklog);
   const skipPlannedTask = useTaskStore((state) => state.skipPlannedTask);
   const deleteTask = useTaskStore((state) => state.deleteTask);
@@ -51,6 +66,8 @@ export function TaskCard({ task }: { task: Task }) {
   const [priority, setPriority] = useState<TaskPriority>(task.priority);
   const [plannedStart, setPlannedStart] = useState(task.planned_start_time ?? "");
   const [plannedEnd, setPlannedEnd] = useState(task.planned_end_time ?? "");
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
   const category = categories.find((item) => item.id === task.category_id);
   const elapsedSeconds = getLiveTaskSeconds(task.id, activeEntry, closedTaskDurations, now);
   const estimateSeconds = (task.estimated_minutes ?? 0) * 60;
@@ -85,6 +102,31 @@ export function TaskCard({ task }: { task: Task }) {
     setPlannedStart(task.planned_start_time ?? "");
     setPlannedEnd(task.planned_end_time ?? "");
   }, [task.id, task.title, task.estimated_minutes, task.priority, task.planned_start_time, task.planned_end_time]);
+
+  useEffect(() => {
+    if (!actionsOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!actionsRef.current?.contains(event.target as Node)) {
+        setActionsOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setActionsOpen(false);
+      }
+    }
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [actionsOpen]);
 
   async function handleStart() {
     const result = await startTask(task.id);
@@ -136,6 +178,23 @@ export function TaskCard({ task }: { task: Task }) {
     if (window.confirm(message)) {
       await moveTaskToBacklog(task.id);
     }
+  }
+
+  async function handleReschedule(days: number) {
+    const targetDate = toDateKey(addDays(new Date(), days));
+    const label = days === 1 ? "tomorrow" : "next week";
+    const message =
+      task.status === "doing"
+        ? `Move this active task to ${label}? The current timer will stop.`
+        : `Move this task to ${label}?`;
+    if (window.confirm(message)) {
+      await rescheduleTask(task.id, targetDate);
+    }
+  }
+
+  function runMenuAction(action: () => void | Promise<void>) {
+    setActionsOpen(false);
+    void action();
   }
 
   if (editing) {
@@ -237,44 +296,91 @@ export function TaskCard({ task }: { task: Task }) {
         <Button type="button" size="icon" variant="secondary" onClick={() => void completeTask(task.id, "Marked done from task list")}>
           <Check className="h-4 w-4" />
         </Button>
-        <Button type="button" size="icon" variant="secondary" onClick={() => setEditing(true)}>
-          <Pencil className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          size="icon"
-          variant="secondary"
-          onClick={() => {
-            if (window.confirm("Drop this task?")) {
-              void dropTask(task.id);
-            }
-          }}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-        {isTodayPlanTask ? (
+        <div ref={actionsRef} className="relative">
           <Button
             type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              if (window.confirm("Skip this planned task for today?")) {
-                void skipPlannedTask(task.id);
-              }
-            }}
+            size="icon"
+            variant="secondary"
+            onClick={() => setActionsOpen((open) => !open)}
+            aria-haspopup="menu"
+            aria-expanded={actionsOpen}
+            aria-label="More task actions"
           >
-            <CalendarX className="h-4 w-4" />
-            Skip today
+            <MoreHorizontal className="h-4 w-4" />
           </Button>
-        ) : null}
-        <Button type="button" size="sm" variant="ghost" onClick={handleMoveToBacklog}>
-          <Inbox className="h-4 w-4" />
-          Backlog
-        </Button>
-        <Button type="button" size="icon" variant="ghost" onClick={() => void handleDelete()}>
-          <Trash2 className="h-4 w-4" />
-        </Button>
+          {actionsOpen ? (
+            <div
+              role="menu"
+              className="absolute left-0 top-10 z-20 w-48 rounded-md border bg-background p-1 text-sm shadow-lg"
+            >
+              <TaskActionItem icon={Pencil} label="Edit" onClick={() => runMenuAction(() => setEditing(true))} />
+              <TaskActionItem
+                icon={CalendarPlus}
+                label="Move to tomorrow"
+                onClick={() => runMenuAction(() => handleReschedule(1))}
+              />
+              <TaskActionItem
+                icon={CalendarClock}
+                label="Move to next week"
+                onClick={() => runMenuAction(() => handleReschedule(7))}
+              />
+              {isTodayPlanTask ? (
+                <TaskActionItem
+                  icon={CalendarX}
+                  label="Skip today"
+                  onClick={() =>
+                    runMenuAction(() => {
+                      if (window.confirm("Skip this planned task for today?")) {
+                        void skipPlannedTask(task.id);
+                      }
+                    })
+                  }
+                />
+              ) : null}
+              <TaskActionItem icon={Inbox} label="Move to backlog" onClick={() => runMenuAction(handleMoveToBacklog)} />
+              <div className="my-1 h-px bg-border" />
+              <TaskActionItem
+                icon={X}
+                label="Drop"
+                onClick={() =>
+                  runMenuAction(() => {
+                    if (window.confirm("Drop this task?")) {
+                      void dropTask(task.id);
+                    }
+                  })
+                }
+              />
+              <TaskActionItem icon={Trash2} label="Delete" danger onClick={() => runMenuAction(handleDelete)} />
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
+  );
+}
+
+function TaskActionItem({
+  icon: Icon,
+  label,
+  danger = false,
+  onClick
+}: {
+  icon: LucideIcon;
+  label: string;
+  danger?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition ${
+        danger ? "text-destructive hover:bg-destructive/10" : "hover:bg-muted"
+      }`}
+    >
+      <Icon className="h-4 w-4" />
+      <span>{label}</span>
+    </button>
   );
 }

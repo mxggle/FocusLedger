@@ -58,7 +58,11 @@ export function useQuickAddShortcuts() {
 
     async function registerShortcut() {
       try {
-        const { register, unregister } = await import("@tauri-apps/plugin-global-shortcut");
+        const { isRegistered, register, unregister } = await import("@tauri-apps/plugin-global-shortcut");
+        if (await isRegistered(normalizedShortcut)) {
+          await unregister(normalizedShortcut);
+        }
+
         await register(normalizedShortcut, (event) => {
           if (event.state !== "Pressed") {
             return;

@@ -43,6 +43,7 @@ export type UpdateTaskInput = Partial<
     | "estimated_minutes"
     | "due_date"
     | "status"
+    | "template_id"
     | "planned_start_time"
     | "planned_end_time"
     | "sort_order"

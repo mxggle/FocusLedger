@@ -1,9 +1,10 @@
-import { CalendarCheck, CalendarPlus, Pencil, Play, Plus, Trash2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { addDays } from "date-fns";
+import { CalendarCheck, CalendarClock, CalendarPlus, Inbox, Pencil, Play, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { Task, TaskPriority } from "../../types";
-import { toDateKey } from "../../utils/date";
+import { formatDateLabel, toDateKey } from "../../utils/date";
 import { formatDurationCompact } from "../../utils/duration";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -16,6 +17,21 @@ function parseEstimate(value: string): number | null {
 
 export function BacklogPage() {
   const backlogTasks = useTaskStore((state) => state.backlogTasks);
+  const allTasks = useTaskStore((state) => state.allTasks);
+  const todayDate = toDateKey();
+  const scheduledTasks = useMemo(
+    () =>
+      allTasks
+        .filter((task) => task.due_date && task.due_date > todayDate && task.status !== "done" && task.status !== "dropped")
+        .sort((a, b) => {
+          const dateCompare = (a.due_date ?? "").localeCompare(b.due_date ?? "");
+          if (dateCompare !== 0) {
+            return dateCompare;
+          }
+          return (a.sort_order ?? 9999) - (b.sort_order ?? 9999);
+        }),
+    [allTasks, todayDate]
+  );
   const openQuickAdd = useUiStore((state) => state.openQuickAdd);
 
   return (
@@ -23,7 +39,7 @@ export function BacklogPage() {
       <div className="mb-5 flex items-end justify-between gap-4">
         <div>
           <div className="text-sm font-medium text-muted-foreground">Backlog</div>
-          <h2 className="mt-1 text-2xl font-semibold">Captured work</h2>
+          <h2 className="mt-1 text-2xl font-semibold">Captured and scheduled work</h2>
         </div>
         <Button type="button" onClick={openQuickAdd}>
           <Plus className="h-4 w-4" />
@@ -31,15 +47,42 @@ export function BacklogPage() {
         </Button>
       </div>
 
-      <div className="grid gap-3">
-        {backlogTasks.length === 0 ? (
-          <div className="rounded-md border border-dashed bg-background p-8 text-center text-sm text-muted-foreground">
-            No backlog tasks.
+      <div className="grid gap-6">
+        <section>
+          <SectionHeader title="Scheduled" count={scheduledTasks.length} />
+          <div className="mt-3 grid gap-3">
+            {scheduledTasks.length === 0 ? (
+              <div className="rounded-md border border-dashed bg-background p-6 text-sm text-muted-foreground">
+                No future scheduled tasks.
+              </div>
+            ) : (
+              scheduledTasks.map((task) => <BacklogTaskCard key={task.id} task={task} />)
+            )}
           </div>
-        ) : (
-          backlogTasks.map((task) => <BacklogTaskCard key={task.id} task={task} />)
-        )}
+        </section>
+
+        <section>
+          <SectionHeader title="Backlog" count={backlogTasks.length} />
+          <div className="mt-3 grid gap-3">
+            {backlogTasks.length === 0 ? (
+              <div className="rounded-md border border-dashed bg-background p-6 text-sm text-muted-foreground">
+                No backlog tasks.
+              </div>
+            ) : (
+              backlogTasks.map((task) => <BacklogTaskCard key={task.id} task={task} />)
+            )}
+          </div>
+        </section>
       </div>
+    </div>
+  );
+}
+
+function SectionHeader({ title, count }: { title: string; count: number }) {
+  return (
+    <div className="flex items-center gap-2">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <Badge>{count}</Badge>
     </div>
   );
 }
@@ -54,7 +97,7 @@ function BacklogTaskCard({ task }: { task: Task }) {
   const [categoryId, setCategoryId] = useState(task.category_id ?? "inbox");
   const [priority, setPriority] = useState<TaskPriority>(task.priority);
   const [estimate, setEstimate] = useState(task.estimated_minutes?.toString() ?? "");
-  const [scheduleDate, setScheduleDate] = useState(toDateKey());
+  const [scheduleDate, setScheduleDate] = useState(task.due_date ?? toDateKey());
   const category = categories.find((item) => item.id === task.category_id);
 
   useEffect(() => {
@@ -62,10 +105,19 @@ function BacklogTaskCard({ task }: { task: Task }) {
     setCategoryId(task.category_id ?? "inbox");
     setPriority(task.priority);
     setEstimate(task.estimated_minutes?.toString() ?? "");
-  }, [task.category_id, task.estimated_minutes, task.id, task.priority, task.title]);
+    setScheduleDate(task.due_date ?? toDateKey());
+  }, [task.category_id, task.due_date, task.estimated_minutes, task.id, task.priority, task.title]);
 
   async function moveToToday() {
     await updateTask(task.id, { due_date: toDateKey() });
+  }
+
+  async function moveToTomorrow() {
+    await updateTask(task.id, { due_date: toDateKey(addDays(new Date(), 1)) });
+  }
+
+  async function moveToNextWeek() {
+    await updateTask(task.id, { due_date: toDateKey(addDays(new Date(), 7)) });
   }
 
   async function scheduleTask() {
@@ -73,6 +125,10 @@ function BacklogTaskCard({ task }: { task: Task }) {
       return;
     }
     await updateTask(task.id, { due_date: scheduleDate });
+  }
+
+  async function moveToBacklog() {
+    await updateTask(task.id, { due_date: null });
   }
 
   async function startToday() {
@@ -150,6 +206,7 @@ function BacklogTaskCard({ task }: { task: Task }) {
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold">{task.title}</h3>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            {task.due_date ? <span>{formatDateLabel(task.due_date)}</span> : null}
             <span>{category?.name ?? "Inbox"}</span>
             <Badge>{task.priority}</Badge>
             {task.estimated_minutes ? <span>{formatDurationCompact(task.estimated_minutes * 60)} estimate</span> : null}
@@ -160,10 +217,27 @@ function BacklogTaskCard({ task }: { task: Task }) {
             <CalendarCheck className="h-4 w-4" />
             Today
           </Button>
+          {!task.due_date ? (
+            <>
+              <Button type="button" size="sm" variant="secondary" onClick={moveToTomorrow}>
+                <CalendarPlus className="h-4 w-4" />
+                Tomorrow
+              </Button>
+              <Button type="button" size="sm" variant="secondary" onClick={moveToNextWeek}>
+                <CalendarClock className="h-4 w-4" />
+                Next week
+              </Button>
+            </>
+          ) : null}
           <Button type="button" size="sm" variant="secondary" onClick={startToday}>
             <Play className="h-4 w-4" />
             Start
           </Button>
+          {task.due_date ? (
+            <Button type="button" size="icon" variant="secondary" onClick={moveToBacklog} aria-label="Move to backlog">
+              <Inbox className="h-4 w-4" />
+            </Button>
+          ) : null}
           <Button type="button" size="icon" variant="secondary" onClick={() => setEditing(true)} aria-label="Edit backlog task">
             <Pencil className="h-4 w-4" />
           </Button>
@@ -182,15 +256,17 @@ function BacklogTaskCard({ task }: { task: Task }) {
           </Button>
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap items-end gap-2">
-        <Field label="Schedule">
-          <Input type="date" value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} />
-        </Field>
-        <Button type="button" size="sm" variant="secondary" onClick={scheduleTask} disabled={!scheduleDate}>
-          <CalendarPlus className="h-4 w-4" />
-          Schedule
-        </Button>
-      </div>
+      {task.due_date ? (
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <Field label="Scheduled date">
+            <Input type="date" value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} />
+          </Field>
+          <Button type="button" size="sm" variant="secondary" onClick={scheduleTask} disabled={!scheduleDate}>
+            <CalendarPlus className="h-4 w-4" />
+            Change date
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

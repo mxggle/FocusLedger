@@ -64,6 +64,7 @@ type TaskState = {
   stopActiveTask: (outcome: StopOutcome, input: StopSessionInput) => Promise<MutationResult>;
   completeTask: (taskId: string, note?: string) => Promise<MutationResult>;
   dropTask: (taskId: string) => Promise<MutationResult>;
+  rescheduleTask: (taskId: string, dueDate: string) => Promise<MutationResult>;
   moveTaskToBacklog: (taskId: string) => Promise<MutationResult>;
   skipPlannedTask: (taskId: string) => Promise<MutationResult>;
 };
@@ -438,6 +439,50 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     } catch (error) {
       reportError("Task could not be dropped", error);
       return mutationFailure(error, "Task could not be dropped");
+    }
+  },
+
+  rescheduleTask: async (taskId, dueDate) => {
+    try {
+      const task = (await taskRepository.getById(taskId)) ?? get().allTasks.find((item) => item.id === taskId);
+      if (!task) {
+        throw new Error("Task not found");
+      }
+
+      const plannedUpdate = task.template_id
+        ? {
+            template_id: null,
+            planned_start_time: null,
+            planned_end_time: null,
+            sort_order: null
+          }
+        : {};
+      const tasksForValidation = get().allTasks.length > 0 ? get().allTasks : await taskRepository.getAll();
+      const validation = validateTaskSchedule(
+        { ...task, ...plannedUpdate, due_date: dueDate, status: "todo" },
+        tasksForValidation,
+        taskId
+      );
+      if (!validation.ok) {
+        throw new Error(validation.message);
+      }
+
+      const activeEntry = await timeEntryRepository.getActiveEntry();
+      if (activeEntry?.task_id === taskId) {
+        await timeEntryRepository.closeEntry(activeEntry.id);
+      }
+
+      await taskRepository.updateTask(taskId, {
+        due_date: dueDate,
+        status: "todo",
+        ...plannedUpdate
+      });
+      await get().refresh();
+      useUiStore.getState().addToast({ kind: "success", title: "Task rescheduled" });
+      return { ok: true };
+    } catch (error) {
+      reportError("Task could not be rescheduled", error);
+      return mutationFailure(error, "Task could not be rescheduled");
     }
   },
 
