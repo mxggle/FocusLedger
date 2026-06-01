@@ -69,6 +69,7 @@ pub fn run() {
             Ok(())
         })
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .invoke_handler(tauri::generate_handler![update_tray_status])
         .run(tauri::generate_context!())

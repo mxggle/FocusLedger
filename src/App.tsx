@@ -1,5 +1,5 @@
 import { BarChart3, CalendarDays, CheckSquare, Inbox, Settings } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BacklogPage } from "./components/backlog/BacklogPage";
 import { HistoryPage } from "./components/history/HistoryPage";
 import { AppShell } from "./components/layout/AppShell";
@@ -9,6 +9,7 @@ import { SettingsPage } from "./components/settings/SettingsPage";
 import { TodayPage } from "./components/today/TodayPage";
 import { ToastViewport } from "./components/ui/ToastViewport";
 import { useQuickAddShortcuts } from "./hooks/useQuickAddShortcuts";
+import { useTaskReminders } from "./hooks/useTaskReminders";
 import { useTrayStatus } from "./hooks/useTrayStatus";
 import { useSettingsStore } from "./stores/settingsStore";
 import { useTaskStore } from "./stores/taskStore";
@@ -30,9 +31,11 @@ export default function App() {
   const loading = useTaskStore((state) => state.loading);
   const error = useTaskStore((state) => state.error);
   const theme = useSettingsStore((state) => state.settings.theme);
+  const openToday = useCallback(() => setRoute("today"), []);
 
   useTrayStatus();
   useQuickAddShortcuts();
+  useTaskReminders({ onOpenToday: openToday });
 
   useEffect(() => {
     void initialize();

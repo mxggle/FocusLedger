@@ -1,5 +1,5 @@
 import { Check, Pause, Square } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTaskStore } from "../../stores/taskStore";
 import { getLiveTaskSeconds, useTimerStore } from "../../stores/timerStore";
 import { formatDurationCompact, formatTimer } from "../../utils/duration";
@@ -16,26 +16,10 @@ export function CurrentFocus() {
   const completeTask = useTaskStore((state) => state.completeTask);
   const now = useTimerStore((state) => state.now);
   const [stopOpen, setStopOpen] = useState(false);
-  const [overrunReminderKey, setOverrunReminderKey] = useState<string | null>(null);
   const elapsedSeconds = activeTask && activeEntry ? getLiveTaskSeconds(activeTask.id, activeEntry, closedTaskDurations, now) : 0;
   const estimateSeconds = ((activeTask?.estimated_minutes ?? 0) * 60);
   const progress = estimateSeconds > 0 ? (elapsedSeconds / estimateSeconds) * 100 : 0;
   const overrun = estimateSeconds > 0 && elapsedSeconds > estimateSeconds;
-  const reminderKey = activeTask ? `${activeTask.id}:${activeTask.estimated_minutes ?? 0}` : null;
-
-  useEffect(() => {
-    if (!overrun || !reminderKey || overrunReminderKey === reminderKey) {
-      return;
-    }
-
-    setOverrunReminderKey(reminderKey);
-    const shouldContinue = window.confirm(
-      "This task is already over its estimate.\n\nPress OK to continue, or Cancel to end this session."
-    );
-    if (!shouldContinue) {
-      setStopOpen(true);
-    }
-  }, [overrun, overrunReminderKey, reminderKey]);
 
   if (!activeTask || !activeEntry) {
     return (

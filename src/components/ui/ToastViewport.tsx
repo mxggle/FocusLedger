@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { cn } from "../../utils/cn";
+import { Button } from "./Button";
 
 export function ToastViewport() {
   const toasts = useUiStore((state) => state.toasts);
@@ -26,6 +27,24 @@ export function ToastViewport() {
               <X className="h-4 w-4" />
             </button>
           </div>
+          {toast.actions?.length ? (
+            <div className="mt-3 flex flex-wrap justify-end gap-2">
+              {toast.actions.map((action) => (
+                <Button
+                  key={action.label}
+                  type="button"
+                  size="sm"
+                  variant={action.variant ?? "secondary"}
+                  onClick={() => {
+                    dismissToast(toast.id);
+                    void action.onClick();
+                  }}
+                >
+                  {action.label}
+                </Button>
+              ))}
+            </div>
+          ) : null}
         </div>
       ))}
     </div>
