@@ -24,13 +24,16 @@ export function AddTaskForm() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await createTask({
+    const result = await createTask({
       title,
       category_id: categoryId || "inbox",
       priority,
       estimated_minutes: estimatedMinutes ? Number(estimatedMinutes) : null,
       due_date: dueDate || toDateKey()
     });
+    if (!result.ok) {
+      return;
+    }
     setTitle("");
     setEstimatedMinutes("");
     setPriority("medium");

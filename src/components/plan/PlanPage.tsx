@@ -102,7 +102,7 @@ export function PlanPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await createTemplate({
+    const result = await createTemplate({
       title,
       category_id: categoryId || "inbox",
       priority,
@@ -112,6 +112,9 @@ export function PlanPage() {
       recurrence_type: recurrenceType,
       recurrence_days: recurrenceType === "weekly" ? recurrenceDays : []
     });
+    if (!result.ok) {
+      return;
+    }
     setTitle("");
     setEstimate("");
     setStartTime("09:00");
@@ -244,7 +247,7 @@ function PlanItem({ template }: { template: TaskTemplate }) {
   );
 
   async function saveEdit() {
-    await updateTemplate(template.id, {
+    const result = await updateTemplate(template.id, {
       title,
       category_id: categoryId,
       priority,
@@ -254,6 +257,9 @@ function PlanItem({ template }: { template: TaskTemplate }) {
       recurrence_type: recurrenceType,
       recurrence_days: recurrenceType === "weekly" ? recurrenceDays : []
     });
+    if (!result.ok) {
+      return;
+    }
     setEditing(false);
   }
 

@@ -6,7 +6,7 @@ import { TodaySummary } from "./TodaySummary";
 
 export function TodayPage() {
   return (
-    <div className="grid h-screen grid-cols-[minmax(320px,0.9fr)_minmax(360px,1fr)_minmax(320px,0.9fr)] overflow-hidden">
+    <div className="grid h-screen min-w-[1000px] grid-cols-[minmax(320px,0.9fr)_minmax(360px,1fr)_minmax(320px,0.9fr)] overflow-hidden">
       <section className="min-w-0 overflow-y-auto border-r p-5">
         <AddTaskForm />
         <TaskList />

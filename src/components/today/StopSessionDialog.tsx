@@ -9,18 +9,34 @@ export function StopSessionDialog({ open, onOpenChange }: { open: boolean; onOpe
   const [blocker, setBlocker] = useState("");
   const [nextAction, setNextAction] = useState("");
   const [completionRate, setCompletionRate] = useState("50");
+  const [saving, setSaving] = useState(false);
+  const parsedCompletionRate = Number(completionRate);
+  const completionRateValid =
+    completionRate.trim() !== "" &&
+    Number.isFinite(parsedCompletionRate) &&
+    parsedCompletionRate >= 0 &&
+    parsedCompletionRate <= 100;
 
   if (!open) {
     return null;
   }
 
   async function save(outcome: "paused" | "done" | "dropped") {
-    await stopActiveTask(outcome, {
+    if (!completionRateValid || saving) {
+      return;
+    }
+
+    setSaving(true);
+    const result = await stopActiveTask(outcome, {
       note,
       blocker,
       next_action: nextAction,
-      completion_rate: Number(completionRate)
+      completion_rate: parsedCompletionRate
     });
+    setSaving(false);
+    if (!result.ok) {
+      return;
+    }
     setNote("");
     setBlocker("");
     setNextAction("");
@@ -56,18 +72,23 @@ export function StopSessionDialog({ open, onOpenChange }: { open: boolean; onOpe
               onChange={(event) => setCompletionRate(event.target.value)}
             />
           </Field>
+          {!completionRateValid ? (
+            <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              Completion rate must be between 0 and 100.
+            </div>
+          ) : null}
         </div>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
-          <Button type="submit" variant="secondary">
+          <Button type="submit" variant="secondary" disabled={!completionRateValid || saving}>
             Save and pause
           </Button>
-          <Button type="button" onClick={() => void save("done")}>
+          <Button type="button" onClick={() => void save("done")} disabled={!completionRateValid || saving}>
             Mark as done
           </Button>
-          <Button type="button" variant="danger" onClick={() => void save("dropped")}>
+          <Button type="button" variant="danger" onClick={() => void save("dropped")} disabled={!completionRateValid || saving}>
             Drop task
           </Button>
         </div>

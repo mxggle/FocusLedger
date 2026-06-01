@@ -1,11 +1,14 @@
 import { format } from "date-fns";
+import { splitEntrySecondsByDate } from "../../services/statsService";
 import { useTaskStore } from "../../stores/taskStore";
 import { useTimerStore } from "../../stores/timerStore";
+import { toDateKey } from "../../utils/date";
 import { formatDurationCompact } from "../../utils/duration";
 
 export function TodayLog() {
   const entries = useTaskStore((state) => state.todayEntries);
   const now = useTimerStore((state) => state.now);
+  const today = toDateKey(now);
 
   return (
     <div>
@@ -17,7 +20,7 @@ export function TodayLog() {
           entries.map((entry) => {
             const start = new Date(entry.start_at);
             const end = entry.end_at ? new Date(entry.end_at) : now;
-            const duration = entry.duration_seconds ?? Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
+            const duration = splitEntrySecondsByDate(entry, today, now);
             const estimateSeconds = (entry.task_estimated_minutes ?? 0) * 60;
             return (
               <div key={entry.id} className="rounded-md border bg-background p-3 text-sm">

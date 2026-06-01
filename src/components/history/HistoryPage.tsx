@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { CalendarDays } from "lucide-react";
+import { splitEntrySecondsByDate } from "../../services/statsService";
 import { useTaskStore } from "../../stores/taskStore";
 import { formatDateLabel } from "../../utils/date";
 import { formatDurationCompact, formatSignedDurationCompact } from "../../utils/duration";
@@ -26,7 +27,7 @@ export function HistoryPage() {
         </Field>
       </div>
 
-      <div className="grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
         {historyStats.map((day) => (
           <button
             key={day.date}
@@ -43,7 +44,7 @@ export function HistoryPage() {
         ))}
       </div>
 
-      <div className="mt-6 grid grid-cols-[280px_1fr] gap-5">
+      <div className="mt-6 grid gap-5 lg:grid-cols-[280px_1fr]">
         <aside className="rounded-md border bg-background p-4">
           <div className="text-sm font-semibold">{formatDateLabel(selectedDate)}</div>
           {historyStats
@@ -75,7 +76,7 @@ export function HistoryPage() {
               entries.map((entry) => {
                 const start = new Date(entry.start_at);
                 const end = entry.end_at ? new Date(entry.end_at) : new Date();
-                const seconds = entry.duration_seconds ?? Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
+                const seconds = splitEntrySecondsByDate(entry, selectedDate, end);
                 return (
                   <div key={entry.id} className="rounded-md border p-3 text-sm">
                     <div className="flex items-start justify-between gap-3">

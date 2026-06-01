@@ -27,9 +27,9 @@ export function AppShell<T extends string>({
 }: AppShellProps<T>) {
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="grid min-h-screen grid-cols-[220px_1fr]">
-        <aside className="border-r bg-muted/40 px-4 py-5">
-          <div className="mb-8">
+      <div className="grid min-h-screen grid-cols-[72px_1fr] lg:grid-cols-[220px_1fr]">
+        <aside className="border-r bg-muted/40 px-2 py-5 lg:px-4">
+          <div className="mb-8 hidden lg:block">
             <h1 className="text-lg font-semibold tracking-normal">{title}</h1>
             <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
           </div>
@@ -42,20 +42,21 @@ export function AppShell<T extends string>({
                   type="button"
                   onClick={() => onRouteChange(route.id)}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition",
+                    "flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-left text-sm transition lg:justify-start",
                     activeRoute === route.id
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:bg-background hover:text-foreground"
                   )}
+                  aria-label={route.label}
                 >
                   <Icon className="h-4 w-4" />
-                  {route.label}
+                  <span className="hidden lg:inline">{route.label}</span>
                 </button>
               );
             })}
           </nav>
         </aside>
-        <main className="min-w-0 overflow-hidden">{children}</main>
+        <main className="min-w-0 overflow-auto">{children}</main>
       </div>
     </div>
   );

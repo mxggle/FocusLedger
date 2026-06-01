@@ -89,7 +89,7 @@ export function TaskCard({ task }: { task: Task }) {
     const result = await startTask(task.id);
     if (result === "active-exists") {
       const confirmed = window.confirm(
-        "You already have an active task.\nDo you want to stop the current task and start this one?"
+        "You already have an active task.\nDo you want to pause the current task and start this one?"
       );
       if (confirmed) {
         await startTask(task.id, { stopCurrent: true });
@@ -98,7 +98,7 @@ export function TaskCard({ task }: { task: Task }) {
   }
 
   async function saveEdit() {
-    await updateTask(task.id, {
+    const result = await updateTask(task.id, {
       title,
       estimated_minutes: parseEstimate(estimate),
       priority,
@@ -110,7 +110,21 @@ export function TaskCard({ task }: { task: Task }) {
           }
         : {})
     });
+    if (!result.ok) {
+      return;
+    }
     setEditing(false);
+  }
+
+  async function handleDelete() {
+    const confirmed = window.confirm(
+      elapsedSeconds > 0
+        ? "Remove this task from today? Its time records will be kept."
+        : "Delete this task?"
+    );
+    if (confirmed) {
+      await deleteTask(task.id);
+    }
   }
 
   if (editing) {
@@ -215,16 +229,34 @@ export function TaskCard({ task }: { task: Task }) {
         <Button type="button" size="icon" variant="secondary" onClick={() => setEditing(true)}>
           <Pencil className="h-4 w-4" />
         </Button>
-        <Button type="button" size="icon" variant="secondary" onClick={() => void dropTask(task.id)}>
+        <Button
+          type="button"
+          size="icon"
+          variant="secondary"
+          onClick={() => {
+            if (window.confirm("Drop this task?")) {
+              void dropTask(task.id);
+            }
+          }}
+        >
           <X className="h-4 w-4" />
         </Button>
         {isTodayPlanTask ? (
-          <Button type="button" size="sm" variant="ghost" onClick={() => void skipPlannedTask(task.id)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              if (window.confirm("Skip this planned task for today?")) {
+                void skipPlannedTask(task.id);
+              }
+            }}
+          >
             <CalendarX className="h-4 w-4" />
             Skip today
           </Button>
         ) : null}
-        <Button type="button" size="icon" variant="ghost" onClick={() => void deleteTask(task.id)}>
+        <Button type="button" size="icon" variant="ghost" onClick={() => void handleDelete()}>
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>

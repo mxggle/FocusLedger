@@ -27,8 +27,9 @@ import { useSettingsStore } from "./settingsStore";
 import { useTimerStore } from "./timerStore";
 import { useUiStore } from "./uiStore";
 
-type StartTaskResult = "started" | "active-exists";
+type StartTaskResult = "started" | "active-exists" | "failed";
 type StopOutcome = "paused" | "done" | "dropped";
+type MutationResult = { ok: true } | { ok: false; message: string };
 
 type TaskState = {
   initialized: boolean;
@@ -50,19 +51,19 @@ type TaskState = {
   initialize: () => Promise<void>;
   refresh: () => Promise<void>;
   setSelectedDate: (date: string) => Promise<void>;
-  createTask: (input: CreateTaskInput) => Promise<void>;
-  updateTask: (id: string, input: UpdateTaskInput) => Promise<void>;
-  deleteTask: (id: string) => Promise<void>;
-  createScheduleTemplate: (input: CreateTaskTemplateInput) => Promise<void>;
-  updateScheduleTemplate: (id: string, input: UpdateTaskTemplateInput) => Promise<void>;
-  deleteScheduleTemplate: (id: string) => Promise<void>;
+  createTask: (input: CreateTaskInput) => Promise<MutationResult>;
+  updateTask: (id: string, input: UpdateTaskInput) => Promise<MutationResult>;
+  deleteTask: (id: string) => Promise<MutationResult>;
+  createScheduleTemplate: (input: CreateTaskTemplateInput) => Promise<MutationResult>;
+  updateScheduleTemplate: (id: string, input: UpdateTaskTemplateInput) => Promise<MutationResult>;
+  deleteScheduleTemplate: (id: string) => Promise<MutationResult>;
   startTask: (taskId: string, options?: { stopCurrent?: boolean }) => Promise<StartTaskResult>;
-  pauseActiveTask: () => Promise<void>;
+  pauseActiveTask: () => Promise<MutationResult>;
   resumeTask: (taskId: string, options?: { stopCurrent?: boolean }) => Promise<StartTaskResult>;
-  stopActiveTask: (outcome: StopOutcome, input: StopSessionInput) => Promise<void>;
-  completeTask: (taskId: string, note?: string) => Promise<void>;
-  dropTask: (taskId: string) => Promise<void>;
-  skipPlannedTask: (taskId: string) => Promise<void>;
+  stopActiveTask: (outcome: StopOutcome, input: StopSessionInput) => Promise<MutationResult>;
+  completeTask: (taskId: string, note?: string) => Promise<MutationResult>;
+  dropTask: (taskId: string) => Promise<MutationResult>;
+  skipPlannedTask: (taskId: string) => Promise<MutationResult>;
 };
 
 async function getClosedDurations(tasks: Task[]): Promise<Record<string, number>> {
@@ -85,6 +86,10 @@ function reportError(title: string, error: unknown): void {
     title,
     description: error instanceof Error ? error.message : "Unknown error"
   });
+}
+
+function mutationFailure(error: unknown, fallback: string): MutationResult {
+  return { ok: false, message: error instanceof Error ? error.message : fallback };
 }
 
 function minimumEstimateMinutes(elapsedSeconds: number): number {
@@ -202,8 +207,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       await taskRepository.createTask(input);
       await get().refresh();
       useUiStore.getState().addToast({ kind: "success", title: "Task added" });
+      return { ok: true };
     } catch (error) {
       reportError("Task could not be created", error);
+      return mutationFailure(error, "Task could not be created");
     }
   },
 
@@ -237,18 +244,39 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       }
       await taskRepository.updateTask(id, input);
       await get().refresh();
+      return { ok: true };
     } catch (error) {
       reportError("Task could not be updated", error);
+      return mutationFailure(error, "Task could not be updated");
     }
   },
 
   deleteTask: async (id) => {
     try {
+      const activeEntry = await timeEntryRepository.getActiveEntry();
+      if (activeEntry?.task_id === id) {
+        await timeEntryRepository.closeEntry(activeEntry.id);
+      }
+
+      const entries = await timeEntryRepository.getEntriesForTask(id);
+      if (entries.length > 0) {
+        await taskRepository.updateTask(id, {
+          status: "dropped",
+          completed_at: null,
+          dropped_at: new Date().toISOString()
+        });
+        await get().refresh();
+        useUiStore.getState().addToast({ kind: "success", title: "Task removed; time records kept" });
+        return { ok: true };
+      }
+
       await taskRepository.deleteTask(id);
       await get().refresh();
       useUiStore.getState().addToast({ kind: "success", title: "Task deleted" });
+      return { ok: true };
     } catch (error) {
       reportError("Task could not be deleted", error);
+      return mutationFailure(error, "Task could not be deleted");
     }
   },
 
@@ -267,8 +295,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       await taskTemplateRepository.createTemplate(input);
       await get().refresh();
       useUiStore.getState().addToast({ kind: "success", title: "Plan item added" });
+      return { ok: true };
     } catch (error) {
       reportError("Plan item could not be created", error);
+      return mutationFailure(error, "Plan item could not be created");
     }
   },
 
@@ -284,8 +314,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       await taskTemplateRepository.updateTemplate(id, input);
       await get().refresh();
       useUiStore.getState().addToast({ kind: "success", title: "Plan item updated" });
+      return { ok: true };
     } catch (error) {
       reportError("Plan item could not be updated", error);
+      return mutationFailure(error, "Plan item could not be updated");
     }
   },
 
@@ -294,8 +326,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       await taskTemplateRepository.deleteTemplate(id);
       await get().refresh();
       useUiStore.getState().addToast({ kind: "success", title: "Plan item deleted" });
+      return { ok: true };
     } catch (error) {
       reportError("Plan item could not be deleted", error);
+      return mutationFailure(error, "Plan item could not be deleted");
     }
   },
 
@@ -318,7 +352,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       return "started";
     } catch (error) {
       reportError("Task could not be started", error);
-      return "active-exists";
+      return "failed";
     }
   },
 
@@ -326,13 +360,15 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     try {
       const activeEntry = await timeEntryRepository.getActiveEntry();
       if (!activeEntry) {
-        return;
+        return { ok: true };
       }
       await timeEntryRepository.closeEntry(activeEntry.id);
       await taskRepository.updateTask(activeEntry.task_id, { status: "paused" });
       await get().refresh();
+      return { ok: true };
     } catch (error) {
       reportError("Task could not be paused", error);
+      return mutationFailure(error, "Task could not be paused");
     }
   },
 
@@ -342,7 +378,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     try {
       const activeEntry = await timeEntryRepository.getActiveEntry();
       if (!activeEntry) {
-        return;
+        return { ok: true };
       }
 
       await timeEntryRepository.closeEntry(activeEntry.id, undefined, input);
@@ -352,8 +388,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         dropped_at: outcome === "dropped" ? new Date().toISOString() : null
       });
       await get().refresh();
+      return { ok: true };
     } catch (error) {
       reportError("Session could not be stopped", error);
+      return mutationFailure(error, "Session could not be stopped");
     }
   },
 
@@ -372,8 +410,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         dropped_at: null
       });
       await get().refresh();
+      return { ok: true };
     } catch (error) {
       reportError("Task could not be completed", error);
+      return mutationFailure(error, "Task could not be completed");
     }
   },
 
@@ -389,8 +429,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         dropped_at: new Date().toISOString()
       });
       await get().refresh();
+      return { ok: true };
     } catch (error) {
       reportError("Task could not be dropped", error);
+      return mutationFailure(error, "Task could not be dropped");
     }
   },
 
@@ -403,8 +445,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       await scheduleService.skipOccurrenceForTask(taskId);
       await get().refresh();
       useUiStore.getState().addToast({ kind: "success", title: "Plan task skipped for today" });
+      return { ok: true };
     } catch (error) {
       reportError("Plan task could not be skipped", error);
+      return mutationFailure(error, "Plan task could not be skipped");
     }
   }
 }));
