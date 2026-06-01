@@ -17,7 +17,7 @@ export const taskRepository = {
       status: "todo",
       priority: input.priority ?? "medium",
       estimated_minutes: input.estimated_minutes ?? null,
-      due_date: input.due_date ?? toDateKey(),
+      due_date: input.due_date === undefined ? toDateKey() : input.due_date,
       template_id: input.template_id ?? null,
       planned_start_time: input.planned_start_time ?? null,
       planned_end_time: input.planned_end_time ?? null,
@@ -88,6 +88,18 @@ export const taskRepository = {
         CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
         created_at DESC`,
       [date]
+    );
+  },
+
+  async getBacklogTasks(): Promise<Task[]> {
+    const db = await getDatabase();
+    return db.select<Task[]>(
+      `${TASK_SELECT}
+       WHERE due_date IS NULL
+        AND status NOT IN ('done', 'dropped')
+       ORDER BY
+        CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
+        created_at DESC`
     );
   },
 

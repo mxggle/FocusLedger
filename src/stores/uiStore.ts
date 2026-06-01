@@ -11,13 +11,19 @@ export type ToastMessage = {
 };
 
 type UiState = {
+  quickAddOpen: boolean;
   toasts: ToastMessage[];
+  openQuickAdd: () => void;
+  closeQuickAdd: () => void;
   addToast: (toast: Omit<ToastMessage, "id">) => void;
   dismissToast: (id: string) => void;
 };
 
 export const useUiStore = create<UiState>((set) => ({
+  quickAddOpen: false,
   toasts: [],
+  openQuickAdd: () => set({ quickAddOpen: true }),
+  closeQuickAdd: () => set({ quickAddOpen: false }),
   addToast: (toast) => {
     const id = createId("toast");
     set((state) => ({ toasts: [...state.toasts, { ...toast, id }].slice(-4) }));

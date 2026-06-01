@@ -84,6 +84,7 @@ export function SettingsPage() {
             <Keyboard className="h-4 w-4" />
             Global shortcut
           </h3>
+          <p className="mt-2 text-xs text-muted-foreground">Use Cmd/Ctrl+K inside the app. The global shortcut works while FocusLedger is running.</p>
           <div className="mt-4 max-w-sm">
             <Field label="Shortcut">
               <Input

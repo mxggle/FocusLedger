@@ -1,4 +1,4 @@
-import { CalendarX, Check, Pencil, Play, RotateCcw, Trash2, X } from "lucide-react";
+import { CalendarX, Check, Inbox, Pencil, Play, RotateCcw, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { validateTaskSchedule } from "../../services/scheduleConflictService";
 import { useTaskStore } from "../../stores/taskStore";
@@ -40,6 +40,7 @@ export function TaskCard({ task }: { task: Task }) {
   const startTask = useTaskStore((state) => state.startTask);
   const completeTask = useTaskStore((state) => state.completeTask);
   const dropTask = useTaskStore((state) => state.dropTask);
+  const moveTaskToBacklog = useTaskStore((state) => state.moveTaskToBacklog);
   const skipPlannedTask = useTaskStore((state) => state.skipPlannedTask);
   const deleteTask = useTaskStore((state) => state.deleteTask);
   const updateTask = useTaskStore((state) => state.updateTask);
@@ -124,6 +125,16 @@ export function TaskCard({ task }: { task: Task }) {
     );
     if (confirmed) {
       await deleteTask(task.id);
+    }
+  }
+
+  async function handleMoveToBacklog() {
+    const message =
+      task.status === "doing"
+        ? "Move this active task to backlog? The current timer will stop."
+        : "Move this task back to backlog?";
+    if (window.confirm(message)) {
+      await moveTaskToBacklog(task.id);
     }
   }
 
@@ -256,6 +267,10 @@ export function TaskCard({ task }: { task: Task }) {
             Skip today
           </Button>
         ) : null}
+        <Button type="button" size="sm" variant="ghost" onClick={handleMoveToBacklog}>
+          <Inbox className="h-4 w-4" />
+          Backlog
+        </Button>
         <Button type="button" size="icon" variant="ghost" onClick={() => void handleDelete()}>
           <Trash2 className="h-4 w-4" />
         </Button>

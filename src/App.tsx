@@ -1,19 +1,23 @@
-import { BarChart3, CalendarDays, CheckSquare, Settings } from "lucide-react";
+import { BarChart3, CalendarDays, CheckSquare, Inbox, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
+import { BacklogPage } from "./components/backlog/BacklogPage";
 import { HistoryPage } from "./components/history/HistoryPage";
 import { AppShell } from "./components/layout/AppShell";
 import { PlanPage } from "./components/plan/PlanPage";
+import { QuickAddDialog } from "./components/quick-add/QuickAddDialog";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { TodayPage } from "./components/today/TodayPage";
 import { ToastViewport } from "./components/ui/ToastViewport";
+import { useQuickAddShortcuts } from "./hooks/useQuickAddShortcuts";
 import { useTrayStatus } from "./hooks/useTrayStatus";
 import { useSettingsStore } from "./stores/settingsStore";
 import { useTaskStore } from "./stores/taskStore";
 
-type RouteId = "today" | "plan" | "history" | "settings";
+type RouteId = "today" | "backlog" | "plan" | "history" | "settings";
 
 const routes = [
   { id: "today" as const, label: "Today", icon: CheckSquare },
+  { id: "backlog" as const, label: "Backlog", icon: Inbox },
   { id: "plan" as const, label: "Plan", icon: CalendarDays },
   { id: "history" as const, label: "History", icon: BarChart3 },
   { id: "settings" as const, label: "Settings", icon: Settings }
@@ -28,6 +32,7 @@ export default function App() {
   const theme = useSettingsStore((state) => state.settings.theme);
 
   useTrayStatus();
+  useQuickAddShortcuts();
 
   useEffect(() => {
     void initialize();
@@ -62,6 +67,8 @@ export default function App() {
           </div>
         ) : route === "today" ? (
           <TodayPage />
+        ) : route === "backlog" ? (
+          <BacklogPage />
         ) : route === "plan" ? (
           <PlanPage />
         ) : route === "history" ? (
@@ -70,6 +77,7 @@ export default function App() {
           <SettingsPage />
         )}
       </AppShell>
+      <QuickAddDialog />
       <ToastViewport />
     </>
   );

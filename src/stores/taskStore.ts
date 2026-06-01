@@ -37,6 +37,7 @@ type TaskState = {
   error: string | null;
   selectedDate: string;
   tasks: Task[];
+  backlogTasks: Task[];
   allTasks: Task[];
   scheduleTemplates: TaskTemplate[];
   categories: Category[];
@@ -63,6 +64,7 @@ type TaskState = {
   stopActiveTask: (outcome: StopOutcome, input: StopSessionInput) => Promise<MutationResult>;
   completeTask: (taskId: string, note?: string) => Promise<MutationResult>;
   dropTask: (taskId: string) => Promise<MutationResult>;
+  moveTaskToBacklog: (taskId: string) => Promise<MutationResult>;
   skipPlannedTask: (taskId: string) => Promise<MutationResult>;
 };
 
@@ -102,6 +104,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   error: null,
   selectedDate: toDateKey(),
   tasks: [],
+  backlogTasks: [],
   allTasks: [],
   scheduleTemplates: [],
   categories: [],
@@ -141,8 +144,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     const now = new Date();
     await scheduleService.generateTasksForDate(todayDate);
 
-    const [tasks, allTasks, scheduleTemplates, categories, todayEntries, selectedDateEntries, activeEntry] = await Promise.all([
+    const [tasks, backlogTasks, allTasks, scheduleTemplates, categories, todayEntries, selectedDateEntries, activeEntry] = await Promise.all([
       taskRepository.getTodayTasks(todayDate),
+      taskRepository.getBacklogTasks(),
       taskRepository.getAll(),
       taskTemplateRepository.getAll(),
       categoryRepository.getAll(),
@@ -180,6 +184,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
     set({
       tasks,
+      backlogTasks,
       allTasks,
       scheduleTemplates,
       categories,
@@ -433,6 +438,31 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     } catch (error) {
       reportError("Task could not be dropped", error);
       return mutationFailure(error, "Task could not be dropped");
+    }
+  },
+
+  moveTaskToBacklog: async (taskId) => {
+    try {
+      const activeEntry = await timeEntryRepository.getActiveEntry();
+      if (activeEntry?.task_id === taskId) {
+        await timeEntryRepository.closeEntry(activeEntry.id);
+      }
+
+      await taskRepository.updateTask(taskId, {
+        due_date: null,
+        status: "todo",
+        planned_start_time: null,
+        planned_end_time: null,
+        sort_order: null,
+        completed_at: null,
+        dropped_at: null
+      });
+      await get().refresh();
+      useUiStore.getState().addToast({ kind: "success", title: "Task moved to backlog" });
+      return { ok: true };
+    } catch (error) {
+      reportError("Task could not be moved to backlog", error);
+      return mutationFailure(error, "Task could not be moved to backlog");
     }
   },
 

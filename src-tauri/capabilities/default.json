@@ -3,5 +3,11 @@
   "identifier": "default",
   "description": "Default permissions for FocusLedger",
   "windows": ["main"],
-  "permissions": ["core:default", "sql:default", "sql:allow-execute"]
+  "permissions": [
+    "core:default",
+    "sql:default",
+    "sql:allow-execute",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister"
+  ]
 }

@@ -17,5 +17,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: "system",
   enableTray: true,
   enableNotifications: true,
-  globalShortcut: "CmdOrCtrl+Shift+Space"
+  globalShortcut: "CommandOrControl+Shift+Space"
 };
