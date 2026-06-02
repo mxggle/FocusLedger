@@ -10,7 +10,9 @@ import { Field, Input, Select } from "../ui/Field";
 export function AddTaskForm() {
   const categories = useTaskStore((state) => state.categories);
   const createTask = useTaskStore((state) => state.createTask);
-  const defaultCategoryId = useSettingsStore((state) => state.settings.defaultCategoryId);
+  const defaultCategoryId = useSettingsStore(
+    (state) => state.settings.defaultCategoryId
+  );
   const [title, setTitle] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [categoryId, setCategoryId] = useState("inbox");
@@ -31,9 +33,7 @@ export function AddTaskForm() {
       estimated_minutes: estimatedMinutes ? Number(estimatedMinutes) : null,
       due_date: dueDate || toDateKey()
     });
-    if (!result.ok) {
-      return;
-    }
+    if (!result.ok) return;
     setTitle("");
     setEstimatedMinutes("");
     setPriority("medium");
@@ -42,13 +42,18 @@ export function AddTaskForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mb-6 rounded-md border bg-background p-3">
-      <div className="mb-2 text-sm font-semibold">Today Tasks</div>
+    <form
+      onSubmit={handleSubmit}
+      className="mb-5 rounded-xl border border-border bg-surface p-4 shadow-card"
+    >
+      <div className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Add to today
+      </div>
       <div className="flex gap-2">
         <Input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          placeholder="Prepare interview self-introduction"
+          placeholder="What needs to get done?"
           className="min-w-0 flex-1"
         />
         <Button type="submit" disabled={!title.trim()}>
@@ -59,15 +64,23 @@ export function AddTaskForm() {
       <button
         type="button"
         onClick={() => setAdvancedOpen((value) => !value)}
-        className="mt-3 flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+        aria-expanded={advancedOpen}
+        className="mt-3 flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
       >
-        <ChevronDown className={`h-3.5 w-3.5 transition ${advancedOpen ? "rotate-180" : ""}`} />
+        <ChevronDown
+          className={`h-3.5 w-3.5 transition-transform duration-fast ${
+            advancedOpen ? "rotate-180" : ""
+          }`}
+        />
         Advanced fields
       </button>
       {advancedOpen ? (
         <div className="mt-3 grid grid-cols-2 gap-3">
           <Field label="Category">
-            <Select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+            <Select
+              value={categoryId}
+              onChange={(event) => setCategoryId(event.target.value)}
+            >
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
@@ -76,13 +89,16 @@ export function AddTaskForm() {
             </Select>
           </Field>
           <Field label="Priority">
-            <Select value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)}>
+            <Select
+              value={priority}
+              onChange={(event) => setPriority(event.target.value as TaskPriority)}
+            >
               <option value="low">Low</option>
               <option value="medium">Medium</option>
               <option value="high">High</option>
             </Select>
           </Field>
-          <Field label="Estimate">
+          <Field label="Estimate (min)">
             <Input
               type="number"
               min="1"
@@ -92,7 +108,11 @@ export function AddTaskForm() {
             />
           </Field>
           <Field label="Due date">
-            <Input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+            <Input
+              type="date"
+              value={dueDate}
+              onChange={(event) => setDueDate(event.target.value)}
+            />
           </Field>
         </div>
       ) : null}

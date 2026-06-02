@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, CheckSquare, Inbox, Settings } from "lucide-react";
+import { AlertCircle, BarChart3, CalendarDays, CheckSquare, Inbox, Settings } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { BacklogPage } from "./components/backlog/BacklogPage";
 import { HistoryPage } from "./components/history/HistoryPage";
@@ -8,7 +8,9 @@ import { QuickAddDialog } from "./components/quick-add/QuickAddDialog";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { TodayPage } from "./components/today/TodayPage";
 import { ConfirmDialog } from "./components/ui/ConfirmDialog";
+import { SkeletonList } from "./components/ui/Skeleton";
 import { ToastViewport } from "./components/ui/ToastViewport";
+import { TooltipProvider } from "./components/ui/Tooltip";
 import { useDayRollover } from "./hooks/useDayRollover";
 import { useQuickAddShortcuts } from "./hooks/useQuickAddShortcuts";
 import { useTaskReminders } from "./hooks/useTaskReminders";
@@ -47,11 +49,14 @@ export default function App() {
   useEffect(() => {
     const root = document.documentElement;
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    root.classList.toggle("dark", theme === "dark" || (theme === "system" && prefersDark));
+    root.classList.toggle(
+      "dark",
+      theme === "dark" || (theme === "system" && prefersDark)
+    );
   }, [theme]);
 
   return (
-    <>
+    <TooltipProvider>
       <AppShell
         routes={routes}
         activeRoute={route}
@@ -60,16 +65,16 @@ export default function App() {
         subtitle="Turn tasks into time records."
       >
         {!initialized && loading ? (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Initializing local SQLite database...
+          <div className="p-6">
+            <SkeletonList count={4} />
           </div>
         ) : error ? (
-          <div className="mx-auto mt-20 max-w-xl rounded-md border border-destructive/40 bg-destructive/10 p-5 text-sm">
+          <div className="mx-auto mt-20 max-w-xl rounded-xl border border-destructive/30 bg-destructive-soft p-5">
             <div className="mb-2 flex items-center gap-2 font-semibold text-destructive">
-              <CalendarDays className="h-4 w-4" />
+              <AlertCircle className="h-4 w-4" />
               FocusLedger could not start
             </div>
-            <p className="text-muted-foreground">{error}</p>
+            <p className="text-sm text-muted-foreground">{error}</p>
           </div>
         ) : route === "today" ? (
           <TodayPage />
@@ -86,6 +91,6 @@ export default function App() {
       <QuickAddDialog />
       <ConfirmDialog />
       <ToastViewport />
-    </>
+    </TooltipProvider>
   );
 }

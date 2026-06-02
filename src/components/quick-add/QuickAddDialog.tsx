@@ -5,9 +5,16 @@ import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { TaskPriority } from "../../types";
 import { toDateKey } from "../../utils/date";
-import { cn } from "../../utils/cn";
 import { Button } from "../ui/Button";
+import {
+  Dialog,
+  DialogClose,
+  DialogDescription,
+  DialogTitle
+} from "../ui/Dialog";
 import { Field, Input, Select } from "../ui/Field";
+import { IconButton } from "../ui/IconButton";
+import { SegmentedControl } from "../ui/SegmentedControl";
 
 type Destination = "backlog" | "today";
 
@@ -21,7 +28,10 @@ export function QuickAddDialog() {
   const close = useUiStore((state) => state.closeQuickAdd);
   const categories = useTaskStore((state) => state.categories);
   const createTask = useTaskStore((state) => state.createTask);
-  const defaultCategoryId = useSettingsStore((state) => state.settings.defaultCategoryId);
+  const defaultCategoryId = useSettingsStore(
+    (state) => state.settings.defaultCategoryId
+  );
+
   const [title, setTitle] = useState("");
   const [destination, setDestination] = useState<Destination>("backlog");
   const [categoryId, setCategoryId] = useState("inbox");
@@ -34,27 +44,9 @@ export function QuickAddDialog() {
   }, [defaultCategoryId]);
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    window.setTimeout(() => inputRef.current?.focus(), 0);
+    if (!open) return;
+    window.setTimeout(() => inputRef.current?.focus(), 40);
   }, [open]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        close();
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [close, open]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -66,9 +58,7 @@ export function QuickAddDialog() {
       due_date: destination === "today" ? toDateKey() : null
     });
 
-    if (!result.ok) {
-      return;
-    }
+    if (!result.ok) return;
 
     setTitle("");
     setEstimatedMinutes("");
@@ -78,56 +68,55 @@ export function QuickAddDialog() {
     close();
   }
 
-  if (!open) {
-    return null;
-  }
-
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/35 px-4 pt-[12vh]">
-      <form onSubmit={handleSubmit} className="w-full max-w-2xl rounded-md border bg-background p-4 shadow-xl">
-        <div className="mb-4 flex items-center justify-between gap-3">
+    <Dialog open={open} onClose={close} size="lg" align="top" className="p-0">
+      <form onSubmit={handleSubmit}>
+        <div className="flex items-start justify-between gap-3 px-5 pt-5">
           <div>
-            <h2 className="text-sm font-semibold">Quick add</h2>
-            <p className="mt-1 text-xs text-muted-foreground">Cmd/Ctrl+K opens this in the app.</p>
+            <DialogTitle>Quick add</DialogTitle>
+            <DialogDescription className="mt-0.5">
+              Press{" "}
+              <kbd className="rounded border border-border bg-muted px-1 py-px font-sans text-[10px] font-medium text-muted-foreground">
+                ⌘K
+              </kbd>{" "}
+              to open this from anywhere.
+            </DialogDescription>
           </div>
-          <Button type="button" size="icon" variant="ghost" onClick={close} aria-label="Close quick add">
-            <X className="h-4 w-4" />
-          </Button>
+          <DialogClose asChild>
+            <IconButton icon={X} label="Close quick add" />
+          </DialogClose>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 px-5 pt-4">
           <Input
             ref={inputRef}
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="Capture a task or idea"
-            className="min-w-0 flex-1"
+            placeholder="Capture a task or idea…"
+            className="h-11 min-w-0 flex-1 text-base"
           />
-          <Button type="submit" disabled={!title.trim()}>
+          <Button type="submit" size="lg" disabled={!title.trim()}>
             <Plus className="h-4 w-4" />
             Add
           </Button>
         </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-[220px_1fr_120px_120px]">
+        <div className="mt-5 grid gap-4 border-t border-border bg-surface-2/60 px-5 py-4 md:grid-cols-[auto_1fr_140px_120px]">
           <Field label="Destination">
-            <div className="grid grid-cols-2 rounded-md border bg-muted/40 p-1">
-              <DestinationButton
-                active={destination === "backlog"}
-                icon={Inbox}
-                label="Backlog"
-                onClick={() => setDestination("backlog")}
-              />
-              <DestinationButton
-                active={destination === "today"}
-                icon={CalendarCheck}
-                label="Today"
-                onClick={() => setDestination("today")}
-              />
-            </div>
+            <SegmentedControl<Destination>
+              value={destination}
+              onChange={setDestination}
+              segments={[
+                { value: "backlog", label: "Backlog", icon: Inbox },
+                { value: "today", label: "Today", icon: CalendarCheck }
+              ]}
+            />
           </Field>
           <Field label="Category">
-            <Select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+            <Select
+              value={categoryId}
+              onChange={(event) => setCategoryId(event.target.value)}
+            >
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
@@ -136,13 +125,18 @@ export function QuickAddDialog() {
             </Select>
           </Field>
           <Field label="Priority">
-            <Select value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)}>
+            <Select
+              value={priority}
+              onChange={(event) =>
+                setPriority(event.target.value as TaskPriority)
+              }
+            >
               <option value="low">Low</option>
               <option value="medium">Medium</option>
               <option value="high">High</option>
             </Select>
           </Field>
-          <Field label="Estimate">
+          <Field label="Estimate (min)">
             <Input
               type="number"
               min="1"
@@ -153,32 +147,6 @@ export function QuickAddDialog() {
           </Field>
         </div>
       </form>
-    </div>
-  );
-}
-
-function DestinationButton({
-  active,
-  icon: Icon,
-  label,
-  onClick
-}: {
-  active: boolean;
-  icon: typeof Inbox;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex h-8 items-center justify-center gap-1.5 rounded px-2 text-xs font-medium transition",
-        active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-      )}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {label}
-    </button>
+    </Dialog>
   );
 }

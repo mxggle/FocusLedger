@@ -1,9 +1,10 @@
-import { Bell, Keyboard, MonitorCog } from "lucide-react";
+import { Bell, Keyboard, MonitorCog, SlidersHorizontal } from "lucide-react";
 import { ChangeEvent } from "react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
 import type { AppTheme } from "../../types";
 import { Field, Input, Select } from "../ui/Field";
+import { PageHeader, SettingsSection } from "../ui/PageHeader";
 import { Switch } from "../ui/Switch";
 
 export function SettingsPage() {
@@ -13,97 +14,133 @@ export function SettingsPage() {
 
   function updateNumber(event: ChangeEvent<HTMLInputElement>) {
     const value = Number(event.target.value);
-    void updateSetting("dailyFocusTargetMinutes", Number.isFinite(value) ? value : 240);
+    void updateSetting(
+      "dailyFocusTargetMinutes",
+      Number.isFinite(value) ? value : 240
+    );
   }
 
   return (
-    <div className="h-screen overflow-y-auto p-6">
-      <div className="mb-6">
-        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <MonitorCog className="h-4 w-4" />
-          Settings
-        </div>
-        <h2 className="mt-1 text-2xl font-semibold">Local preferences</h2>
-      </div>
+    <div className="h-full overflow-y-auto px-6 py-7">
+      <div className="mx-auto max-w-3xl">
+        <PageHeader
+          icon={MonitorCog}
+          eyebrow="Settings"
+          title="Local preferences"
+          description="Everything is stored on this device."
+        />
 
-      <div className="grid max-w-3xl gap-4">
-        <section className="rounded-md border bg-background p-4">
-          <h3 className="text-sm font-semibold">Defaults</h3>
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <Field label="Default category">
-              <Select
-                value={settings.defaultCategoryId}
-                onChange={(event) => void updateSetting("defaultCategoryId", event.target.value)}
+        <div className="grid gap-5">
+          <SettingsSection icon={SlidersHorizontal} title="Defaults">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Default category">
+                <Select
+                  value={settings.defaultCategoryId}
+                  onChange={(event) =>
+                    void updateSetting("defaultCategoryId", event.target.value)
+                  }
+                >
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field
+                label="Daily focus target"
+                hint="Total focus minutes per day"
               >
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Daily focus target">
-              <Input type="number" min="0" value={settings.dailyFocusTargetMinutes} onChange={updateNumber} />
-            </Field>
-            <Field label="Theme">
-              <Select value={settings.theme} onChange={(event) => void updateSetting("theme", event.target.value as AppTheme)}>
-                <option value="system">System</option>
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-              </Select>
-            </Field>
-          </div>
-        </section>
+                <Input
+                  type="number"
+                  min="0"
+                  value={settings.dailyFocusTargetMinutes}
+                  onChange={updateNumber}
+                />
+              </Field>
+              <Field label="Theme">
+                <Select
+                  value={settings.theme}
+                  onChange={(event) =>
+                    void updateSetting("theme", event.target.value as AppTheme)
+                  }
+                >
+                  <option value="system">System</option>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </Select>
+              </Field>
+            </div>
+          </SettingsSection>
 
-        <section className="rounded-md border bg-background p-4">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <Bell className="h-4 w-4" />
-            Desktop behavior
-          </h3>
-          <div className="mt-4 grid gap-4">
-            <SettingRow
-              label="Start week on Monday"
-              value={settings.startWeekOnMonday}
-              onChange={(value) => void updateSetting("startWeekOnMonday", value)}
-            />
-            <SettingRow
-              label="Enable tray"
-              value={settings.enableTray}
-              onChange={(value) => void updateSetting("enableTray", value)}
-            />
-            <SettingRow
-              label="Enable notifications"
-              value={settings.enableNotifications}
-              onChange={(value) => void updateSetting("enableNotifications", value)}
-            />
-          </div>
-        </section>
-
-        <section className="rounded-md border bg-background p-4">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <Keyboard className="h-4 w-4" />
-            Global shortcut
-          </h3>
-          <p className="mt-2 text-xs text-muted-foreground">Use Cmd/Ctrl+K inside the app. The global shortcut works while FocusLedger is running.</p>
-          <div className="mt-4 max-w-sm">
-            <Field label="Shortcut">
-              <Input
-                value={settings.globalShortcut}
-                onChange={(event) => void updateSetting("globalShortcut", event.target.value)}
+          <SettingsSection icon={Bell} title="Desktop behavior">
+            <div className="divide-y divide-border">
+              <SettingRow
+                label="Start week on Monday"
+                value={settings.startWeekOnMonday}
+                onChange={(value) =>
+                  void updateSetting("startWeekOnMonday", value)
+                }
               />
-            </Field>
-          </div>
-        </section>
+              <SettingRow
+                label="Enable tray"
+                hint="Keep FocusLedger in the menu bar / system tray."
+                value={settings.enableTray}
+                onChange={(value) => void updateSetting("enableTray", value)}
+              />
+              <SettingRow
+                label="Enable notifications"
+                hint="Get reminders when sessions and tasks need attention."
+                value={settings.enableNotifications}
+                onChange={(value) =>
+                  void updateSetting("enableNotifications", value)
+                }
+              />
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            icon={Keyboard}
+            title="Global shortcut"
+            description="Use Cmd/Ctrl+K inside the app. The global shortcut works while FocusLedger is running."
+          >
+            <div className="max-w-sm">
+              <Field label="Shortcut key">
+                <Input
+                  value={settings.globalShortcut}
+                  onChange={(event) =>
+                    void updateSetting("globalShortcut", event.target.value)
+                  }
+                />
+              </Field>
+            </div>
+          </SettingsSection>
+        </div>
       </div>
     </div>
   );
 }
 
-function SettingRow({ label, value, onChange }: { label: string; value: boolean; onChange: (value: boolean) => void }) {
+function SettingRow({
+  label,
+  hint,
+  value,
+  onChange
+}: {
+  label: string;
+  hint?: string;
+  value: boolean;
+  onChange: (value: boolean) => void;
+}) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-sm">{label}</span>
-      <Switch checked={value} onChange={onChange} />
+    <div className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-foreground">{label}</div>
+        {hint ? (
+          <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div>
+        ) : null}
+      </div>
+      <Switch checked={value} onChange={onChange} label={label} />
     </div>
   );
 }

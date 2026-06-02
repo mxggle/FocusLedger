@@ -4,6 +4,15 @@
 **Status:** Approved (design direction confirmed via visual companion)
 **Scope:** Comprehensive UI/UX refresh of the entire app. **Visual/interaction layer only** — no changes to business logic, database, repositories, services, or store *behavior*. The only store change permitted is adding layout/collapse UI state to `uiStore`.
 
+## Amendment — 2026-06-02 (polish pass)
+
+A second renovation pass elevated quality to a **Linear-grade "soft modern"** target. The original "no new deps" constraint (§1, §11) was **lifted by the user** for this pass to reach a modern interaction/animation ceiling. Added runtime deps:
+
+- **Radix UI primitives** — `@radix-ui/react-dialog`, `react-dropdown-menu`, `react-tooltip`, `react-switch`, `react-toggle-group`. Accessible, headless; styled with Tailwind tokens (shadcn-style).
+- **framer-motion** — spring micro-interactions: toast enter/exit (`AnimatePresence`), `SegmentedControl` sliding indicator (`layoutId`).
+
+New shared primitives added in this pass: `Dialog` (Radix shell used by QuickAdd/Confirm/StopSession), `Menu` (Radix dropdown used by TaskCard), `PageHeader`/`SettingsSection`. Token system refined: layered shadow scale (`xs/sm/card/md/pop`), softer focus via `--ring-shadow` (glow, not hard outline), `border-strong`/`surface-2`/`subtle` tokens, tighter radii, deeper dark canvas. `Button` disabled state fixed (muted, not washed-out primary); `Switch` rebuilt on Radix with spring thumb; `IconButton`/`Button` now `forwardRef` (required for Radix `asChild`).
+
 ---
 
 ## 0. Confirmed Direction

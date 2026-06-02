@@ -1,26 +1,68 @@
-import type { ButtonHTMLAttributes } from "react";
+import { cva, type VariantProps } from "class-variance-authority";
+import { Loader2 } from "lucide-react";
+import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { cn } from "../../utils/cn";
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
-  size?: "sm" | "md" | "icon";
-};
+const buttonVariants = cva(
+  [
+    "relative inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-md border font-medium",
+    "transition-[transform,background-color,box-shadow,border-color,color] duration-fast",
+    "outline-none focus-visible:shadow-ring focus-visible:border-ring",
+    "active:scale-[0.97]",
+    // A genuinely muted disabled state (not a faded primary).
+    "disabled:pointer-events-none disabled:scale-100 disabled:border-transparent disabled:bg-muted disabled:text-muted-foreground/70 disabled:shadow-none"
+  ],
+  {
+    variants: {
+      variant: {
+        primary:
+          "border-primary/0 bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover hover:shadow-md",
+        secondary:
+          "border-border bg-surface text-foreground shadow-xs hover:border-border-strong hover:bg-surface-2",
+        ghost:
+          "border-transparent bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+        danger:
+          "border-transparent bg-destructive text-destructive-foreground shadow-sm hover:brightness-110 hover:shadow-md",
+        soft:
+          "border-transparent bg-primary-soft text-primary-soft-foreground hover:brightness-[0.97]"
+      },
+      size: {
+        sm: "h-8 px-3 text-xs",
+        md: "h-9 px-3.5 text-sm",
+        lg: "h-11 px-5 text-base",
+        icon: "h-9 w-9 shrink-0"
+      }
+    },
+    defaultVariants: {
+      variant: "primary",
+      size: "md"
+    }
+  }
+);
 
-export function Button({ className, variant = "primary", size = "md", ...props }: ButtonProps) {
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> &
+  VariantProps<typeof buttonVariants> & {
+    loading?: boolean;
+  };
+
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { className, variant, size, loading, disabled, children, ...props },
+  ref
+) {
   return (
     <button
-      className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-md border text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50",
-        variant === "primary" && "border-primary bg-primary text-primary-foreground hover:bg-primary/90",
-        variant === "secondary" && "border-border bg-background hover:bg-muted",
-        variant === "ghost" && "border-transparent bg-transparent hover:bg-muted",
-        variant === "danger" && "border-destructive bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        size === "sm" && "h-8 px-2.5",
-        size === "md" && "h-9 px-3",
-        size === "icon" && "h-8 w-8",
-        className
-      )}
+      ref={ref}
+      className={cn(buttonVariants({ variant, size }), className)}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       {...props}
-    />
+    >
+      {loading ? (
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+      ) : null}
+      {children}
+    </button>
   );
-}
+});
+
+export { buttonVariants };

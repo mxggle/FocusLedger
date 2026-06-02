@@ -4,16 +4,16 @@ import {
   CalendarPlus,
   CalendarX,
   Check,
+  Clock,
   Inbox,
   MoreHorizontal,
   Pencil,
   Play,
   RotateCcw,
   Trash2,
-  X,
-  type LucideIcon
+  X
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { validateTaskSchedule } from "../../services/scheduleConflictService";
 import { useTaskStore } from "../../stores/taskStore";
 import { getLiveTaskSeconds, useTimerStore } from "../../stores/timerStore";
@@ -25,14 +25,38 @@ import { isTaskOverdue } from "../../utils/taskGrouping";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Field, Input, Select } from "../ui/Field";
+import { IconButton } from "../ui/IconButton";
+import { Menu, MenuItem, MenuSeparator } from "../ui/Menu";
+import { cn } from "../../utils/cn";
 
-const statusClass = {
-  todo: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200",
-  doing: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-200",
-  paused: "bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200",
-  done: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-200",
-  dropped: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-200"
+// ── Status badge mapping ──────────────────────────────────────────────────────
+
+type BadgeVariant = "neutral" | "primary" | "success" | "warning" | "danger";
+
+const statusVariant: Record<Task["status"], BadgeVariant> = {
+  todo: "neutral",
+  doing: "primary",
+  paused: "warning",
+  done: "success",
+  dropped: "danger"
 };
+
+const statusLabel: Record<Task["status"], string> = {
+  todo: "To do",
+  doing: "In progress",
+  paused: "Paused",
+  done: "Done",
+  dropped: "Dropped"
+};
+
+// Left accent rail color by priority.
+const priorityRail: Record<TaskPriority, string> = {
+  low: "bg-border-strong",
+  medium: "bg-primary/50",
+  high: "bg-warning"
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function timeToSortOrder(time: string): number {
   const [hours = "0", minutes = "0"] = time.split(":");
@@ -47,6 +71,8 @@ function parseEstimate(value: string): number | null {
 function minimumEstimateMinutes(elapsedSeconds: number): number {
   return Math.max(1, Math.ceil(elapsedSeconds / 60));
 }
+
+// ── TaskCard ──────────────────────────────────────────────────────────────────
 
 export function TaskCard({ task }: { task: Task }) {
   const categories = useTaskStore((state) => state.categories);
@@ -63,14 +89,14 @@ export function TaskCard({ task }: { task: Task }) {
   const updateTask = useTaskStore((state) => state.updateTask);
   const confirm = useUiStore((state) => state.confirm);
   const now = useTimerStore((state) => state.now);
+
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
   const [estimate, setEstimate] = useState(task.estimated_minutes?.toString() ?? "");
   const [priority, setPriority] = useState<TaskPriority>(task.priority);
   const [plannedStart, setPlannedStart] = useState(task.planned_start_time ?? "");
   const [plannedEnd, setPlannedEnd] = useState(task.planned_end_time ?? "");
-  const [actionsOpen, setActionsOpen] = useState(false);
-  const actionsRef = useRef<HTMLDivElement>(null);
+
   const category = categories.find((item) => item.id === task.category_id);
   const elapsedSeconds = getLiveTaskSeconds(task.id, activeEntry, closedTaskDurations, now);
   const estimateSeconds = (task.estimated_minutes ?? 0) * 60;
@@ -80,7 +106,7 @@ export function TaskCard({ task }: { task: Task }) {
   const isTodayPlanTask = Boolean(task.template_id && task.due_date === toDateKey());
   const overdue = isTaskOverdue(task, toDateKey());
   const plannedTime = task.planned_end_time
-    ? `${task.planned_start_time}-${task.planned_end_time}`
+    ? `${task.planned_start_time}–${task.planned_end_time}`
     : task.planned_start_time;
   const validation = useMemo(
     () =>
@@ -105,39 +131,24 @@ export function TaskCard({ task }: { task: Task }) {
     setPriority(task.priority);
     setPlannedStart(task.planned_start_time ?? "");
     setPlannedEnd(task.planned_end_time ?? "");
-  }, [task.id, task.title, task.estimated_minutes, task.priority, task.planned_start_time, task.planned_end_time]);
+  }, [
+    task.id,
+    task.title,
+    task.estimated_minutes,
+    task.priority,
+    task.planned_start_time,
+    task.planned_end_time
+  ]);
 
-  useEffect(() => {
-    if (!actionsOpen) {
-      return;
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      if (!actionsRef.current?.contains(event.target as Node)) {
-        setActionsOpen(false);
-      }
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setActionsOpen(false);
-      }
-    }
-
-    window.addEventListener("mousedown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("mousedown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [actionsOpen]);
+  // ── Handlers (logic unchanged) ────────────────────────────────────────────
 
   async function handleStart() {
     const result = await startTask(task.id);
     if (result === "active-exists") {
       const confirmed = await confirm({
         title: "Start this task?",
-        message: "You already have an active task.\nDo you want to pause the current task and start this one?",
+        message:
+          "You already have an active task.\nDo you want to pause the current task and start this one?",
         confirmLabel: "Pause and start"
       });
       if (confirmed) {
@@ -159,9 +170,7 @@ export function TaskCard({ task }: { task: Task }) {
           }
         : {})
     });
-    if (!result.ok) {
-      return;
-    }
+    if (!result.ok) return;
     setEditing(false);
   }
 
@@ -175,9 +184,7 @@ export function TaskCard({ task }: { task: Task }) {
       confirmLabel: "Delete",
       danger: true
     });
-    if (confirmed) {
-      await deleteTask(task.id);
-    }
+    if (confirmed) await deleteTask(task.id);
   }
 
   async function handleMoveToBacklog() {
@@ -185,7 +192,9 @@ export function TaskCard({ task }: { task: Task }) {
       task.status === "doing"
         ? "Move this active task to backlog? The current timer will stop."
         : "Move this task back to backlog?";
-    if (await confirm({ title: "Move to backlog", message, confirmLabel: "Move" })) {
+    if (
+      await confirm({ title: "Move to backlog", message, confirmLabel: "Move" })
+    ) {
       await moveTaskToBacklog(task.id);
     }
   }
@@ -197,25 +206,31 @@ export function TaskCard({ task }: { task: Task }) {
       task.status === "doing"
         ? `Move this active task to ${label}? The current timer will stop.`
         : `Move this task to ${label}?`;
-    if (await confirm({ title: `Move to ${label}`, message, confirmLabel: "Move" })) {
+    if (
+      await confirm({
+        title: `Move to ${label}`,
+        message,
+        confirmLabel: "Move"
+      })
+    ) {
       await rescheduleTask(task.id, targetDate);
     }
   }
 
-  function runMenuAction(action: () => void | Promise<void>) {
-    setActionsOpen(false);
-    void action();
-  }
+  // ── Edit view ─────────────────────────────────────────────────────────────
 
   if (editing) {
     return (
-      <div className="rounded-md border bg-background p-3">
+      <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
         <div className="grid gap-3">
           <Field label="Title">
-            <Input value={title} onChange={(event) => setTitle(event.target.value)} />
+            <Input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+            />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Estimate">
+            <Field label="Estimate (min)">
               <Input
                 type="number"
                 min={minimumEstimate}
@@ -224,7 +239,10 @@ export function TaskCard({ task }: { task: Task }) {
               />
             </Field>
             <Field label="Priority">
-              <Select value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)}>
+              <Select
+                value={priority}
+                onChange={(event) => setPriority(event.target.value as TaskPriority)}
+              >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
@@ -234,21 +252,30 @@ export function TaskCard({ task }: { task: Task }) {
           {isTodayPlanTask ? (
             <div className="grid grid-cols-2 gap-3">
               <Field label="Today start">
-                <Input type="time" value={plannedStart} onChange={(event) => setPlannedStart(event.target.value)} />
+                <Input
+                  type="time"
+                  value={plannedStart}
+                  onChange={(event) => setPlannedStart(event.target.value)}
+                />
               </Field>
               <Field label="Today end">
-                <Input type="time" value={plannedEnd} onChange={(event) => setPlannedEnd(event.target.value)} />
+                <Input
+                  type="time"
+                  value={plannedEnd}
+                  onChange={(event) => setPlannedEnd(event.target.value)}
+                />
               </Field>
             </div>
           ) : null}
           {!validation.ok ? (
-            <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            <div className="rounded-lg border border-destructive/30 bg-destructive-soft px-3 py-2 text-sm text-destructive-soft-foreground">
               {validation.message}
             </div>
           ) : null}
           {estimateTooSmall ? (
-            <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-              Estimate cannot be less than time already spent ({formatDurationCompact(elapsedSeconds)}).
+            <div className="rounded-lg border border-destructive/30 bg-destructive-soft px-3 py-2 text-sm text-destructive-soft-foreground">
+              Estimate cannot be less than time already spent (
+              {formatDurationCompact(elapsedSeconds)}).
             </div>
           ) : null}
           <div className="flex justify-end gap-2">
@@ -258,7 +285,11 @@ export function TaskCard({ task }: { task: Task }) {
             <Button
               type="button"
               onClick={saveEdit}
-              disabled={!title.trim() || estimateTooSmall || (isTodayPlanTask && (!plannedStart || !validation.ok))}
+              disabled={
+                !title.trim() ||
+                estimateTooSmall ||
+                (isTodayPlanTask && (!plannedStart || !validation.ok))
+              }
             >
               Save
             </Button>
@@ -268,132 +299,175 @@ export function TaskCard({ task }: { task: Task }) {
     );
   }
 
+  // ── Default view ──────────────────────────────────────────────────────────
+
+  const isActive = task.status === "doing";
+
   return (
-    <div className="rounded-md border bg-background p-3">
+    <div
+      className={cn(
+        "group relative overflow-hidden rounded-xl border bg-surface p-3.5 pl-4 shadow-card",
+        "transition-[box-shadow,border-color,transform] duration-fast hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md",
+        isActive ? "border-primary/40 ring-1 ring-inset ring-primary/10" : "border-border"
+      )}
+    >
+      {/* Priority accent rail */}
+      <span
+        className={cn(
+          "absolute inset-y-0 left-0 w-1",
+          isActive ? "bg-primary" : priorityRail[task.priority]
+        )}
+        aria-hidden="true"
+      />
+
+      {/* Header row */}
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold">{task.title}</h3>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-semibold text-foreground">
+            {task.title}
+          </h3>
+          {/* Meta info row */}
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground">
             {overdue && task.due_date ? (
-              <span className="font-medium text-orange-600 dark:text-orange-400">Due {formatDateLabel(task.due_date)}</span>
+              <span className="inline-flex items-center gap-1 font-semibold text-warning-soft-foreground">
+                <CalendarClock className="h-3 w-3" />
+                Due {formatDateLabel(task.due_date)}
+              </span>
             ) : null}
-            {plannedTime ? <span>{plannedTime}</span> : null}
+            {plannedTime ? (
+              <span className="inline-flex items-center gap-1 tabular-nums">
+                <Clock className="h-3 w-3" />
+                {plannedTime}
+              </span>
+            ) : null}
             <span>{category?.name ?? "Inbox"}</span>
-            {task.estimated_minutes ? <span>{task.estimated_minutes} min estimate</span> : null}
-            {elapsedSeconds > 0 ? <span>{formatDurationCompact(elapsedSeconds)} actual</span> : null}
+            {elapsedSeconds > 0 || estimateSeconds > 0 ? (
+              <span className="font-medium tabular-nums text-foreground/70">
+                {formatDurationCompact(elapsedSeconds)}
+                {estimateSeconds > 0
+                  ? ` / ${formatDurationCompact(estimateSeconds)}`
+                  : ""}
+              </span>
+            ) : task.estimated_minutes ? (
+              <span className="tabular-nums">{task.estimated_minutes} min</span>
+            ) : null}
           </div>
-          {(task.estimated_minutes || elapsedSeconds > 0) ? (
-            <div className="mt-2 text-xs font-semibold tabular-nums">
-              Used {formatDurationCompact(elapsedSeconds)}
-              {estimateSeconds > 0 ? ` / Estimate ${formatDurationCompact(estimateSeconds)}` : " / No estimate"}
-            </div>
-          ) : null}
         </div>
-        <div className="flex flex-wrap justify-end gap-1.5">
-          {!validation.ok ? <Badge className="bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-200">Time conflict</Badge> : null}
-          <Badge className={statusClass[task.status]}>{task.status}</Badge>
+
+        {/* Status badges — right-aligned */}
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          {!validation.ok ? <Badge variant="danger" dot>Conflict</Badge> : null}
+          <Badge variant={statusVariant[task.status]} dot>
+            {statusLabel[task.status]}
+          </Badge>
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+
+      {/* Action row */}
+      <div className="mt-3.5 flex items-center gap-2">
         {task.status === "paused" ? (
           <Button type="button" size="sm" onClick={handleStart}>
-            <RotateCcw className="h-4 w-4" />
+            <RotateCcw className="h-3.5 w-3.5" />
             Resume
           </Button>
         ) : (
-          <Button type="button" size="sm" onClick={handleStart} disabled={task.status === "doing"}>
-            <Play className="h-4 w-4" />
-            Start
-          </Button>
-        )}
-        <Button type="button" size="icon" variant="secondary" onClick={() => void completeTask(task.id, "Marked done from task list")}>
-          <Check className="h-4 w-4" />
-        </Button>
-        <div ref={actionsRef} className="relative">
           <Button
             type="button"
-            size="icon"
-            variant="secondary"
-            onClick={() => setActionsOpen((open) => !open)}
-            aria-haspopup="menu"
-            aria-expanded={actionsOpen}
-            aria-label="More task actions"
+            size="sm"
+            variant={isActive ? "soft" : "primary"}
+            onClick={handleStart}
+            disabled={isActive}
           >
-            <MoreHorizontal className="h-4 w-4" />
+            <Play className="h-3.5 w-3.5" />
+            {isActive ? "Running" : "Start"}
           </Button>
-          {actionsOpen ? (
-            <div
-              role="menu"
-              className="absolute left-0 top-10 z-20 w-48 rounded-md border bg-background p-1 text-sm shadow-lg"
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          onClick={() => void completeTask(task.id, "Marked done from task list")}
+        >
+          <Check className="h-3.5 w-3.5" />
+          Done
+        </Button>
+
+        <div className="ml-auto">
+          <Menu
+            align="end"
+            trigger={
+              <IconButton
+                icon={MoreHorizontal}
+                label="More task actions"
+                variant="secondary"
+              />
+            }
+          >
+            <MenuItem icon={Pencil} onSelect={() => setEditing(true)}>
+              Edit
+            </MenuItem>
+            <MenuItem
+              icon={CalendarPlus}
+              onSelect={() => void handleReschedule(1)}
             >
-              <TaskActionItem icon={Pencil} label="Edit" onClick={() => runMenuAction(() => setEditing(true))} />
-              <TaskActionItem
-                icon={CalendarPlus}
-                label="Move to tomorrow"
-                onClick={() => runMenuAction(() => handleReschedule(1))}
-              />
-              <TaskActionItem
-                icon={CalendarClock}
-                label="Move to next week"
-                onClick={() => runMenuAction(() => handleReschedule(7))}
-              />
-              {isTodayPlanTask ? (
-                <TaskActionItem
-                  icon={CalendarX}
-                  label="Skip today"
-                  onClick={() =>
-                    runMenuAction(async () => {
-                      if (await confirm({ title: "Skip today", message: "Skip this planned task for today?", confirmLabel: "Skip" })) {
-                        await skipPlannedTask(task.id);
-                      }
-                    })
-                  }
-                />
-              ) : null}
-              <TaskActionItem icon={Inbox} label="Move to backlog" onClick={() => runMenuAction(handleMoveToBacklog)} />
-              <div className="my-1 h-px bg-border" />
-              <TaskActionItem
-                icon={X}
-                label="Drop"
-                onClick={() =>
-                  runMenuAction(async () => {
-                    if (await confirm({ title: "Drop task", message: "Drop this task?", confirmLabel: "Drop", danger: true })) {
-                      await dropTask(task.id);
+              Move to tomorrow
+            </MenuItem>
+            <MenuItem
+              icon={CalendarClock}
+              onSelect={() => void handleReschedule(7)}
+            >
+              Move to next week
+            </MenuItem>
+            {isTodayPlanTask ? (
+              <MenuItem
+                icon={CalendarX}
+                onSelect={() =>
+                  void (async () => {
+                    if (
+                      await confirm({
+                        title: "Skip today",
+                        message: "Skip this planned task for today?",
+                        confirmLabel: "Skip"
+                      })
+                    ) {
+                      await skipPlannedTask(task.id);
                     }
-                  })
+                  })()
                 }
-              />
-              <TaskActionItem icon={Trash2} label="Delete" danger onClick={() => runMenuAction(handleDelete)} />
-            </div>
-          ) : null}
+              >
+                Skip today
+              </MenuItem>
+            ) : null}
+            <MenuItem icon={Inbox} onSelect={() => void handleMoveToBacklog()}>
+              Move to backlog
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem
+              icon={X}
+              danger
+              onSelect={() =>
+                void (async () => {
+                  if (
+                    await confirm({
+                      title: "Drop task",
+                      message: "Drop this task?",
+                      confirmLabel: "Drop",
+                      danger: true
+                    })
+                  ) {
+                    await dropTask(task.id);
+                  }
+                })()
+              }
+            >
+              Drop
+            </MenuItem>
+            <MenuItem icon={Trash2} danger onSelect={() => void handleDelete()}>
+              Delete
+            </MenuItem>
+          </Menu>
         </div>
       </div>
     </div>
-  );
-}
-
-function TaskActionItem({
-  icon: Icon,
-  label,
-  danger = false,
-  onClick
-}: {
-  icon: LucideIcon;
-  label: string;
-  danger?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      onClick={onClick}
-      className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition ${
-        danger ? "text-destructive hover:bg-destructive/10" : "hover:bg-muted"
-      }`}
-    >
-      <Icon className="h-4 w-4" />
-      <span>{label}</span>
-    </button>
   );
 }

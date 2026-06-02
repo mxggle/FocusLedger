@@ -1,23 +1,37 @@
+import * as RadixSwitch from "@radix-ui/react-switch";
 import { cn } from "../../utils/cn";
 
-export function Switch({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
+type SwitchProps = {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  label?: string;
+};
+
+export function Switch({ checked, onChange, disabled, label }: SwitchProps) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
+    <RadixSwitch.Root
+      checked={checked}
+      onCheckedChange={onChange}
+      disabled={disabled}
+      aria-label={label}
       className={cn(
-        "relative h-6 w-11 rounded-full border transition",
-        checked ? "border-primary bg-primary" : "border-border bg-muted"
+        "group relative inline-flex h-[24px] w-[42px] shrink-0 cursor-pointer items-center rounded-full",
+        "border border-transparent p-[2px] outline-none transition-colors duration-normal",
+        "focus-visible:shadow-ring",
+        "data-[state=unchecked]:bg-muted data-[state=unchecked]:shadow-[inset_0_1px_2px_rgba(17,24,39,0.12)]",
+        "data-[state=checked]:bg-primary data-[state=checked]:shadow-[inset_0_1px_2px_rgba(17,24,39,0.18)]",
+        "disabled:cursor-not-allowed disabled:opacity-50"
       )}
     >
-      <span
+      <RadixSwitch.Thumb
         className={cn(
-          "absolute top-0.5 h-5 w-5 rounded-full bg-background shadow transition",
-          checked ? "left-5" : "left-0.5"
+          "pointer-events-none block h-[18px] w-[18px] rounded-full bg-white shadow-sm",
+          "transition-transform duration-normal ease-spring",
+          "data-[state=checked]:translate-x-[18px] data-[state=unchecked]:translate-x-0",
+          "group-active:w-[22px] group-active:data-[state=checked]:translate-x-[14px]"
         )}
       />
-    </button>
+    </RadixSwitch.Root>
   );
 }

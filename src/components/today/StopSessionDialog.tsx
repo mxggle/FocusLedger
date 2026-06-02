@@ -1,15 +1,23 @@
 import { FormEvent, useState } from "react";
 import { useTaskStore } from "../../stores/taskStore";
 import { Button } from "../ui/Button";
+import { Dialog, DialogDescription, DialogTitle } from "../ui/Dialog";
 import { Field, Input, Textarea } from "../ui/Field";
 
-export function StopSessionDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function StopSessionDialog({
+  open,
+  onOpenChange
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const stopActiveTask = useTaskStore((state) => state.stopActiveTask);
   const [note, setNote] = useState("");
   const [blocker, setBlocker] = useState("");
   const [nextAction, setNextAction] = useState("");
   const [completionRate, setCompletionRate] = useState("50");
   const [saving, setSaving] = useState(false);
+
   const parsedCompletionRate = Number(completionRate);
   const completionRateValid =
     completionRate.trim() !== "" &&
@@ -17,15 +25,8 @@ export function StopSessionDialog({ open, onOpenChange }: { open: boolean; onOpe
     parsedCompletionRate >= 0 &&
     parsedCompletionRate <= 100;
 
-  if (!open) {
-    return null;
-  }
-
   async function save(outcome: "paused" | "done" | "dropped") {
-    if (!completionRateValid || saving) {
-      return;
-    }
-
+    if (!completionRateValid || saving) return;
     setSaving(true);
     const result = await stopActiveTask(outcome, {
       note,
@@ -34,9 +35,7 @@ export function StopSessionDialog({ open, onOpenChange }: { open: boolean; onOpe
       completion_rate: parsedCompletionRate
     });
     setSaving(false);
-    if (!result.ok) {
-      return;
-    }
+    if (!result.ok) return;
     setNote("");
     setBlocker("");
     setNextAction("");
@@ -50,20 +49,49 @@ export function StopSessionDialog({ open, onOpenChange }: { open: boolean; onOpe
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 p-4">
-      <form onSubmit={handleSubmit} className="w-full max-w-lg rounded-md border bg-background p-5 shadow-xl">
-        <h2 className="text-lg font-semibold">Wrap up this session</h2>
-        <div className="mt-4 grid gap-3">
+    <Dialog
+      open={open}
+      onClose={() => !saving && onOpenChange(false)}
+      size="md"
+      className="p-6"
+    >
+      <form onSubmit={handleSubmit}>
+        <DialogTitle className="text-lg">Wrap up this session</DialogTitle>
+        <DialogDescription className="mt-1 text-sm">
+          A quick reflection before you stop.
+        </DialogDescription>
+        <div className="mt-5 grid gap-4">
           <Field label="What did you work on?">
-            <Textarea value={note} onChange={(event) => setNote(event.target.value)} />
+            <Textarea
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="A short note on what got done…"
+            />
           </Field>
-          <Field label="Any blocker?">
-            <Textarea value={blocker} onChange={(event) => setBlocker(event.target.value)} />
-          </Field>
-          <Field label="Next action">
-            <Input value={nextAction} onChange={(event) => setNextAction(event.target.value)} />
-          </Field>
-          <Field label="Completion rate">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Any blocker?">
+              <Textarea
+                value={blocker}
+                onChange={(event) => setBlocker(event.target.value)}
+                placeholder="What got in the way?"
+              />
+            </Field>
+            <Field label="Next action">
+              <Textarea
+                value={nextAction}
+                onChange={(event) => setNextAction(event.target.value)}
+                placeholder="Where to pick up next…"
+              />
+            </Field>
+          </div>
+          <Field
+            label="Completion rate (0–100)"
+            error={
+              completionRateValid
+                ? undefined
+                : "Completion rate must be between 0 and 100."
+            }
+          >
             <Input
               type="number"
               min="0"
@@ -72,27 +100,41 @@ export function StopSessionDialog({ open, onOpenChange }: { open: boolean; onOpe
               onChange={(event) => setCompletionRate(event.target.value)}
             />
           </Field>
-          {!completionRateValid ? (
-            <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-              Completion rate must be between 0 and 100.
-            </div>
-          ) : null}
         </div>
-        <div className="mt-5 flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
+        <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            disabled={saving}
+          >
             Cancel
           </Button>
-          <Button type="submit" variant="secondary" disabled={!completionRateValid || saving}>
-            Save and pause
+          <Button
+            type="submit"
+            variant="secondary"
+            disabled={!completionRateValid || saving}
+            loading={saving}
+          >
+            Save &amp; pause
           </Button>
-          <Button type="button" onClick={() => void save("done")} disabled={!completionRateValid || saving}>
+          <Button
+            type="button"
+            onClick={() => void save("done")}
+            disabled={!completionRateValid || saving}
+          >
             Mark as done
           </Button>
-          <Button type="button" variant="danger" onClick={() => void save("dropped")} disabled={!completionRateValid || saving}>
+          <Button
+            type="button"
+            variant="danger"
+            onClick={() => void save("dropped")}
+            disabled={!completionRateValid || saving}
+          >
             Drop task
           </Button>
         </div>
       </form>
-    </div>
+    </Dialog>
   );
 }
