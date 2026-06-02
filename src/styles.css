@@ -2,6 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Prevent drag/rubber-band selection on containers for native app feel */
+body,
+button,
+[role="button"],
+[data-radix-collection-item] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Allow text selection on actual text content and inputs */
+p,
+span,
+h1, h2, h3, h4, h5, h6,
+label,
+input,
+textarea,
+[contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* ─── Design Tokens ─────────────────────────────────────────────────────── */
 
 :root {
