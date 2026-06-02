@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { validateTemplateSchedule } from "../../services/scheduleConflictService";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
+import { useUiStore } from "../../stores/uiStore";
 import type { RecurrenceType, TaskPriority, TaskTemplate } from "../../types";
 import { formatDurationCompact } from "../../utils/duration";
 import { Badge } from "../ui/Badge";
@@ -217,6 +218,7 @@ function PlanItem({ template }: { template: TaskTemplate }) {
   const categories = useTaskStore((state) => state.categories);
   const updateTemplate = useTaskStore((state) => state.updateScheduleTemplate);
   const deleteTemplate = useTaskStore((state) => state.deleteScheduleTemplate);
+  const confirm = useUiStore((state) => state.confirm);
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(template.title);
   const [categoryId, setCategoryId] = useState(template.category_id ?? "inbox");
@@ -357,9 +359,18 @@ function PlanItem({ template }: { template: TaskTemplate }) {
             size="icon"
             variant="ghost"
             onClick={() => {
-              if (window.confirm("Delete this plan item? Existing task history will stay.")) {
-                void deleteTemplate(template.id);
-              }
+              void (async () => {
+                if (
+                  await confirm({
+                    title: "Delete plan item",
+                    message: "Delete this plan item? Existing task history will stay.",
+                    confirmLabel: "Delete",
+                    danger: true
+                  })
+                ) {
+                  await deleteTemplate(template.id);
+                }
+              })();
             }}
             aria-label="Delete plan item"
           >

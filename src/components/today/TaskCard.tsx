@@ -17,9 +17,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { validateTaskSchedule } from "../../services/scheduleConflictService";
 import { useTaskStore } from "../../stores/taskStore";
 import { getLiveTaskSeconds, useTimerStore } from "../../stores/timerStore";
+import { useUiStore } from "../../stores/uiStore";
 import type { Task, TaskPriority } from "../../types";
-import { toDateKey } from "../../utils/date";
+import { formatDateLabel, toDateKey } from "../../utils/date";
 import { formatDurationCompact } from "../../utils/duration";
+import { isTaskOverdue } from "../../utils/taskGrouping";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Field, Input, Select } from "../ui/Field";
@@ -59,6 +61,7 @@ export function TaskCard({ task }: { task: Task }) {
   const skipPlannedTask = useTaskStore((state) => state.skipPlannedTask);
   const deleteTask = useTaskStore((state) => state.deleteTask);
   const updateTask = useTaskStore((state) => state.updateTask);
+  const confirm = useUiStore((state) => state.confirm);
   const now = useTimerStore((state) => state.now);
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
@@ -75,6 +78,7 @@ export function TaskCard({ task }: { task: Task }) {
   const minimumEstimate = minimumEstimateMinutes(elapsedSeconds);
   const estimateTooSmall = parsedEstimate !== null && parsedEstimate < minimumEstimate;
   const isTodayPlanTask = Boolean(task.template_id && task.due_date === toDateKey());
+  const overdue = isTaskOverdue(task, toDateKey());
   const plannedTime = task.planned_end_time
     ? `${task.planned_start_time}-${task.planned_end_time}`
     : task.planned_start_time;
@@ -131,9 +135,11 @@ export function TaskCard({ task }: { task: Task }) {
   async function handleStart() {
     const result = await startTask(task.id);
     if (result === "active-exists") {
-      const confirmed = window.confirm(
-        "You already have an active task.\nDo you want to pause the current task and start this one?"
-      );
+      const confirmed = await confirm({
+        title: "Start this task?",
+        message: "You already have an active task.\nDo you want to pause the current task and start this one?",
+        confirmLabel: "Pause and start"
+      });
       if (confirmed) {
         await startTask(task.id, { stopCurrent: true });
       }
@@ -160,11 +166,15 @@ export function TaskCard({ task }: { task: Task }) {
   }
 
   async function handleDelete() {
-    const confirmed = window.confirm(
-      elapsedSeconds > 0
-        ? "Remove this task from today? Its time records will be kept."
-        : "Delete this task?"
-    );
+    const confirmed = await confirm({
+      title: "Delete task",
+      message:
+        elapsedSeconds > 0
+          ? "Remove this task from today? Its time records will be kept."
+          : "Delete this task?",
+      confirmLabel: "Delete",
+      danger: true
+    });
     if (confirmed) {
       await deleteTask(task.id);
     }
@@ -175,7 +185,7 @@ export function TaskCard({ task }: { task: Task }) {
       task.status === "doing"
         ? "Move this active task to backlog? The current timer will stop."
         : "Move this task back to backlog?";
-    if (window.confirm(message)) {
+    if (await confirm({ title: "Move to backlog", message, confirmLabel: "Move" })) {
       await moveTaskToBacklog(task.id);
     }
   }
@@ -187,7 +197,7 @@ export function TaskCard({ task }: { task: Task }) {
       task.status === "doing"
         ? `Move this active task to ${label}? The current timer will stop.`
         : `Move this task to ${label}?`;
-    if (window.confirm(message)) {
+    if (await confirm({ title: `Move to ${label}`, message, confirmLabel: "Move" })) {
       await rescheduleTask(task.id, targetDate);
     }
   }
@@ -264,6 +274,9 @@ export function TaskCard({ task }: { task: Task }) {
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold">{task.title}</h3>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            {overdue && task.due_date ? (
+              <span className="font-medium text-orange-600 dark:text-orange-400">Due {formatDateLabel(task.due_date)}</span>
+            ) : null}
             {plannedTime ? <span>{plannedTime}</span> : null}
             <span>{category?.name ?? "Inbox"}</span>
             {task.estimated_minutes ? <span>{task.estimated_minutes} min estimate</span> : null}
@@ -329,9 +342,9 @@ export function TaskCard({ task }: { task: Task }) {
                   icon={CalendarX}
                   label="Skip today"
                   onClick={() =>
-                    runMenuAction(() => {
-                      if (window.confirm("Skip this planned task for today?")) {
-                        void skipPlannedTask(task.id);
+                    runMenuAction(async () => {
+                      if (await confirm({ title: "Skip today", message: "Skip this planned task for today?", confirmLabel: "Skip" })) {
+                        await skipPlannedTask(task.id);
                       }
                     })
                   }
@@ -343,9 +356,9 @@ export function TaskCard({ task }: { task: Task }) {
                 icon={X}
                 label="Drop"
                 onClick={() =>
-                  runMenuAction(() => {
-                    if (window.confirm("Drop this task?")) {
-                      void dropTask(task.id);
+                  runMenuAction(async () => {
+                    if (await confirm({ title: "Drop task", message: "Drop this task?", confirmLabel: "Drop", danger: true })) {
+                      await dropTask(task.id);
                     }
                   })
                 }

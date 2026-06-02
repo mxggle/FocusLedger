@@ -169,9 +169,11 @@ export function useTaskReminders({ onOpenToday }: ReminderOptions = {}) {
     const startWithConflictHandling = async (taskId: string) => {
       const result = await startTask(taskId);
       if (result === "active-exists") {
-        const confirmed = window.confirm(
-          "You already have an active task.\nDo you want to pause the current task and start this one?"
-        );
+        const confirmed = await useUiStore.getState().confirm({
+          title: "Start this task?",
+          message: "You already have an active task.\nDo you want to pause the current task and start this one?",
+          confirmLabel: "Pause and start"
+        });
         if (confirmed) {
           await startTask(taskId, { stopCurrent: true });
         }

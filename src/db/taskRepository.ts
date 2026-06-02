@@ -75,13 +75,17 @@ export const taskRepository = {
 
   async getTodayTasks(date = toDateKey()): Promise<Task[]> {
     const db = await getDatabase();
+    // due_date <= date carries unfinished past-due tasks forward into Today so
+    // they are never lost when the day rolls over (surfaced as "overdue" in the UI).
     return db.select<Task[]>(
       `${TASK_SELECT}
        WHERE (
-        due_date = $1 AND status NOT IN ('done', 'dropped')
+        due_date <= $1 AND status NOT IN ('done', 'dropped')
        ) OR status IN ('doing', 'paused')
        ORDER BY
         CASE status WHEN 'doing' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END,
+        CASE WHEN due_date < $1 THEN 0 ELSE 1 END,
+        due_date ASC,
         CASE WHEN planned_start_time IS NULL THEN 1 ELSE 0 END,
         planned_start_time ASC,
         COALESCE(sort_order, 9999) ASC,

@@ -7,7 +7,9 @@ import { PlanPage } from "./components/plan/PlanPage";
 import { QuickAddDialog } from "./components/quick-add/QuickAddDialog";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { TodayPage } from "./components/today/TodayPage";
+import { ConfirmDialog } from "./components/ui/ConfirmDialog";
 import { ToastViewport } from "./components/ui/ToastViewport";
+import { useDayRollover } from "./hooks/useDayRollover";
 import { useQuickAddShortcuts } from "./hooks/useQuickAddShortcuts";
 import { useTaskReminders } from "./hooks/useTaskReminders";
 import { useTrayStatus } from "./hooks/useTrayStatus";
@@ -36,6 +38,7 @@ export default function App() {
   useTrayStatus();
   useQuickAddShortcuts();
   useTaskReminders({ onOpenToday: openToday });
+  useDayRollover();
 
   useEffect(() => {
     void initialize();
@@ -81,6 +84,7 @@ export default function App() {
         )}
       </AppShell>
       <QuickAddDialog />
+      <ConfirmDialog />
       <ToastViewport />
     </>
   );

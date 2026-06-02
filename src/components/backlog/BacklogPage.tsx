@@ -92,6 +92,7 @@ function BacklogTaskCard({ task }: { task: Task }) {
   const updateTask = useTaskStore((state) => state.updateTask);
   const deleteTask = useTaskStore((state) => state.deleteTask);
   const startTask = useTaskStore((state) => state.startTask);
+  const confirm = useUiStore((state) => state.confirm);
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
   const [categoryId, setCategoryId] = useState(task.category_id ?? "inbox");
@@ -139,9 +140,11 @@ function BacklogTaskCard({ task }: { task: Task }) {
 
     const result = await startTask(task.id);
     if (result === "active-exists") {
-      const confirmed = window.confirm(
-        "You already have an active task.\nDo you want to pause the current task and start this one?"
-      );
+      const confirmed = await confirm({
+        title: "Start this task?",
+        message: "You already have an active task.\nDo you want to pause the current task and start this one?",
+        confirmLabel: "Pause and start"
+      });
       if (confirmed) {
         await startTask(task.id, { stopCurrent: true });
       }
@@ -246,9 +249,18 @@ function BacklogTaskCard({ task }: { task: Task }) {
             size="icon"
             variant="ghost"
             onClick={() => {
-              if (window.confirm("Delete this backlog task?")) {
-                void deleteTask(task.id);
-              }
+              void (async () => {
+                if (
+                  await confirm({
+                    title: "Delete task",
+                    message: "Delete this backlog task?",
+                    confirmLabel: "Delete",
+                    danger: true
+                  })
+                ) {
+                  await deleteTask(task.id);
+                }
+              })();
             }}
             aria-label="Delete backlog task"
           >
