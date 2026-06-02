@@ -127,6 +127,20 @@ export const useUiStore = create<UiState>((set) => ({
 
   addToast: (toast) => {
     const { durationMs = 5000, ...message } = toast;
+
+    // Skip if an identical toast is already visible (prevents duplicates from
+    // double-fired effects, e.g. StrictMode mounting an effect twice).
+    const existing = useUiStore.getState().toasts;
+    const isDuplicate = existing.some(
+      (t) =>
+        t.kind === message.kind &&
+        t.title === message.title &&
+        t.description === message.description
+    );
+    if (isDuplicate) {
+      return;
+    }
+
     const id = createId("toast");
     set((state) => ({
       toasts: [...state.toasts, { ...message, id }].slice(-4)

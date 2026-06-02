@@ -3,6 +3,31 @@ import { useUiStore } from "./uiStore";
 
 // ── Existing tests ──────────────────────────────────────────────────────────
 
+describe("uiStore addToast", () => {
+  beforeEach(() => {
+    useUiStore.setState({ toasts: [] });
+  });
+
+  it("adds a toast", () => {
+    useUiStore.getState().addToast({ kind: "error", title: "Boom", description: "bad" });
+    expect(useUiStore.getState().toasts).toHaveLength(1);
+  });
+
+  it("skips an identical toast that is already visible", () => {
+    const { addToast } = useUiStore.getState();
+    addToast({ kind: "error", title: "Boom", description: "bad" });
+    addToast({ kind: "error", title: "Boom", description: "bad" });
+    expect(useUiStore.getState().toasts).toHaveLength(1);
+  });
+
+  it("still adds toasts that differ in title or description", () => {
+    const { addToast } = useUiStore.getState();
+    addToast({ kind: "error", title: "Boom", description: "bad" });
+    addToast({ kind: "error", title: "Boom", description: "worse" });
+    expect(useUiStore.getState().toasts).toHaveLength(2);
+  });
+});
+
 describe("uiStore confirm", () => {
   beforeEach(() => {
     useUiStore.setState({ confirmRequest: null });
