@@ -111,3 +111,23 @@ describe("uiStore todayPanes", () => {
     expect(after).not.toBe(before);
   });
 });
+
+// ── New: today summary expand/collapse ──────────────────────────────────────
+
+describe("uiStore todaySummaryExpanded", () => {
+  beforeEach(() => {
+    useUiStore.setState({ todaySummaryExpanded: false });
+  });
+
+  it("starts collapsed=false by default (after reset)", () => {
+    expect(useUiStore.getState().todaySummaryExpanded).toBe(false);
+  });
+
+  it("toggleTodaySummary flips the expanded state", () => {
+    useUiStore.getState().toggleTodaySummary();
+    expect(useUiStore.getState().todaySummaryExpanded).toBe(true);
+
+    useUiStore.getState().toggleTodaySummary();
+    expect(useUiStore.getState().todaySummaryExpanded).toBe(false);
+  });
+});

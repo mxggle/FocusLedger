@@ -40,10 +40,19 @@ export type TodayPanes = {
 
 const STORAGE_SIDEBAR = "fl:sidebarCollapsed";
 const STORAGE_PANES = "fl:todayPanes";
+const STORAGE_SUMMARY_EXPANDED = "fl:todaySummaryExpanded";
 
 function readSidebarCollapsed(): boolean {
   try {
     return localStorage.getItem(STORAGE_SIDEBAR) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function readSummaryExpanded(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_SUMMARY_EXPANDED) === "true";
   } catch {
     return false;
   }
@@ -62,6 +71,14 @@ function readTodayPanes(): TodayPanes {
 function writeSidebarCollapsed(value: boolean): void {
   try {
     localStorage.setItem(STORAGE_SIDEBAR, String(value));
+  } catch {
+    // ignore
+  }
+}
+
+function writeSummaryExpanded(value: boolean): void {
+  try {
+    localStorage.setItem(STORAGE_SUMMARY_EXPANDED, String(value));
   } catch {
     // ignore
   }
@@ -92,9 +109,11 @@ type UiState = {
   // New: layout collapse state
   sidebarCollapsed: boolean;
   todayPanes: TodayPanes;
+  todaySummaryExpanded: boolean;
   toggleSidebar: () => void;
   toggleTodayPane: (pane: keyof TodayPanes) => void;
   setTodayPaneCollapsed: (pane: keyof TodayPanes, collapsed: boolean) => void;
+  toggleTodaySummary: () => void;
 };
 
 export const useUiStore = create<UiState>((set) => ({
@@ -147,6 +166,7 @@ export const useUiStore = create<UiState>((set) => ({
   // ── New: layout collapse state (hydrated from localStorage) ───────────────
   sidebarCollapsed: readSidebarCollapsed(),
   todayPanes: readTodayPanes(),
+  todaySummaryExpanded: readSummaryExpanded(),
 
   toggleSidebar: () =>
     set((state) => {
@@ -170,5 +190,12 @@ export const useUiStore = create<UiState>((set) => ({
       const next: TodayPanes = { ...state.todayPanes, [pane]: collapsed };
       writeTodayPanes(next);
       return { todayPanes: next };
+    }),
+
+  toggleTodaySummary: () =>
+    set((state) => {
+      const next = !state.todaySummaryExpanded;
+      writeSummaryExpanded(next);
+      return { todaySummaryExpanded: next };
     })
 }));

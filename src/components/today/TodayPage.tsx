@@ -64,15 +64,16 @@ export function TodayPage() {
         </div>
       </CollapsiblePane>
 
-      {/* Log & Summary pane — no border-r (rightmost) */}
+      {/* Log & Summary pane — no border-r (rightmost).
+          Summary is sticky at the top; the log list scrolls beneath it. */}
       <CollapsiblePane
         title="Log"
         collapsed={todayPanes.log}
         onToggle={() => toggleTodayPane("log")}
       >
+        <TodaySummary />
         <div className="p-4">
           <TodayLog />
-          <TodaySummary />
         </div>
       </CollapsiblePane>
     </div>
