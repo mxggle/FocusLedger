@@ -209,7 +209,7 @@ export function useTaskReminders({ onOpenToday }: ReminderOptions = {}) {
       }
 
       notifiedKeysRef.current.add(notificationKey);
-      const body = `${description} Click to open FocusLedger.`;
+      const body = `${description} Click to open Yolo.`;
       sendSystemNotification({
         title,
         body,

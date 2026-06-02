@@ -1,8 +1,8 @@
-# FocusLedger
+# Yolo
 
 Turn tasks into time records.
 
-FocusLedger is a local-first desktop todo and time tracking app. It helps you write down today's work, start a focus session, record the real execution time, and review where the day went.
+Yolo is a local-first desktop todo and time tracking app. It helps you write down today's work, start a focus session, record the real execution time, and review where the day went.
 
 ## Tech Stack
 
@@ -69,7 +69,7 @@ npm test
 
 ## Data Storage
 
-All product data is stored in a local SQLite database named `focusledger.db` through Tauri's SQL plugin. React components never run SQL directly; they call repository modules under `src/db`.
+All product data is stored in a local SQLite database named `yolo.db` through Tauri's SQL plugin. React components never run SQL directly; they call repository modules under `src/db`.
 
 Tables:
 

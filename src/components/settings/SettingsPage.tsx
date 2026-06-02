@@ -5,6 +5,7 @@ import { useTaskStore } from "../../stores/taskStore";
 import type { AppTheme } from "../../types";
 import { Field, Input, Select } from "../ui/Field";
 import { PageHeader, SettingsSection } from "../ui/PageHeader";
+import { ShortcutInput } from "../ui/ShortcutInput";
 import { Switch } from "../ui/Switch";
 import { CategoryManager } from "./CategoryManager";
 
@@ -93,7 +94,7 @@ export function SettingsPage() {
               />
               <SettingRow
                 label="Enable tray"
-                hint="Keep FocusLedger in the menu bar / system tray."
+                hint="Keep Yolo in the menu bar / system tray."
                 value={settings.enableTray}
                 onChange={(value) => void updateSetting("enableTray", value)}
               />
@@ -111,15 +112,13 @@ export function SettingsPage() {
           <SettingsSection
             icon={Keyboard}
             title="Global shortcut"
-            description="Use Cmd/Ctrl+K inside the app. The global shortcut works while FocusLedger is running."
+            description="Quick-add shortcut used both inside the app and system-wide while Yolo is running."
           >
             <div className="max-w-sm">
               <Field label="Shortcut key">
-                <Input
+                <ShortcutInput
                   value={settings.globalShortcut}
-                  onChange={(event) =>
-                    void updateSetting("globalShortcut", event.target.value)
-                  }
+                  onChange={(value) => void updateSetting("globalShortcut", value)}
                 />
               </Field>
             </div>

@@ -13,6 +13,7 @@ import {
   X
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useShortcutLabel } from "../../hooks/useShortcutLabel";
 import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { Task, TaskPriority } from "../../types";
@@ -42,6 +43,7 @@ export function BacklogPage() {
   const backlogTasks = useTaskStore((state) => state.backlogTasks);
   const allTasks = useTaskStore((state) => state.allTasks);
   const openQuickAdd = useUiStore((state) => state.openQuickAdd);
+  const shortcutLabel = useShortcutLabel();
   const todayDate = toDateKey();
 
   const scheduledTasks = useMemo(
@@ -105,7 +107,7 @@ export function BacklogPage() {
               <EmptyState
                 icon={Package}
                 title="Backlog is clear."
-                hint="Use Quick add (Cmd/Ctrl+K) to capture ideas."
+                hint={`Use Quick add (${shortcutLabel}) to capture ideas.`}
                 dashed
               />
             ) : (

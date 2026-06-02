@@ -1,5 +1,6 @@
 import { CalendarCheck, Inbox, Plus, X } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { useShortcutLabel } from "../../hooks/useShortcutLabel";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
@@ -32,6 +33,7 @@ export function QuickAddDialog() {
     (state) => state.settings.defaultCategoryId
   );
 
+  const shortcutLabel = useShortcutLabel();
   const [title, setTitle] = useState("");
   const [destination, setDestination] = useState<Destination>("backlog");
   const [categoryId, setCategoryId] = useState("inbox");
@@ -77,7 +79,7 @@ export function QuickAddDialog() {
             <DialogDescription className="mt-0.5">
               Press{" "}
               <kbd className="rounded border border-border bg-muted px-1 py-px font-sans text-[10px] font-medium text-muted-foreground">
-                ⌘K
+                {shortcutLabel}
               </kbd>{" "}
               to open this from anywhere.
             </DialogDescription>

@@ -61,7 +61,7 @@ export default function App() {
         routes={routes}
         activeRoute={route}
         onRouteChange={setRoute}
-        title="FocusLedger"
+        title="Yolo"
         subtitle="Turn tasks into time records."
       >
         {!initialized && loading ? (
@@ -72,7 +72,7 @@ export default function App() {
           <div className="mx-auto mt-20 max-w-xl rounded-xl border border-destructive/30 bg-destructive-soft p-5">
             <div className="mb-2 flex items-center gap-2 font-semibold text-destructive">
               <AlertCircle className="h-4 w-4" />
-              FocusLedger could not start
+              Yolo could not start
             </div>
             <p className="text-sm text-muted-foreground">{error}</p>
           </div>

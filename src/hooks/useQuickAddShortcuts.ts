@@ -26,6 +26,21 @@ async function focusMainWindow() {
   }
 }
 
+function matchesShortcut(event: KeyboardEvent, shortcut: string): boolean {
+  const parts = shortcut.split("+").map((p) => p.trim().toLowerCase());
+  const key = parts[parts.length - 1];
+  const needsCmd = parts.includes("cmdorctrl") || parts.includes("commandorcontrol");
+  const needsAlt = parts.includes("alt");
+  const needsShift = parts.includes("shift");
+
+  const cmdMatch = needsCmd ? event.ctrlKey || event.metaKey : !event.ctrlKey && !event.metaKey;
+  const altMatch = needsAlt ? event.altKey : !event.altKey;
+  const shiftMatch = needsShift ? event.shiftKey : !event.shiftKey;
+  const keyMatch = event.key.toLowerCase() === key;
+
+  return cmdMatch && altMatch && shiftMatch && keyMatch;
+}
+
 export function useQuickAddShortcuts() {
   const shortcut = useSettingsStore((state) => state.settings.globalShortcut);
   const openQuickAdd = useUiStore((state) => state.openQuickAdd);
@@ -33,8 +48,7 @@ export function useQuickAddShortcuts() {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      const primaryModifier = event.ctrlKey || event.metaKey;
-      if (primaryModifier && event.key.toLowerCase() === "k") {
+      if (shortcut && matchesShortcut(event, shortcut)) {
         event.preventDefault();
         openQuickAdd();
       }
@@ -42,7 +56,7 @@ export function useQuickAddShortcuts() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [openQuickAdd]);
+  }, [openQuickAdd, shortcut]);
 
   useEffect(() => {
     if (!isTauriRuntime()) {

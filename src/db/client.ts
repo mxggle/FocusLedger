@@ -2,7 +2,7 @@ import Database from "@tauri-apps/plugin-sql";
 import { runMigrations } from "./migrations";
 import type { SqlDatabase } from "./types";
 
-const DATABASE_URL = "sqlite:focusledger.db";
+const DATABASE_URL = "sqlite:yolo.db";
 
 let databasePromise: Promise<SqlDatabase> | null = null;
 

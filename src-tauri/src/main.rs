@@ -1,3 +1,3 @@
 fn main() {
-    focusledger_lib::run()
+    yolo_lib::run()
 }

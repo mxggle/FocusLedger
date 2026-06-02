@@ -1,12 +1,12 @@
 [package]
-name = "focusledger"
+name = "yolo"
 version = "0.1.0"
-description = "FocusLedger desktop app"
-authors = ["FocusLedger"]
+description = "Yolo desktop app"
+authors = ["Yolo"]
 edition = "2021"
 
 [lib]
-name = "focusledger_lib"
+name = "yolo_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

@@ -20,7 +20,7 @@ export function useTrayStatus() {
     const elapsed = formatTimer(elapsedSeconds);
     const title = activeTask && activeEntry ? elapsed : null;
     const tooltip =
-      activeTask && activeEntry ? `${activeTask.title} - ${elapsed}` : "FocusLedger - no active focus session";
+      activeTask && activeEntry ? `${activeTask.title} - ${elapsed}` : "Yolo - no active focus session";
 
     void invoke("update_tray_status", { title, tooltip }).catch((error) => {
       console.warn("Tray status could not be updated", error);
