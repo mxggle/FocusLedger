@@ -24,10 +24,12 @@ import { formatDurationCompact } from "../../utils/duration";
 import { isTaskOverdue } from "../../utils/taskGrouping";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
+import { CategoryDot } from "../ui/CategoryDot";
 import { Field, Input, Select } from "../ui/Field";
 import { IconButton } from "../ui/IconButton";
 import { Menu, MenuItem, MenuSeparator } from "../ui/Menu";
 import { cn } from "../../utils/cn";
+import { resolveCategoryColor } from "../../utils/category";
 
 // ── Status badge mapping ──────────────────────────────────────────────────────
 
@@ -47,13 +49,6 @@ const statusLabel: Record<Task["status"], string> = {
   paused: "Paused",
   done: "Done",
   dropped: "Dropped"
-};
-
-// Left accent rail color by priority.
-const priorityRail: Record<TaskPriority, string> = {
-  low: "bg-border-strong",
-  medium: "bg-primary/50",
-  high: "bg-warning"
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -94,10 +89,12 @@ export function TaskCard({ task }: { task: Task }) {
   const [title, setTitle] = useState(task.title);
   const [estimate, setEstimate] = useState(task.estimated_minutes?.toString() ?? "");
   const [priority, setPriority] = useState<TaskPriority>(task.priority);
+  const [categoryId, setCategoryId] = useState(task.category_id ?? "inbox");
   const [plannedStart, setPlannedStart] = useState(task.planned_start_time ?? "");
   const [plannedEnd, setPlannedEnd] = useState(task.planned_end_time ?? "");
 
   const category = categories.find((item) => item.id === task.category_id);
+  const categoryColor = resolveCategoryColor(category?.color);
   const elapsedSeconds = getLiveTaskSeconds(task.id, activeEntry, closedTaskDurations, now);
   const estimateSeconds = (task.estimated_minutes ?? 0) * 60;
   const parsedEstimate = parseEstimate(estimate);
@@ -129,6 +126,7 @@ export function TaskCard({ task }: { task: Task }) {
     setTitle(task.title);
     setEstimate(task.estimated_minutes?.toString() ?? "");
     setPriority(task.priority);
+    setCategoryId(task.category_id ?? "inbox");
     setPlannedStart(task.planned_start_time ?? "");
     setPlannedEnd(task.planned_end_time ?? "");
   }, [
@@ -136,6 +134,7 @@ export function TaskCard({ task }: { task: Task }) {
     task.title,
     task.estimated_minutes,
     task.priority,
+    task.category_id,
     task.planned_start_time,
     task.planned_end_time
   ]);
@@ -162,6 +161,7 @@ export function TaskCard({ task }: { task: Task }) {
       title,
       estimated_minutes: parseEstimate(estimate),
       priority,
+      category_id: categoryId || "inbox",
       ...(isTodayPlanTask
         ? {
             planned_start_time: plannedStart,
@@ -228,6 +228,18 @@ export function TaskCard({ task }: { task: Task }) {
               value={title}
               onChange={(event) => setTitle(event.target.value)}
             />
+          </Field>
+          <Field label="Category">
+            <Select
+              value={categoryId}
+              onChange={(event) => setCategoryId(event.target.value)}
+            >
+              {categories.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </Select>
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Estimate (min)">
@@ -311,12 +323,10 @@ export function TaskCard({ task }: { task: Task }) {
         isActive ? "border-primary/40 ring-1 ring-inset ring-primary/10" : "border-border"
       )}
     >
-      {/* Priority accent rail */}
+      {/* Category accent rail */}
       <span
-        className={cn(
-          "absolute inset-y-0 left-0 w-1",
-          isActive ? "bg-primary" : priorityRail[task.priority]
-        )}
+        className="absolute inset-y-0 left-0 w-1"
+        style={{ backgroundColor: categoryColor }}
         aria-hidden="true"
       />
 
@@ -340,7 +350,13 @@ export function TaskCard({ task }: { task: Task }) {
                 {plannedTime}
               </span>
             ) : null}
-            <span>{category?.name ?? "Inbox"}</span>
+            <span className="inline-flex items-center gap-1.5">
+              <CategoryDot color={category?.color} />
+              {category?.name ?? "Inbox"}
+            </span>
+            {task.priority !== "medium" ? (
+              <span className="capitalize">{task.priority} priority</span>
+            ) : null}
             {elapsedSeconds > 0 || estimateSeconds > 0 ? (
               <span className="font-medium tabular-nums text-foreground/70">
                 {formatDurationCompact(elapsedSeconds)}

@@ -1,4 +1,4 @@
-import { Bell, Keyboard, MonitorCog, SlidersHorizontal } from "lucide-react";
+import { Bell, Keyboard, MonitorCog, SlidersHorizontal, Tags } from "lucide-react";
 import { ChangeEvent } from "react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
@@ -6,6 +6,7 @@ import type { AppTheme } from "../../types";
 import { Field, Input, Select } from "../ui/Field";
 import { PageHeader, SettingsSection } from "../ui/PageHeader";
 import { Switch } from "../ui/Switch";
+import { CategoryManager } from "./CategoryManager";
 
 export function SettingsPage() {
   const settings = useSettingsStore((state) => state.settings);
@@ -71,6 +72,14 @@ export function SettingsPage() {
                 </Select>
               </Field>
             </div>
+          </SettingsSection>
+
+          <SettingsSection
+            icon={Tags}
+            title="Categories"
+            description="Organize tasks by area. Pick a color so they stand out across the app."
+          >
+            <CategoryManager />
           </SettingsSection>
 
           <SettingsSection icon={Bell} title="Desktop behavior">

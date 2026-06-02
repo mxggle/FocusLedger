@@ -5,6 +5,7 @@ import { useTaskStore } from "../../stores/taskStore";
 import { useTimerStore } from "../../stores/timerStore";
 import { toDateKey } from "../../utils/date";
 import { formatDurationCompact } from "../../utils/duration";
+import { CategoryDot } from "../ui/CategoryDot";
 import { EmptyState } from "../ui/EmptyState";
 
 export function TodayLog() {
@@ -47,7 +48,10 @@ export function TodayLog() {
                         {entry.end_at ? format(end, "HH:mm") : "now"}
                       </span>
                       <span aria-hidden="true">·</span>
-                      <span className="truncate">{entry.category_name ?? "Inbox"}</span>
+                      <span className="inline-flex items-center gap-1.5 truncate">
+                        <CategoryDot color={entry.category_color} />
+                        {entry.category_name ?? "Inbox"}
+                      </span>
                     </div>
                   </div>
                   <div className="shrink-0 text-right">

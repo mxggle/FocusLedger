@@ -8,18 +8,14 @@ import type { RecurrenceType, TaskPriority, TaskTemplate } from "../../types";
 import { formatDurationCompact } from "../../utils/duration";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
+import { CategoryDot } from "../ui/CategoryDot";
 import { EmptyState } from "../ui/EmptyState";
 import { Field, Input, Select } from "../ui/Field";
 import { IconButton } from "../ui/IconButton";
 import { PageHeader } from "../ui/PageHeader";
 import { Switch } from "../ui/Switch";
 import { cn } from "../../utils/cn";
-
-const priorityRail: Record<TaskPriority, string> = {
-  low: "bg-border-strong",
-  medium: "bg-primary/50",
-  high: "bg-warning"
-};
+import { resolveCategoryColor } from "../../utils/category";
 
 const weekDays = [
   { value: 1, label: "Mon" },
@@ -316,6 +312,7 @@ function PlanItem({ template }: { template: TaskTemplate }) {
   const [recurrenceDays, setRecurrenceDays] = useState(template.recurrence_days);
 
   const category = categories.find((item) => item.id === template.category_id);
+  const categoryColor = resolveCategoryColor(category?.color);
 
   const validation = useMemo(
     () =>
@@ -474,10 +471,8 @@ function PlanItem({ template }: { template: TaskTemplate }) {
       )}
     >
       <span
-        className={cn(
-          "absolute inset-y-0 left-0 w-1",
-          template.enabled ? priorityRail[template.priority] : "bg-border"
-        )}
+        className="absolute inset-y-0 left-0 w-1"
+        style={{ backgroundColor: template.enabled ? categoryColor : "hsl(var(--border))" }}
         aria-hidden="true"
       />
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -502,7 +497,10 @@ function PlanItem({ template }: { template: TaskTemplate }) {
               {!template.enabled ? <Badge variant="neutral">Off</Badge> : null}
             </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground">
-              <span>{category?.name ?? "Inbox"}</span>
+              <span className="inline-flex items-center gap-1.5">
+                <CategoryDot color={category?.color} />
+                {category?.name ?? "Inbox"}
+              </span>
               <span className="capitalize">{template.priority}</span>
               {template.estimated_minutes ? (
                 <span className="tabular-nums">

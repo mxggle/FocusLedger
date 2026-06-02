@@ -5,6 +5,7 @@ import { getLiveTaskSeconds, useTimerStore } from "../../stores/timerStore";
 import { formatDurationCompact, formatTimer } from "../../utils/duration";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
+import { CategoryDot } from "../ui/CategoryDot";
 import { EmptyState } from "../ui/EmptyState";
 import { Progress } from "../ui/Progress";
 import { StopSessionDialog } from "./StopSessionDialog";
@@ -66,7 +67,10 @@ export function CurrentFocus() {
           {activeTask.title}
         </h2>
         <div className="mt-2">
-          <Badge variant="neutral">{category?.name ?? "Inbox"}</Badge>
+          <Badge variant="neutral">
+            <CategoryDot color={category?.color} />
+            {category?.name ?? "Inbox"}
+          </Badge>
         </div>
       </div>
 

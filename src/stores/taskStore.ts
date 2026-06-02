@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { categoryRepository } from "../db/categoryRepository";
+import { categoryRepository, FALLBACK_CATEGORY_ID } from "../db/categoryRepository";
 import { initializeDatabase } from "../db/client";
 import { taskRepository } from "../db/taskRepository";
 import { taskTemplateRepository } from "../db/taskTemplateRepository";
@@ -9,8 +9,10 @@ import { scheduleService } from "../services/scheduleService";
 import { calculateDateRangeStats, calculateTodayStats } from "../services/statsService";
 import type {
   Category,
+  CreateCategoryInput,
   CreateTaskTemplateInput,
   CreateTaskInput,
+  UpdateCategoryInput,
   DailyStats,
   StopSessionInput,
   Task,
@@ -55,6 +57,9 @@ type TaskState = {
   createTask: (input: CreateTaskInput) => Promise<MutationResult>;
   updateTask: (id: string, input: UpdateTaskInput) => Promise<MutationResult>;
   deleteTask: (id: string) => Promise<MutationResult>;
+  createCategory: (input: CreateCategoryInput) => Promise<MutationResult>;
+  updateCategory: (id: string, input: UpdateCategoryInput) => Promise<MutationResult>;
+  deleteCategory: (id: string) => Promise<MutationResult>;
   createScheduleTemplate: (input: CreateTaskTemplateInput) => Promise<MutationResult>;
   updateScheduleTemplate: (id: string, input: UpdateTaskTemplateInput) => Promise<MutationResult>;
   deleteScheduleTemplate: (id: string) => Promise<MutationResult>;
@@ -283,6 +288,46 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     } catch (error) {
       reportError("Task could not be deleted", error);
       return mutationFailure(error, "Task could not be deleted");
+    }
+  },
+
+  createCategory: async (input) => {
+    try {
+      await categoryRepository.create(input);
+      await get().refresh();
+      useUiStore.getState().addToast({ kind: "success", title: "Category added" });
+      return { ok: true };
+    } catch (error) {
+      reportError("Category could not be created", error);
+      return mutationFailure(error, "Category could not be created");
+    }
+  },
+
+  updateCategory: async (id, input) => {
+    try {
+      await categoryRepository.update(id, input);
+      await get().refresh();
+      useUiStore.getState().addToast({ kind: "success", title: "Category updated" });
+      return { ok: true };
+    } catch (error) {
+      reportError("Category could not be updated", error);
+      return mutationFailure(error, "Category could not be updated");
+    }
+  },
+
+  deleteCategory: async (id) => {
+    try {
+      await categoryRepository.delete(id);
+      const settingsStore = useSettingsStore.getState();
+      if (settingsStore.settings.defaultCategoryId === id) {
+        await settingsStore.updateSetting("defaultCategoryId", FALLBACK_CATEGORY_ID);
+      }
+      await get().refresh();
+      useUiStore.getState().addToast({ kind: "success", title: "Category deleted" });
+      return { ok: true };
+    } catch (error) {
+      reportError("Category could not be deleted", error);
+      return mutationFailure(error, "Category could not be deleted");
     }
   },
 

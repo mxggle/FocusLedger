@@ -20,22 +20,17 @@ import { formatDateLabel, toDateKey } from "../../utils/date";
 import { formatDurationCompact } from "../../utils/duration";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
+import { CategoryDot } from "../ui/CategoryDot";
 import { EmptyState } from "../ui/EmptyState";
 import { Field, Input, Select } from "../ui/Field";
 import { IconButton } from "../ui/IconButton";
 import { PageHeader } from "../ui/PageHeader";
-import { cn } from "../../utils/cn";
+import { resolveCategoryColor } from "../../utils/category";
 
 function parseEstimate(value: string): number | null {
   const parsed = Number(value);
   return value && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
-
-const priorityRail: Record<TaskPriority, string> = {
-  low: "bg-border-strong",
-  medium: "bg-primary/50",
-  high: "bg-warning"
-};
 
 const priorityBadge: Record<TaskPriority, "neutral" | "primary" | "warning"> = {
   low: "neutral",
@@ -154,6 +149,7 @@ function BacklogTaskCard({ task }: { task: Task }) {
   const [scheduleDate, setScheduleDate] = useState(task.due_date ?? toDateKey());
 
   const category = categories.find((item) => item.id === task.category_id);
+  const categoryColor = resolveCategoryColor(category?.color);
 
   useEffect(() => {
     setTitle(task.title);
@@ -274,7 +270,8 @@ function BacklogTaskCard({ task }: { task: Task }) {
   return (
     <div className="group relative overflow-hidden rounded-xl border border-border bg-surface p-4 pl-5 shadow-card transition-[box-shadow,border-color,transform] duration-fast hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md">
       <span
-        className={cn("absolute inset-y-0 left-0 w-1", priorityRail[task.priority])}
+        className="absolute inset-y-0 left-0 w-1"
+        style={{ backgroundColor: categoryColor }}
         aria-hidden="true"
       />
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -289,7 +286,10 @@ function BacklogTaskCard({ task }: { task: Task }) {
                 {formatDateLabel(task.due_date)}
               </span>
             ) : null}
-            <span>{category?.name ?? "Inbox"}</span>
+            <span className="inline-flex items-center gap-1.5">
+              <CategoryDot color={category?.color} />
+              {category?.name ?? "Inbox"}
+            </span>
             <Badge variant={priorityBadge[task.priority]} dot>
               {task.priority}
             </Badge>

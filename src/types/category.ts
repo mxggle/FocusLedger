@@ -5,3 +5,13 @@ export type Category = {
   created_at: string;
   updated_at: string;
 };
+
+export type CreateCategoryInput = {
+  name: string;
+  color?: string | null;
+};
+
+export type UpdateCategoryInput = {
+  name?: string;
+  color?: string | null;
+};

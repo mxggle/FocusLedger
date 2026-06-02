@@ -1,4 +1,4 @@
-export type { Category } from "./category";
+export type { Category, CreateCategoryInput, UpdateCategoryInput } from "./category";
 export type {
   CreateTaskTemplateInput,
   RecurrenceType,
