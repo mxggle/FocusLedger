@@ -1,9 +1,9 @@
 import {
   PanelLeftClose,
   PanelLeftOpen,
-  Timer,
   type LucideIcon
 } from "lucide-react";
+import logoSrc from "../../assets/logo.png";
 import type { ReactNode } from "react";
 import { useUiStore } from "../../stores/uiStore";
 import { cn } from "../../utils/cn";
@@ -52,8 +52,8 @@ export function AppShell<T extends string>({
             sidebarCollapsed && "justify-center"
           )}
         >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary-hover text-primary-foreground shadow-sm">
-            <Timer className="h-[18px] w-[18px]" strokeWidth={2.25} />
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center">
+            <img src={logoSrc} alt="Yolo logo" className="h-8 w-8 object-contain" />
           </div>
           {!sidebarCollapsed && (
             <div className="min-w-0 flex-1">
