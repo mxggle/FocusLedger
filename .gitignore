@@ -10,3 +10,4 @@ src-tauri/gen
 .commandcode/
 *.tsbuildinfo
 !src/**/*.d.ts
+.superpowers/
