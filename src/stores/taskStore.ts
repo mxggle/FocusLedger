@@ -336,10 +336,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       if (!input.title.trim()) {
         throw new Error("Plan title is required");
       }
-      if (!input.planned_start_time) {
-        throw new Error("Start time is required");
-      }
-      const validation = validateTemplateSchedule({ ...input, recurrence_days: input.recurrence_days ?? [] }, get().scheduleTemplates);
+      const validation = validateTemplateSchedule({ ...input, planned_start_time: input.planned_start_time ?? null, recurrence_days: input.recurrence_days ?? [] }, get().scheduleTemplates);
       if (!validation.ok) {
         throw new Error(validation.message);
       }

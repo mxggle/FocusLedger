@@ -9,7 +9,7 @@ export type TaskTemplate = {
   category_id: string | null;
   priority: TaskPriority;
   estimated_minutes: number | null;
-  planned_start_time: string;
+  planned_start_time: string | null;
   planned_end_time: string | null;
   recurrence_type: RecurrenceType;
   recurrence_days: number[];
@@ -24,7 +24,7 @@ export type CreateTaskTemplateInput = {
   category_id?: string | null;
   priority?: TaskPriority;
   estimated_minutes?: number | null;
-  planned_start_time: string;
+  planned_start_time?: string | null;
   planned_end_time?: string | null;
   recurrence_type: RecurrenceType;
   recurrence_days?: number[];

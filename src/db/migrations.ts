@@ -106,8 +106,42 @@ export async function runMigrations(db: SqlDatabase): Promise<void> {
 
   await ensureTaskScheduleColumns(db);
   await db.execute("CREATE INDEX IF NOT EXISTS idx_tasks_template_due ON tasks(template_id, due_date)");
+  await ensureTemplateStartTimeNullable(db);
   await seedDefaultCategories(db);
   await seedDefaultSettings(db);
+}
+
+async function ensureTemplateStartTimeNullable(db: SqlDatabase): Promise<void> {
+  const columns = await db.select<Array<{ name: string; notnull: number }>>(
+    "PRAGMA table_info(task_templates)"
+  );
+  const col = columns.find((c) => c.name === "planned_start_time");
+  if (!col || col.notnull === 0) return;
+
+  await db.execute(
+    `CREATE TABLE task_templates_v2 (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT,
+      category_id TEXT,
+      priority TEXT NOT NULL DEFAULT 'medium',
+      estimated_minutes INTEGER,
+      planned_start_time TEXT,
+      planned_end_time TEXT,
+      recurrence_type TEXT NOT NULL,
+      recurrence_days TEXT NOT NULL DEFAULT '[]',
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (category_id) REFERENCES categories(id)
+    )`
+  );
+  await db.execute("INSERT INTO task_templates_v2 SELECT * FROM task_templates");
+  await db.execute("DROP TABLE task_templates");
+  await db.execute("ALTER TABLE task_templates_v2 RENAME TO task_templates");
+  await db.execute(
+    "CREATE INDEX IF NOT EXISTS idx_task_templates_enabled ON task_templates(enabled)"
+  );
 }
 
 async function ensureTaskScheduleColumns(db: SqlDatabase): Promise<void> {

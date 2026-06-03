@@ -156,6 +156,10 @@ export function validateTemplateSchedule(
     return { ok: false, message: "Choose at least one repeat day." };
   }
 
+  if (!candidate.planned_start_time) {
+    return { ok: true };
+  }
+
   const candidateInterval = getInterval(candidate, { requireDuration: true });
   if (!candidateInterval.ok || !candidateInterval.interval) {
     return candidateInterval;

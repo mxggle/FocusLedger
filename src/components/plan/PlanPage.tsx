@@ -41,6 +41,7 @@ function formatRecurrence(
 function formatTimeRange(
   template: Pick<TaskTemplate, "planned_start_time" | "planned_end_time">
 ): string {
+  if (!template.planned_start_time) return "Anytime";
   return template.planned_end_time
     ? `${template.planned_start_time}–${template.planned_end_time}`
     : template.planned_start_time;
@@ -102,7 +103,7 @@ export function PlanPage() {
   const [categoryId, setCategoryId] = useState("inbox");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [estimate, setEstimate] = useState("");
-  const [startTime, setStartTime] = useState("09:00");
+  const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>("daily");
   const [recurrenceDays, setRecurrenceDays] = useState([1, 2, 3, 4, 5]);
@@ -112,7 +113,7 @@ export function PlanPage() {
       validateTemplateSchedule(
         {
           title,
-          planned_start_time: startTime,
+          planned_start_time: startTime || null,
           planned_end_time: endTime || null,
           estimated_minutes: parseEstimate(estimate),
           recurrence_type: recurrenceType,
@@ -134,7 +135,7 @@ export function PlanPage() {
       category_id: categoryId || "inbox",
       priority,
       estimated_minutes: parseEstimate(estimate),
-      planned_start_time: startTime,
+      planned_start_time: startTime || null,
       planned_end_time: endTime || null,
       recurrence_type: recurrenceType,
       recurrence_days: recurrenceType === "weekly" ? recurrenceDays : []
@@ -142,7 +143,7 @@ export function PlanPage() {
     if (!result.ok) return;
     setTitle("");
     setEstimate("");
-    setStartTime("09:00");
+    setStartTime("");
     setEndTime("");
     setPriority("medium");
     setRecurrenceType("daily");
@@ -262,7 +263,7 @@ export function PlanPage() {
           <div className="mt-4 flex justify-end">
             <Button
               type="submit"
-              disabled={!title.trim() || !startTime || !validation.ok}
+              disabled={!title.trim() || !validation.ok}
             >
               <Plus className="h-4 w-4" />
               Add plan
@@ -304,7 +305,7 @@ function PlanItem({ template }: { template: TaskTemplate }) {
   const [estimate, setEstimate] = useState(
     template.estimated_minutes?.toString() ?? ""
   );
-  const [startTime, setStartTime] = useState(template.planned_start_time);
+  const [startTime, setStartTime] = useState(template.planned_start_time ?? "");
   const [endTime, setEndTime] = useState(template.planned_end_time ?? "");
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>(
     template.recurrence_type
@@ -320,7 +321,7 @@ function PlanItem({ template }: { template: TaskTemplate }) {
         {
           ...template,
           title,
-          planned_start_time: startTime,
+          planned_start_time: startTime || null,
           planned_end_time: endTime || null,
           estimated_minutes: parseEstimate(estimate),
           recurrence_type: recurrenceType,
@@ -347,7 +348,7 @@ function PlanItem({ template }: { template: TaskTemplate }) {
       category_id: categoryId,
       priority,
       estimated_minutes: parseEstimate(estimate),
-      planned_start_time: startTime,
+      planned_start_time: startTime || null,
       planned_end_time: endTime || null,
       recurrence_type: recurrenceType,
       recurrence_days: recurrenceType === "weekly" ? recurrenceDays : []
@@ -453,7 +454,7 @@ function PlanItem({ template }: { template: TaskTemplate }) {
           <Button
             type="button"
             onClick={saveEdit}
-            disabled={!title.trim() || !startTime || !validation.ok}
+            disabled={!title.trim() || !validation.ok}
           >
             <Check className="h-4 w-4" />
             Save
@@ -478,14 +479,20 @@ function PlanItem({ template }: { template: TaskTemplate }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <div className="flex shrink-0 flex-col items-center justify-center rounded-lg bg-muted px-2.5 py-1.5 text-center ring-1 ring-inset ring-border">
-            <span className="text-sm font-semibold tabular-nums text-foreground">
-              {template.planned_start_time}
-            </span>
-            {template.planned_end_time ? (
-              <span className="text-[10px] tabular-nums text-muted-foreground">
-                {template.planned_end_time}
-              </span>
-            ) : null}
+            {template.planned_start_time ? (
+              <>
+                <span className="text-sm font-semibold tabular-nums text-foreground">
+                  {template.planned_start_time}
+                </span>
+                {template.planned_end_time ? (
+                  <span className="text-[10px] tabular-nums text-muted-foreground">
+                    {template.planned_end_time}
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              <span className="text-xs font-medium text-muted-foreground">Anytime</span>
+            )}
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">

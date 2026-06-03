@@ -49,7 +49,7 @@ export const taskTemplateRepository = {
       category_id: input.category_id || "inbox",
       priority: input.priority ?? "medium",
       estimated_minutes: input.estimated_minutes ?? null,
-      planned_start_time: input.planned_start_time,
+      planned_start_time: input.planned_start_time || null,
       planned_end_time: input.planned_end_time || null,
       recurrence_type: input.recurrence_type,
       recurrence_days: normalizeDays(input),
@@ -88,7 +88,7 @@ export const taskTemplateRepository = {
     const db = await getDatabase();
     const rows = await db.select<TaskTemplateRow[]>(
       `${TEMPLATE_SELECT}
-       ORDER BY enabled DESC, planned_start_time ASC, created_at DESC`
+       ORDER BY enabled DESC, CASE WHEN planned_start_time IS NULL THEN 1 ELSE 0 END ASC, planned_start_time ASC, created_at DESC`
     );
     return rows.map(fromRow);
   },
@@ -98,7 +98,7 @@ export const taskTemplateRepository = {
     const rows = await db.select<TaskTemplateRow[]>(
       `${TEMPLATE_SELECT}
        WHERE enabled = 1
-       ORDER BY planned_start_time ASC, created_at ASC`
+       ORDER BY CASE WHEN planned_start_time IS NULL THEN 1 ELSE 0 END ASC, planned_start_time ASC, created_at ASC`
     );
     return rows.map(fromRow);
   },

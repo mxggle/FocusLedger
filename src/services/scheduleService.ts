@@ -22,7 +22,8 @@ export function templateAppliesToDate(template: Pick<TaskTemplate, "recurrence_t
   return template.recurrence_days.includes(weekday);
 }
 
-function timeToSortOrder(time: string): number {
+function timeToSortOrder(time: string | null): number | null {
+  if (!time) return null;
   const [hours = "0", minutes = "0"] = time.split(":");
   return Number(hours) * 60 + Number(minutes);
 }
