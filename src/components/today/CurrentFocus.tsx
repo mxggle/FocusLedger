@@ -1,4 +1,4 @@
-import { Check, Pause, Square, Timer } from "lucide-react";
+import { Check, Pause, RotateCcw, Square, Timer } from "lucide-react";
 import { useState } from "react";
 import { useTaskStore } from "../../stores/taskStore";
 import { getLiveTaskSeconds, useTimerStore } from "../../stores/timerStore";
@@ -10,25 +10,28 @@ import { EmptyState } from "../ui/EmptyState";
 import { StopSessionDialog } from "./StopSessionDialog";
 
 export function CurrentFocus() {
-  const activeTask = useTaskStore((state) => state.activeTask);
+  const focusedTask = useTaskStore((state) => state.focusedTask);
   const activeEntry = useTaskStore((state) => state.activeEntry);
   const categories = useTaskStore((state) => state.categories);
   const closedTaskDurations = useTaskStore((state) => state.closedTaskDurations);
   const pauseActiveTask = useTaskStore((state) => state.pauseActiveTask);
+  const resumeTask = useTaskStore((state) => state.resumeTask);
   const completeTask = useTaskStore((state) => state.completeTask);
   const now = useTimerStore((state) => state.now);
   const [stopOpen, setStopOpen] = useState(false);
 
-  const elapsedSeconds =
-    activeTask && activeEntry
-      ? getLiveTaskSeconds(activeTask.id, activeEntry, closedTaskDurations, now)
-      : 0;
-  const estimateSeconds = (activeTask?.estimated_minutes ?? 0) * 60;
+  const isRunning = Boolean(
+    focusedTask && activeEntry && activeEntry.task_id === focusedTask.id
+  );
+  const elapsedSeconds = focusedTask
+    ? getLiveTaskSeconds(focusedTask.id, activeEntry, closedTaskDurations, now)
+    : 0;
+  const estimateSeconds = (focusedTask?.estimated_minutes ?? 0) * 60;
   const hasEstimate = estimateSeconds > 0;
   const progress = hasEstimate ? (elapsedSeconds / estimateSeconds) * 100 : 0;
   const overrun = hasEstimate && elapsedSeconds > estimateSeconds;
 
-  if (!activeTask || !activeEntry) {
+  if (!focusedTask) {
     return (
       <EmptyState
         icon={Timer}
@@ -40,7 +43,7 @@ export function CurrentFocus() {
     );
   }
 
-  const category = categories.find((item) => item.id === activeTask.category_id);
+  const category = categories.find((item) => item.id === focusedTask.category_id);
   const pct = Math.round(Math.min(progress, 100));
 
   return (
@@ -49,23 +52,29 @@ export function CurrentFocus() {
       <div className="bg-gradient-to-b from-primary-soft/60 to-transparent px-6 pt-5 pb-4">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
-            <span
-              className={`absolute inline-flex h-full w-full rounded-full opacity-75 motion-safe:animate-ping ${
-                overrun ? "bg-warning" : "bg-primary"
-              }`}
-            />
+            {isRunning ? (
+              <span
+                className={`absolute inline-flex h-full w-full rounded-full opacity-75 motion-safe:animate-ping ${
+                  overrun ? "bg-warning" : "bg-primary"
+                }`}
+              />
+            ) : null}
             <span
               className={`relative inline-flex h-2 w-2 rounded-full ${
-                overrun ? "bg-warning" : "bg-primary"
+                isRunning
+                  ? overrun
+                    ? "bg-warning"
+                    : "bg-primary"
+                  : "bg-muted-foreground/40"
               }`}
             />
           </span>
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Current Focus
+            {isRunning ? "Current Focus" : "Paused"}
           </span>
         </div>
         <h2 className="mt-2.5 truncate text-lg font-semibold leading-snug tracking-tight text-foreground">
-          {activeTask.title}
+          {focusedTask.title}
         </h2>
         <div className="mt-2">
           <Badge variant="neutral">
@@ -95,8 +104,14 @@ export function CurrentFocus() {
           />
           {/* Breathing aura behind the orb */}
           <div
-            className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl motion-safe:animate-[breathe_6s_ease-in-out_infinite] ${
-              overrun ? "bg-warning/15" : "bg-primary/15"
+            className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl ${
+              isRunning ? "motion-safe:animate-[breathe_6s_ease-in-out_infinite]" : ""
+            } ${
+              overrun
+                ? "bg-warning/15"
+                : isRunning
+                  ? "bg-primary/15"
+                  : "bg-muted-foreground/10"
             }`}
             style={{ width: "clamp(220px, 78%, 360px)", aspectRatio: "1" }}
           />
@@ -135,7 +150,7 @@ export function CurrentFocus() {
             ) : (
               <span className="text-xs font-medium text-muted-foreground tabular-nums">
                 {hasEstimate
-                  ? `${activeTask.estimated_minutes} min · ${pct}%`
+                  ? `${focusedTask.estimated_minutes} min · ${pct}%`
                   : formatDurationCompact(elapsedSeconds)}
               </span>
             )}
@@ -146,17 +161,31 @@ export function CurrentFocus() {
       {/* Controls — collapse to icon-only on narrow panes (see .focus-controls
           in styles.css) so labels never truncate to "P… / St… / D…". */}
       <div className="focus-controls flex items-center gap-2 border-t border-border bg-surface-2/40 px-3 py-3">
-        <Button
-          type="button"
-          variant="secondary"
-          className="min-w-0 flex-1 px-3"
-          aria-label="Pause"
-          title="Pause"
-          onClick={() => void pauseActiveTask()}
-        >
-          <Pause className="h-4 w-4 shrink-0" />
-          <span className="focus-control-label truncate">Pause</span>
-        </Button>
+        {isRunning ? (
+          <Button
+            type="button"
+            variant="secondary"
+            className="min-w-0 flex-1 px-3"
+            aria-label="Pause"
+            title="Pause"
+            onClick={() => void pauseActiveTask()}
+          >
+            <Pause className="h-4 w-4 shrink-0" />
+            <span className="focus-control-label truncate">Pause</span>
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="primary"
+            className="min-w-0 flex-1 px-3"
+            aria-label="Resume"
+            title="Resume"
+            onClick={() => void resumeTask(focusedTask.id)}
+          >
+            <RotateCcw className="h-4 w-4 shrink-0" />
+            <span className="focus-control-label truncate">Resume</span>
+          </Button>
+        )}
         <Button
           type="button"
           variant="secondary"
@@ -170,12 +199,12 @@ export function CurrentFocus() {
         </Button>
         <Button
           type="button"
-          variant="primary"
+          variant={isRunning ? "primary" : "secondary"}
           className="min-w-0 flex-1 px-3"
           aria-label="Done"
           title="Done"
           onClick={() =>
-            void completeTask(activeTask.id, "Completed from current focus")
+            void completeTask(focusedTask.id, "Completed from current focus")
           }
         >
           <Check className="h-4 w-4 shrink-0" />

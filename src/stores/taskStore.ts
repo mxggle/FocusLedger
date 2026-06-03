@@ -29,7 +29,7 @@ import { useSettingsStore } from "./settingsStore";
 import { useTimerStore } from "./timerStore";
 import { useUiStore } from "./uiStore";
 
-type StartTaskResult = "started" | "active-exists" | "failed";
+type StartTaskResult = "started" | "failed";
 type StopOutcome = "paused" | "done" | "dropped";
 type MutationResult = { ok: true } | { ok: false; message: string };
 
@@ -48,6 +48,8 @@ type TaskState = {
   historyEntries: TimeEntryWithTask[];
   activeEntry: TimeEntry | null;
   activeTask: Task | null;
+  focusedTaskId: string | null;
+  focusedTask: Task | null;
   closedTaskDurations: Record<string, number>;
   todayStats: TodayStats | null;
   historyStats: DailyStats[];
@@ -63,9 +65,9 @@ type TaskState = {
   createScheduleTemplate: (input: CreateTaskTemplateInput) => Promise<MutationResult>;
   updateScheduleTemplate: (id: string, input: UpdateTaskTemplateInput) => Promise<MutationResult>;
   deleteScheduleTemplate: (id: string) => Promise<MutationResult>;
-  startTask: (taskId: string, options?: { stopCurrent?: boolean }) => Promise<StartTaskResult>;
+  startTask: (taskId: string) => Promise<StartTaskResult>;
   pauseActiveTask: () => Promise<MutationResult>;
-  resumeTask: (taskId: string, options?: { stopCurrent?: boolean }) => Promise<StartTaskResult>;
+  resumeTask: (taskId: string) => Promise<StartTaskResult>;
   stopActiveTask: (outcome: StopOutcome, input: StopSessionInput) => Promise<MutationResult>;
   completeTask: (taskId: string, note?: string) => Promise<MutationResult>;
   dropTask: (taskId: string) => Promise<MutationResult>;
@@ -119,6 +121,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   historyEntries: [],
   activeEntry: null,
   activeTask: null,
+  focusedTaskId: null,
+  focusedTask: null,
   closedTaskDurations: {},
   todayStats: null,
   historyStats: [],
@@ -166,7 +170,31 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     const historyEnd = new Date(startOfDateKey((historyDates[historyDates.length - 1] ?? toDateKey())).getTime() + 86400000).toISOString();
     const historyEntries = await timeEntryRepository.getEntriesForRange(historyStart, historyEnd, now.toISOString());
     const activeTask = activeEntry ? (await taskRepository.getById(activeEntry.task_id)) ?? null : null;
-    const closedTaskDurations = await getClosedDurations([...tasks, ...(activeTask ? [activeTask] : [])]);
+
+    // The Current Focus pane keeps a task while it is running OR paused, so
+    // pausing no longer drops it back to the Tasks list. focusedTaskId is the
+    // sticky pointer (set when a task starts, cleared on stop/done/drop); it
+    // falls back to the active entry so a running session is always focused.
+    const desiredFocusId = get().focusedTaskId ?? activeEntry?.task_id ?? null;
+    let focusedTask: Task | null = null;
+    if (desiredFocusId) {
+      const candidate =
+        desiredFocusId === activeTask?.id
+          ? activeTask
+          : (await taskRepository.getById(desiredFocusId)) ?? null;
+      // Keep focus while running or paused; drop it once done, dropped,
+      // relocated, or gone.
+      if (candidate && (candidate.id === activeEntry?.task_id || candidate.status === "paused")) {
+        focusedTask = candidate;
+      }
+    }
+    const focusedTaskId = focusedTask?.id ?? null;
+
+    const closedTaskDurations = await getClosedDurations([
+      ...tasks,
+      ...(activeTask ? [activeTask] : []),
+      ...(focusedTask ? [focusedTask] : [])
+    ]);
     const todayStats = calculateTodayStats({
       date: todayDate,
       tasks: allTasks,
@@ -199,6 +227,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       historyEntries,
       activeEntry,
       activeTask,
+      focusedTaskId,
+      focusedTask,
       closedTaskDurations,
       todayStats,
       historyStats
@@ -381,13 +411,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
   },
 
-  startTask: async (taskId, options = {}) => {
+  startTask: async (taskId) => {
     try {
       const activeEntry = await timeEntryRepository.getActiveEntry();
       if (activeEntry && activeEntry.task_id !== taskId) {
-        if (!options.stopCurrent) {
-          return "active-exists";
-        }
+        // Auto-pause whatever is currently running, then start the new task.
         await timeEntryRepository.closeEntry(activeEntry.id);
         await taskRepository.updateTask(activeEntry.task_id, { status: "paused" });
       }
@@ -396,6 +424,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         await timeEntryRepository.createEntry(taskId);
       }
       await taskRepository.updateTask(taskId, { status: "doing" });
+      set({ focusedTaskId: taskId });
       await get().refresh();
       return "started";
     } catch (error) {
@@ -420,21 +449,35 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
   },
 
-  resumeTask: async (taskId, options = {}) => get().startTask(taskId, options),
+  resumeTask: async (taskId) => get().startTask(taskId),
 
   stopActiveTask: async (outcome, input) => {
     try {
       const activeEntry = await timeEntryRepository.getActiveEntry();
-      if (!activeEntry) {
+      // Stop targets the running entry, or the focused task if it is paused.
+      const targetTaskId = activeEntry?.task_id ?? get().focusedTaskId;
+      if (!targetTaskId) {
         return { ok: true };
       }
 
-      await timeEntryRepository.closeEntry(activeEntry.id, undefined, input);
-      await taskRepository.updateTask(activeEntry.task_id, {
+      if (activeEntry) {
+        await timeEntryRepository.closeEntry(activeEntry.id, undefined, input);
+      } else {
+        // Paused focus session: no open entry, so attach the wrap-up reflection
+        // to the task's most recent entry instead.
+        const entries = await timeEntryRepository.getEntriesForTask(targetTaskId);
+        const latest = entries[entries.length - 1];
+        if (latest) {
+          await timeEntryRepository.updateReflection(latest.id, input);
+        }
+      }
+
+      await taskRepository.updateTask(targetTaskId, {
         status: outcome,
         completed_at: outcome === "done" ? new Date().toISOString() : null,
         dropped_at: outcome === "dropped" ? new Date().toISOString() : null
       });
+      set({ focusedTaskId: null });
       await get().refresh();
       return { ok: true };
     } catch (error) {

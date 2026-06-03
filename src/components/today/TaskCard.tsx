@@ -142,18 +142,8 @@ export function TaskCard({ task }: { task: Task }) {
   // ── Handlers (logic unchanged) ────────────────────────────────────────────
 
   async function handleStart() {
-    const result = await startTask(task.id);
-    if (result === "active-exists") {
-      const confirmed = await confirm({
-        title: "Start this task?",
-        message:
-          "You already have an active task.\nDo you want to pause the current task and start this one?",
-        confirmLabel: "Pause and start"
-      });
-      if (confirmed) {
-        await startTask(task.id, { stopCurrent: true });
-      }
-    }
+    // Starting a task auto-pauses whatever is currently running.
+    await startTask(task.id);
   }
 
   async function saveEdit() {

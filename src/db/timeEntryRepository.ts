@@ -119,6 +119,33 @@ export const timeEntryRepository = {
     return next;
   },
 
+  async updateReflection(id: string, input: StopSessionInput = {}): Promise<void> {
+    const existing = await this.getById(id);
+    if (!existing) {
+      return;
+    }
+
+    const db = await getDatabase();
+    const updatedAt = new Date().toISOString();
+    await db.execute(
+      `UPDATE time_entries SET
+        note = $1,
+        blocker = $2,
+        next_action = $3,
+        completion_rate = $4,
+        updated_at = $5
+       WHERE id = $6`,
+      [
+        input.note?.trim() || existing.note,
+        input.blocker?.trim() || existing.blocker,
+        input.next_action?.trim() || existing.next_action,
+        input.completion_rate ?? existing.completion_rate,
+        updatedAt,
+        id
+      ]
+    );
+  },
+
   async getById(id: string): Promise<TimeEntry | null> {
     const db = await getDatabase();
     const rows = await db.select<TimeEntry[]>(`${TIME_ENTRY_SELECT} WHERE id = $1 LIMIT 1`, [id]);
