@@ -5,8 +5,19 @@ import { createId } from "../utils/id";
 
 const TIME_ENTRY_SELECT = `SELECT * FROM time_entries`;
 
+// Resuming the same task within this gap continues the previous block instead
+// of opening a new row. Keeps rapid pause/resume from fragmenting the log.
+const CONTINUATION_WINDOW_SECONDS = 180;
+// Closed blocks shorter than this carry no useful signal; pausing discards them
+// so frequent start/pause taps don't litter the Today Log with empty entries.
+const MIN_MEANINGFUL_SECONDS = 30;
+
 function durationSeconds(startAt: string, endAt: string): number {
   return Math.max(0, Math.floor((new Date(endAt).getTime() - new Date(startAt).getTime()) / 1000));
+}
+
+function hasReflection(entry: Pick<TimeEntry, "note" | "blocker" | "next_action">): boolean {
+  return Boolean(entry.note || entry.blocker || entry.next_action);
 }
 
 export const timeEntryRepository = {
@@ -47,6 +58,51 @@ export const timeEntryRepository = {
     );
 
     return entry;
+  },
+
+  /**
+   * Start tracking `taskId`. If the most recent block belongs to the same task
+   * and was paused only moments ago, reopen it so a brief pause/resume reads as
+   * one continuous session rather than two adjacent rows.
+   */
+  async resumeOrCreateEntry(taskId: string, now = new Date().toISOString()): Promise<TimeEntry> {
+    const db = await getDatabase();
+    const [latest] = await db.select<TimeEntry[]>(
+      `${TIME_ENTRY_SELECT} ORDER BY start_at DESC LIMIT 1`
+    );
+
+    if (
+      latest &&
+      latest.task_id === taskId &&
+      latest.end_at &&
+      !hasReflection(latest) &&
+      durationSeconds(latest.end_at, now) <= CONTINUATION_WINDOW_SECONDS
+    ) {
+      await db.execute(
+        `UPDATE time_entries SET end_at = NULL, duration_seconds = NULL, updated_at = $1 WHERE id = $2`,
+        [now, latest.id]
+      );
+      return { ...latest, end_at: null, duration_seconds: null, updated_at: now };
+    }
+
+    return this.createEntry(taskId, now);
+  },
+
+  async deleteEntry(id: string): Promise<void> {
+    const db = await getDatabase();
+    await db.execute(`DELETE FROM time_entries WHERE id = $1`, [id]);
+  },
+
+  /**
+   * Drop a just-closed block that captured negligible time and carries no
+   * reflection notes. Returns true when the entry was removed.
+   */
+  async discardIfTrivial(entry: TimeEntry, minSeconds = MIN_MEANINGFUL_SECONDS): Promise<boolean> {
+    if ((entry.duration_seconds ?? 0) >= minSeconds || hasReflection(entry)) {
+      return false;
+    }
+    await this.deleteEntry(entry.id);
+    return true;
   },
 
   async getActiveEntry(): Promise<TimeEntry | null> {

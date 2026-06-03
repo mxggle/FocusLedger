@@ -416,12 +416,15 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       const activeEntry = await timeEntryRepository.getActiveEntry();
       if (activeEntry && activeEntry.task_id !== taskId) {
         // Auto-pause whatever is currently running, then start the new task.
-        await timeEntryRepository.closeEntry(activeEntry.id);
+        // Drop the paused block if the switch happened before it logged
+        // anything meaningful.
+        const closed = await timeEntryRepository.closeEntry(activeEntry.id);
+        await timeEntryRepository.discardIfTrivial(closed);
         await taskRepository.updateTask(activeEntry.task_id, { status: "paused" });
       }
 
       if (!activeEntry || activeEntry.task_id !== taskId) {
-        await timeEntryRepository.createEntry(taskId);
+        await timeEntryRepository.resumeOrCreateEntry(taskId);
       }
       await taskRepository.updateTask(taskId, { status: "doing" });
       set({ focusedTaskId: taskId });
@@ -439,7 +442,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       if (!activeEntry) {
         return { ok: true };
       }
-      await timeEntryRepository.closeEntry(activeEntry.id);
+      const closed = await timeEntryRepository.closeEntry(activeEntry.id);
+      await timeEntryRepository.discardIfTrivial(closed);
       await taskRepository.updateTask(activeEntry.task_id, { status: "paused" });
       await get().refresh();
       return { ok: true };
