@@ -92,10 +92,16 @@ export function useQuickAddShortcuts() {
       } catch (error) {
         if (!disposed) {
           console.warn("Global quick add shortcut could not be registered", error);
+          const message =
+            error instanceof Error
+              ? error.message
+              : typeof error === "string"
+                ? error
+                : "Shortcut registration failed";
           addToast({
             kind: "error",
             title: "Global shortcut unavailable",
-            description: error instanceof Error ? error.message : "Shortcut registration failed"
+            description: `${message}. You can change the shortcut in Settings.`
           });
         }
         return undefined;
