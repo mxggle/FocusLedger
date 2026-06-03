@@ -190,6 +190,36 @@ select {
   font-variant-numeric: tabular-nums;
 }
 
+/* ─── Focus stage ────────────────────────────────────────────────────────── */
+/* Calm, slow pulse for the focus orb's aura. Reads as "a session is alive"
+   without demanding attention. Disabled under prefers-reduced-motion below. */
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.07);
+    opacity: 0.85;
+  }
+}
+
+/* Focus controls collapse to icon-only when the pane gets narrow, instead of
+   truncating labels to "P… / St… / D…". Driven by the row's own width so it
+   reacts to pane resizing, not the viewport. */
+
+.focus-controls {
+  container: focus-controls / inline-size;
+}
+
+@container focus-controls (max-width: 300px) {
+  .focus-control-label {
+    display: none;
+  }
+}
+
 /* ─── Reduced motion ─────────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {

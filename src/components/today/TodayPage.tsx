@@ -59,7 +59,7 @@ export function TodayPage() {
         onToggle={() => toggleTodayPane("focus")}
         className="border-r border-border"
       >
-        <div className="p-4">
+        <div className="h-full p-4">
           <CurrentFocus />
         </div>
       </CollapsiblePane>
