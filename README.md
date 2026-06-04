@@ -1,10 +1,10 @@
 # Yolo
 
-**Turn tasks into time records.**
+**Make your time count.**
 
-Yolo is a local-first desktop app that closes the loop between planning and execution. Write down what you want to do today, start a task with one click, let it track the time, then see exactly where your day went.
+Yolo is an AI-native desktop app for people who want to take their time seriously. Write down what you want to do today, start a task with one click, let it track the time, then see exactly where your day went — and let AI help you reflect, plan, and reclaim your hours.
 
-No accounts. No sync. No subscriptions. Just you and your time.
+Your time, your data, your focus.
 
 ---
 
@@ -110,6 +110,8 @@ Tables: `tasks`, `time_entries`, `categories`, `settings`
 
 The core desktop workflow is done. Next:
 
+- **AI time companion** — reflect on your day, plan tomorrow, and spot where time leaks
+- **MCP integration** — let AI agents read and act on your tasks and time records
 - System tray with quick-start
 - Global keyboard shortcuts
 - Mini floating timer window
