@@ -100,6 +100,10 @@ const SCHEMA_STATEMENTS = [
 ];
 
 export async function runMigrations(db: SqlDatabase): Promise<void> {
+  // WAL lets the desktop app and the external MCP reader access the database
+  // concurrently without lock contention. Persisted in the file; idempotent.
+  await db.execute("PRAGMA journal_mode=WAL");
+
   for (const statement of SCHEMA_STATEMENTS) {
     await db.execute(statement);
   }

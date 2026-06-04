@@ -106,13 +106,32 @@ Tables: `tasks`, `time_entries`, `categories`, `settings`
 
 ---
 
+## AI agent access (MCP)
+
+Yolo ships an [MCP](https://modelcontextprotocol.io) server (`mcp/`) that exposes your
+tasks and time records to AI agents like Claude Desktop, Claude Code, and Cursor — so you
+can ask *"where did my time go today?"* from your assistant. It reads the same local
+database **read-only**, so agents can look but never change your data.
+
+```bash
+cd mcp && npm install && npm run build
+```
+
+Tools: `list_tasks`, `get_task`, `list_time_entries`, `daily_summary`, `list_categories`.
+See [`mcp/README.md`](mcp/README.md) for the Claude Desktop config and details.
+
+---
+
 ## Roadmap
 
-The core desktop workflow is done. Next:
+The core desktop workflow is done. Next is making Yolo **AI-native** — an assistant that
+reads the time data you already collect and helps you reflect, plan, and reclaim hours.
 
-- **AI time companion** — reflect on your day, plan tomorrow, and spot where time leaks
-- **MCP integration** — let AI agents read and act on your tasks and time records
-- System tray with quick-start
-- Global keyboard shortcuts
-- Mini floating timer window
-- Desktop notifications
+- **AI time companion** — daily debrief, tomorrow planner, estimate calibration, then a
+  proactive focus coach
+- **AI-native capture** — natural-language quick-add and smart stop-notes
+- **MCP integration** — let external AI agents read and act on your tasks and time records
+- **Desktop foundations** — system tray, global shortcuts, mini floating timer, notifications
+
+See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phased plan and the open decision on
+where the AI runs.
