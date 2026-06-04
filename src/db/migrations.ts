@@ -180,7 +180,9 @@ async function seedDefaultSettings(db: SqlDatabase): Promise<void> {
     ["theme", DEFAULT_SETTINGS.theme],
     ["enableTray", DEFAULT_SETTINGS.enableTray],
     ["enableNotifications", DEFAULT_SETTINGS.enableNotifications],
-    ["globalShortcut", DEFAULT_SETTINGS.globalShortcut]
+    ["globalShortcut", DEFAULT_SETTINGS.globalShortcut],
+    ["birthDate", DEFAULT_SETTINGS.birthDate],
+    ["lifeExpectancyYears", DEFAULT_SETTINGS.lifeExpectancyYears]
   ];
 
   for (const [key, value] of settingsEntries) {

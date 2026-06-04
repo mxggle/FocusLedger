@@ -1,5 +1,6 @@
 import { format } from "date-fns";
-import { Clock } from "lucide-react";
+import { Clock, Minus } from "lucide-react";
+import { Fragment } from "react";
 import { splitEntrySecondsByDate } from "../../services/statsService";
 import { useTaskStore } from "../../stores/taskStore";
 import { useTimerStore } from "../../stores/timerStore";
@@ -8,6 +9,9 @@ import { cn } from "../../utils/cn";
 import { toDateKey } from "../../utils/date";
 import { formatDurationCompact } from "../../utils/duration";
 import { EmptyState } from "../ui/EmptyState";
+
+// Ignore sub-minute slivers between back-to-back entries; surface real breaks.
+const MIN_GAP_SECONDS = 60;
 
 export function TodayLog() {
   const entries = useTaskStore((state) => state.todayEntries);
@@ -18,6 +22,16 @@ export function TodayLog() {
   const timeline = [...entries].sort(
     (a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime()
   );
+
+  // Untracked time between the end of one entry and the start of the next.
+  const gapBefore = (index: number): number => {
+    if (index === 0) return 0;
+    const prev = timeline[index - 1];
+    if (!prev.end_at) return 0;
+    const seconds =
+      (new Date(timeline[index].start_at).getTime() - new Date(prev.end_at).getTime()) / 1000;
+    return seconds >= MIN_GAP_SECONDS ? seconds : 0;
+  };
 
   return (
     <div>
@@ -41,9 +55,27 @@ export function TodayLog() {
             const dotColor = resolveCategoryColor(entry.category_color);
             const ongoing = !entry.end_at;
             const isLast = index === timeline.length - 1;
+            const gapSeconds = gapBefore(index);
 
             return (
-              <li key={entry.id} className="flex items-stretch gap-3">
+              <Fragment key={entry.id}>
+              {gapSeconds > 0 ? (
+                <li className="flex items-stretch gap-3">
+                  {/* Empty time column keeps the gap aligned with the rail. */}
+                  <div className="w-11 shrink-0" aria-hidden="true" />
+                  {/* Dashed rail signals untracked time between entries. */}
+                  <div className="flex w-3 shrink-0 justify-center">
+                    <span className="border-l border-dashed border-border" />
+                  </div>
+                  <div className="flex min-w-0 flex-1 items-center py-1.5">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+                      <Minus className="h-3 w-3" aria-hidden="true" />
+                      {formatDurationCompact(gapSeconds)} gap
+                    </span>
+                  </div>
+                </li>
+              ) : null}
+              <li className="flex items-stretch gap-3">
                 {/* Time anchor */}
                 <div className="w-11 shrink-0 pt-3 text-right tabular-nums">
                   <div className="text-xs font-semibold text-foreground">
@@ -110,6 +142,7 @@ export function TodayLog() {
                   ) : null}
                 </div>
               </li>
+              </Fragment>
             );
           })}
         </ol>

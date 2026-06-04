@@ -1,8 +1,9 @@
-import { AlertCircle, BarChart3, CalendarDays, CheckSquare, Inbox, Settings } from "lucide-react";
+import { AlertCircle, BarChart3, CalendarDays, CheckSquare, Hourglass, Inbox, Settings } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { BacklogPage } from "./components/backlog/BacklogPage";
 import { HistoryPage } from "./components/history/HistoryPage";
 import { AppShell } from "./components/layout/AppShell";
+import { LifePage } from "./components/life/LifePage";
 import { PlanPage } from "./components/plan/PlanPage";
 import { QuickAddDialog } from "./components/quick-add/QuickAddDialog";
 import { SettingsPage } from "./components/settings/SettingsPage";
@@ -18,12 +19,13 @@ import { useTrayStatus } from "./hooks/useTrayStatus";
 import { useSettingsStore } from "./stores/settingsStore";
 import { useTaskStore } from "./stores/taskStore";
 
-type RouteId = "today" | "backlog" | "plan" | "history" | "settings";
+type RouteId = "today" | "backlog" | "plan" | "life" | "history" | "settings";
 
 const routes = [
   { id: "today" as const, label: "Today", icon: CheckSquare },
   { id: "backlog" as const, label: "Backlog", icon: Inbox },
   { id: "plan" as const, label: "Plan", icon: CalendarDays },
+  { id: "life" as const, label: "Life", icon: Hourglass },
   { id: "history" as const, label: "History", icon: BarChart3 },
   { id: "settings" as const, label: "Settings", icon: Settings }
 ];
@@ -82,6 +84,8 @@ export default function App() {
           <BacklogPage />
         ) : route === "plan" ? (
           <PlanPage />
+        ) : route === "life" ? (
+          <LifePage onNavigate={setRoute} />
         ) : route === "history" ? (
           <HistoryPage />
         ) : (
