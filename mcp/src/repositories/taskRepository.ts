@@ -1,5 +1,6 @@
 import type { SqliteDatabase } from "../db/database.js";
 import type { TaskRow, TaskStatus } from "../db/types.js";
+import { toDateKey } from "../util/date.js";
 
 export interface TaskFilter {
   scope?: "today" | "backlog" | "all";
@@ -61,7 +62,7 @@ export function createTaskRepository(db: SqliteDatabase): TaskRepository {
  * always include whatever is in-progress, regardless of due date.
  */
 function listToday(db: SqliteDatabase, filter: TaskFilter): TaskRow[] {
-  const date = filter.dueOn ?? new Date().toISOString().slice(0, 10);
+  const date = filter.dueOn ?? toDateKey();
   const sql = `${SELECT}
      WHERE (
        (due_date <= ? AND status NOT IN ('done', 'dropped'))
@@ -71,6 +72,9 @@ function listToday(db: SqliteDatabase, filter: TaskFilter): TaskRow[] {
        CASE status WHEN 'doing' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END,
        CASE WHEN due_date < ? THEN 0 ELSE 1 END,
        due_date ASC,
+       CASE WHEN planned_start_time IS NULL THEN 1 ELSE 0 END,
+       planned_start_time ASC,
+       COALESCE(sort_order, 9999) ASC,
        ${PRIORITY_ORDER},
        created_at DESC${limitClause(filter.limit)}`;
   return db.prepare(sql).all(date, date) as TaskRow[];

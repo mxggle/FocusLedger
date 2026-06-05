@@ -71,6 +71,9 @@ export interface TaskSeed {
   priority?: string;
   estimated_minutes?: number | null;
   due_date?: string | null;
+  planned_start_time?: string | null;
+  planned_end_time?: string | null;
+  sort_order?: number | null;
   completed_at?: string | null;
   dropped_at?: string | null;
   created_at?: string;
@@ -93,9 +96,9 @@ export function insertTask(db: SqliteDatabase, task: TaskSeed): void {
     task.estimated_minutes ?? null,
     task.due_date ?? null,
     null,
-    null,
-    null,
-    null,
+    task.planned_start_time ?? null,
+    task.planned_end_time ?? null,
+    task.sort_order ?? null,
     task.created_at ?? NOW,
     NOW,
     task.completed_at ?? null,
