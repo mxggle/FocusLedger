@@ -34,6 +34,9 @@ The real problem isn't making lists. It's not knowing when you started, how long
 > **Your time. Your data. Your focus.** — 100% local, zero cloud, zero tracking.
 
 ---
+<img width="2830" height="1756" alt="CleanShot 2026-06-05 at 21 33 09@2x" src="https://github.com/user-attachments/assets/7847c95c-e574-401b-9e63-29f6517129db" />
+<img width="1415" height="878" alt="image" src="https://github.com/user-attachments/assets/9daffc68-aa7b-40ec-94a5-1764d72d5ce9" />
+<img width="2830" height="1756" alt="CleanShot 2026-06-05 at 21 36 17@2x" src="https://github.com/user-attachments/assets/7a344d6e-cadc-418d-afca-c866e72c3e94" />
 
 ## 🚀 Features
 
