@@ -18,6 +18,10 @@ type ReminderOptions = {
   onOpenToday?: () => void;
 };
 
+function isTauriRuntime(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
 function taskDateTime(task: Task, time: string): Date | null {
   if (!task.due_date || !time) {
     return null;
@@ -56,6 +60,16 @@ async function focusAppWindow() {
 async function requestNotificationPermission(): Promise<boolean> {
   if (!("Notification" in window)) {
     return false;
+  }
+
+  if (isTauriRuntime()) {
+    const { isPermissionGranted, requestPermission } = await import("@tauri-apps/plugin-notification");
+    if (await isPermissionGranted()) {
+      return true;
+    }
+
+    const permission = await requestPermission();
+    return permission === "granted";
   }
 
   if (window.Notification.permission === "granted") {

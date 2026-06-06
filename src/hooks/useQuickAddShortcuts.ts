@@ -2,8 +2,29 @@ import { useEffect } from "react";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useUiStore } from "../stores/uiStore";
 
+let globalShortcutQueue = Promise.resolve();
+
 function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+function runGlobalShortcutOperation<T>(operation: () => Promise<T>): Promise<T> {
+  const result = globalShortcutQueue.then(operation, operation);
+  globalShortcutQueue = result.then(
+    () => undefined,
+    () => undefined
+  );
+  return result;
+}
+
+function isAlreadyRegisteredError(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "";
+  return message.toLowerCase().includes("already registered");
 }
 
 function normalizeShortcut(shortcut: string): string {
@@ -72,23 +93,47 @@ export function useQuickAddShortcuts() {
 
     async function registerShortcut() {
       try {
-        const { isRegistered, register, unregister } = await import("@tauri-apps/plugin-global-shortcut");
-        if (await isRegistered(normalizedShortcut)) {
-          await unregister(normalizedShortcut);
-        }
-
-        await register(normalizedShortcut, (event) => {
-          if (event.state !== "Pressed") {
-            return;
+        return await runGlobalShortcutOperation(async () => {
+          if (disposed) {
+            return undefined;
           }
 
-          void focusMainWindow();
-          openQuickAdd();
-        });
+          const { register, unregister } = await import("@tauri-apps/plugin-global-shortcut");
+          if (disposed) {
+            return undefined;
+          }
 
-        return async () => {
-          await unregister(normalizedShortcut);
-        };
+          const handleShortcut = (event: { state: "Released" | "Pressed" }) => {
+            if (event.state !== "Pressed") {
+              return;
+            }
+
+            void focusMainWindow();
+            openQuickAdd();
+          };
+
+          try {
+            await register(normalizedShortcut, handleShortcut);
+          } catch (error) {
+            if (!isAlreadyRegisteredError(error)) {
+              throw error;
+            }
+
+            await unregister(normalizedShortcut).catch(() => undefined);
+            await register(normalizedShortcut, handleShortcut);
+          }
+
+          if (disposed) {
+            await unregister(normalizedShortcut);
+            return undefined;
+          }
+
+          return async () => {
+            await runGlobalShortcutOperation(async () => {
+              await unregister(normalizedShortcut);
+            });
+          };
+        });
       } catch (error) {
         if (!disposed) {
           console.warn("Global quick add shortcut could not be registered", error);
