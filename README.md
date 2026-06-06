@@ -16,7 +16,7 @@
     <img src="https://img.shields.io/badge/built%20with-Tauri%20v2-24C8DB?style=flat-square&logo=tauri" alt="Tauri" />
     <img src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react" alt="React" />
     <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript" alt="TypeScript" />
-    <img src="https://img.shields.io/badge/offline%20first-SQLite-003B57?style=flat-square&logo=sqlite" alt="SQLite" />
+    <img src="https://img.shields.io/badge/focus%20workflow-Today%20%7C%20Plan%20%7C%20Review-111827?style=flat-square" alt="Focus workflow" />
     <img src="https://img.shields.io/badge/MCP-enabled-8B5CF6?style=flat-square" alt="MCP" />
   </p>
 
@@ -31,7 +31,7 @@ Most productivity apps help you **write** tasks. Yolo helps you **do** them — 
 
 The real problem isn't making lists. It's not knowing when you started, how long something took, or what you actually accomplished at the end of the day. Yolo keeps a precise time record, so you can **review, reflect, and improve**.
 
-> **Your time. Your data. Your focus.** — 100% local, zero cloud, zero tracking.
+> **Plan the day. Run one focus. Review the truth.**
 
 ---
 <img width="2830" height="1756" alt="CleanShot 2026-06-05 at 21 33 09@2x" src="https://github.com/user-attachments/assets/7847c95c-e574-401b-9e63-29f6517129db" />
@@ -56,15 +56,21 @@ The real problem isn't making lists. It's not knowing when you started, how long
 - Category totals and daily focus time at a glance
 - **7-day history** with per-day breakdowns
 
+### 🗓 Planning Rhythm
+- Plan recurring work with start and end times
+- Carry overdue work forward without losing the original context
+- Move tasks between today, tomorrow, next week, and backlog
+
+### ⏳ Life View
+- See your life in weeks, mapped against real tracked focus
+- Spot high-focus weeks and drill back into the underlying days
+- Use long-horizon perspective without leaving the daily workflow
+
 ### 🤖 AI-Native (MCP)
 - Ships an **MCP server** that exposes your tasks and time records to AI agents
 - Works with **Claude Desktop, Claude Code, Cursor**, and any MCP-compatible tool
 - Ask _"where did my time go today?"_ directly from your AI assistant
 - Read-only — agents can look, but **never modify** your data
-
-### 🔒 Privacy First
-- All data stored **locally in SQLite** — no account, no network, no sync
-- Fully offline, always under your control
 
 ---
 
@@ -136,9 +142,9 @@ npm run test:watch
 
 ---
 
-## 🗄 Data Storage
+## 🗄 Data Model
 
-All data lives in a local SQLite database (`yolo.db`) managed through Tauri's SQL plugin.
+Yolo stores its task, time-entry, category, and settings records in SQLite (`yolo.db`) through Tauri's SQL plugin.
 
 React components **never touch SQL directly** — all data access goes through repository modules in [`src/db/`](src/db/).
 

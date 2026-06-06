@@ -74,17 +74,17 @@ These run in parallel with the AI work — they make Yolo a first-class desktop 
 
 ---
 
-## Open design decision · where AI runs
+## Open design decision · how AI is delivered
 
-AI breaks the current "fully offline, no network required" promise, so the delivery model
-must be settled before Phase 1 ships. Options under consideration:
+AI features introduce a delivery decision that affects quality, setup, cost, and desktop
+UX. The model must be settled before Phase 1 ships. Options under consideration:
 
 - **BYO API key (cloud)** — user supplies their own Claude/OpenAI key. Best quality, zero
-  server cost, no backend. Most pragmatic for a local desktop app.
-- **Local model (Ollama)** — on-device, keeps the offline guarantee. Private but heavier,
-  weaker results, large install.
-- **Hybrid** — local for cheap parsing (e.g. quick-add), cloud for deep reasoning
-  (debrief, planning). Most flexible, most complexity.
+  server cost, no backend.
+- **On-device model (Ollama)** — self-contained, but heavier, weaker results, and a larger
+  install.
+- **Hybrid** — lightweight local parsing for quick-add, cloud models for deep reasoning
+  such as debriefs and planning. Most flexible, most complexity.
 
 Likely direction: BYO key first, with capture-only features degrading gracefully when no
-key is set, so the offline core keeps working.
+key is set.
