@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.0 - 2026-06-08
+
+### Added
+
+- Full-screen "zen" focus mode: an immersive, borderless stage that hands the
+  entire app window to a single running session. Enter from the expand button on
+  the focus card; exit with the corner control or `Esc`.
+- Animated focus ring — a soft breathing glow on the live arc and a leading
+  "now" marker that rides the arc tip to mark the present moment advancing
+  through your committed time. Respects `prefers-reduced-motion`.
+- YOLO theme groundwork: a calm "commit moment" when a session begins, an earned
+  celebration when one ends, the Life thread, and a refreshed voice across copy.
+
+### Changed
+
+- Collapsed the focus controls to a focused Pause + Done pair.
+- Extracted the focus ring into a shared, resolution-independent component used
+  by both the focus card and the new zen mode.
+
+### Validation
+
+- Ran `yarn build` (tsc + vite).
+
 ## 0.1.1 - 2026-06-06
 
 ### Changed

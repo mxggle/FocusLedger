@@ -116,6 +116,12 @@ type UiState = {
   toggleTodayPane: (pane: keyof TodayPanes) => void;
   setTodayPaneCollapsed: (pane: keyof TodayPanes, collapsed: boolean) => void;
   toggleTodaySummary: () => void;
+
+  // Focus zen mode — fills the whole app with just the focus stage. Ephemeral
+  // (not persisted): reopening the app should never start trapped in zen.
+  focusZen: boolean;
+  setFocusZen: (value: boolean) => void;
+  toggleFocusZen: () => void;
 };
 
 export const useUiStore = create<UiState>((set) => ({
@@ -214,5 +220,9 @@ export const useUiStore = create<UiState>((set) => ({
       const next = !state.todaySummaryExpanded;
       writeSummaryExpanded(next);
       return { todaySummaryExpanded: next };
-    })
+    }),
+
+  focusZen: false,
+  setFocusZen: (value) => set({ focusZen: value }),
+  toggleFocusZen: () => set((state) => ({ focusZen: !state.focusZen }))
 }));
