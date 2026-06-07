@@ -120,7 +120,10 @@ export function CurrentFocus() {
         {/* ── Focus orb: progress ring + timer ── */}
         <div
           className="relative aspect-square"
-          style={{ width: "clamp(184px, 64%, 256px)" }}
+          style={{
+            width: "clamp(184px, 64%, 256px)",
+            containerType: "inline-size"
+          }}
           role="progressbar"
           aria-valuenow={hasEstimate ? pct : undefined}
           aria-valuemin={0}
@@ -133,12 +136,12 @@ export function CurrentFocus() {
             hasEstimate={hasEstimate}
           />
 
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-5">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-3">
             <div
               className={`font-mono font-bold tabular-nums leading-none transition-colors ${
                 overrun ? "text-warning" : "text-foreground"
               }`}
-              style={{ fontSize: "clamp(22px, 2.7vw, 34px)" }}
+              style={{ fontSize: "clamp(18px, 13.5cqw, 32px)" }}
             >
               {formatTimer(elapsedSeconds)}
             </div>
