@@ -101,7 +101,9 @@ type UiState = {
   confirmRequest: ConfirmRequest | null;
   openQuickAdd: () => void;
   closeQuickAdd: () => void;
-  addToast: (toast: Omit<ToastMessage, "id"> & { durationMs?: number }) => void;
+  addToast: (
+    toast: Omit<ToastMessage, "id"> & { durationMs?: number }
+  ) => string | undefined;
   dismissToast: (id: string) => void;
   confirm: (options: ConfirmOptions | string) => Promise<boolean>;
   resolveConfirm: (confirmed: boolean) => void;
@@ -138,7 +140,7 @@ export const useUiStore = create<UiState>((set) => ({
         t.description === message.description
     );
     if (isDuplicate) {
-      return;
+      return undefined;
     }
 
     const id = createId("toast");
@@ -150,6 +152,7 @@ export const useUiStore = create<UiState>((set) => ({
         useUiStore.getState().dismissToast(id);
       }, durationMs);
     }
+    return id;
   },
 
   dismissToast: (id) =>

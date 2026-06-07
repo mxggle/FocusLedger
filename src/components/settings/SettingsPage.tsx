@@ -1,8 +1,11 @@
 import { Bell, Keyboard, MonitorCog, SlidersHorizontal, Tags } from "lucide-react";
 import { ChangeEvent } from "react";
+import { useNotificationPermission } from "../../hooks/useNotificationPermission";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
 import type { AppTheme } from "../../types";
+import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
 import { Field, Input, Select } from "../ui/Field";
 import { PageHeader, SettingsSection } from "../ui/PageHeader";
 import { ShortcutInput } from "../ui/ShortcutInput";
@@ -13,6 +16,7 @@ export function SettingsPage() {
   const settings = useSettingsStore((state) => state.settings);
   const updateSetting = useSettingsStore((state) => state.updateSetting);
   const categories = useTaskStore((state) => state.categories);
+  const notificationPermission = useNotificationPermission();
 
   function updateNumber(event: ChangeEvent<HTMLInputElement>) {
     const value = Number(event.target.value);
@@ -20,6 +24,14 @@ export function SettingsPage() {
       "dailyFocusTargetMinutes",
       Number.isFinite(value) ? value : 240
     );
+  }
+
+  async function enableSystemNotifications() {
+    const result = await notificationPermission.request();
+    // If the OS won't re-prompt (already denied), send the user to settings.
+    if (result !== "granted") {
+      await notificationPermission.openSettings();
+    }
   }
 
   return (
@@ -106,6 +118,41 @@ export function SettingsPage() {
                   void updateSetting("enableNotifications", value)
                 }
               />
+              {settings.enableNotifications ? (
+                <div className="flex items-center justify-between gap-4 py-3 last:pb-0">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-foreground">
+                        System permission
+                      </span>
+                      {notificationPermission.status === "granted" ? (
+                        <Badge variant="success" dot>
+                          Granted
+                        </Badge>
+                      ) : (
+                        <Badge variant="warning" dot>
+                          Not granted
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">
+                      {notificationPermission.status === "granted"
+                        ? "Your OS allows Yolo to show desktop notifications."
+                        : "Your OS hasn't allowed Yolo to show notifications. Until you grant it, reminders only appear inside the app."}
+                    </div>
+                  </div>
+                  {notificationPermission.status !== "granted" ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => void enableSystemNotifications()}
+                    >
+                      Allow notifications
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </SettingsSection>
 
