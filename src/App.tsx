@@ -8,6 +8,7 @@ import { LifePage } from "./components/life/LifePage";
 import { PlanPage } from "./components/plan/PlanPage";
 import { QuickAddDialog } from "./components/quick-add/QuickAddDialog";
 import { SettingsPage } from "./components/settings/SettingsPage";
+import { FocusZenOverlay } from "./components/today/FocusZenOverlay";
 import { TodayPage } from "./components/today/TodayPage";
 import { ConfirmDialog } from "./components/ui/ConfirmDialog";
 import { SkeletonList } from "./components/ui/Skeleton";
@@ -105,6 +106,7 @@ export default function App() {
           <AboutPage />
         )}
       </AppShell>
+      <FocusZenOverlay />
       <QuickAddDialog />
       <ConfirmDialog />
       <ToastViewport />

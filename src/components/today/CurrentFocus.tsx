@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Check, Pause, RotateCcw, Timer } from "lucide-react";
+import { Check, Maximize2, Pause, RotateCcw, Timer } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTaskStore } from "../../stores/taskStore";
 import { getLiveTaskSeconds, useTimerStore } from "../../stores/timerStore";
@@ -15,9 +15,10 @@ import { Button } from "../ui/Button";
 import { CategoryDot } from "../ui/CategoryDot";
 import { EmptyState } from "../ui/EmptyState";
 import { FocusCelebration } from "./FocusCelebration";
+import { FocusRing } from "./FocusRing";
 import { StopSessionDialog } from "./StopSessionDialog";
 
-export function CurrentFocus() {
+export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
   const focusedTask = useTaskStore((state) => state.focusedTask);
   const activeEntry = useTaskStore((state) => state.activeEntry);
   const categories = useTaskStore((state) => state.categories);
@@ -126,6 +127,17 @@ export function CurrentFocus() {
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             {isRunning ? "Current Focus" : "Paused"}
           </span>
+          {onExpand ? (
+            <button
+              type="button"
+              onClick={onExpand}
+              aria-label="Expand focus to full screen"
+              title="Full-screen focus"
+              className="ml-auto -my-1 -mr-1.5 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </button>
+          ) : null}
         </div>
         <h2 className="mt-2.5 truncate text-lg font-semibold leading-snug tracking-tight text-foreground">
           {focusedTask.title}
@@ -202,6 +214,8 @@ export function CurrentFocus() {
             pct={Math.min(progress, 100)}
             overrun={overrun}
             hasEstimate={hasEstimate}
+            isRunning={isRunning}
+            reduce={Boolean(reduce)}
           />
 
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-3">
@@ -305,73 +319,5 @@ export function CurrentFocus() {
         onDone={(seconds) => setCelebration({ seconds })}
       />
     </div>
-  );
-}
-
-/**
- * Circular ring framing the timer. With an estimate it shows a track + animated
- * progress arc; without one it's just a faint decorative frame (a full muted
- * "0% progress" ring read as stuck/odd).
- */
-function FocusRing({
-  pct,
-  overrun,
-  hasEstimate
-}: {
-  pct: number;
-  overrun: boolean;
-  hasEstimate: boolean;
-}) {
-  const radius = 44;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - Math.max(0, Math.min(100, pct)) / 100);
-  const stroke = overrun ? "hsl(var(--warning))" : "url(#focusRingStroke)";
-
-  if (!hasEstimate) {
-    return (
-      <svg viewBox="0 0 100 100" className="h-full w-full" aria-hidden>
-        <circle
-          cx="50"
-          cy="50"
-          r={radius}
-          fill="none"
-          stroke="hsl(var(--border))"
-          strokeWidth="3"
-        />
-      </svg>
-    );
-  }
-
-  return (
-    <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90" aria-hidden>
-      <defs>
-        <linearGradient id="focusRingStroke" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="hsl(var(--primary))" />
-          <stop offset="100%" stopColor="hsl(var(--primary) / 0.65)" />
-        </linearGradient>
-      </defs>
-      {/* Track */}
-      <circle
-        cx="50"
-        cy="50"
-        r={radius}
-        fill="none"
-        stroke="hsl(var(--muted))"
-        strokeWidth="5"
-      />
-      {/* Progress */}
-      <circle
-        cx="50"
-        cy="50"
-        r={radius}
-        fill="none"
-        stroke={stroke}
-        strokeWidth="5"
-        strokeLinecap="round"
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-        className="transition-[stroke-dashoffset] duration-500 ease-out"
-      />
-    </svg>
   );
 }

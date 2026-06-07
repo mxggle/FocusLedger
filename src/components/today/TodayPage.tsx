@@ -16,6 +16,7 @@ export function TodayPage({ onOpenLife }: { onOpenLife: () => void }) {
   const todayPanes = useUiStore((state) => state.todayPanes);
   const setTodayPaneCollapsed = useUiStore((state) => state.setTodayPaneCollapsed);
   const toggleTodayPane = useUiStore((state) => state.toggleTodayPane);
+  const setFocusZen = useUiStore((state) => state.setFocusZen);
 
   // Responsive auto-collapse on window resize
   useEffect(() => {
@@ -67,7 +68,7 @@ export function TodayPage({ onOpenLife }: { onOpenLife: () => void }) {
         className="border-r border-border"
       >
         <div className="h-full p-4">
-          <CurrentFocus />
+          <CurrentFocus onExpand={() => setFocusZen(true)} />
         </div>
       </CollapsiblePane>
 

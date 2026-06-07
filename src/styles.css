@@ -206,6 +206,21 @@ select {
   }
 }
 
+/* The leading "now" marker that rides the tip of the progress arc — a clean
+   knob marking the present moment advancing through your committed time. The
+   knob holds steady; only its soft glow breathes, so the motion stays calm. */
+@keyframes focus-head-glow {
+  0%,
+  100% {
+    r: 4px;
+    opacity: 0.3;
+  }
+  50% {
+    r: 6.5px;
+    opacity: 0.55;
+  }
+}
+
 /* Focus controls collapse to icon-only when the pane gets narrow, instead of
    truncating labels to "P… / St… / D…". Driven by the row's own width so it
    reacts to pane resizing, not the viewport. */
