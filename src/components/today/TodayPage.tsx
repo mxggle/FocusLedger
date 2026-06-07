@@ -3,6 +3,7 @@ import { useUiStore } from "../../stores/uiStore";
 import { CollapsiblePane } from "../ui/CollapsiblePane";
 import { AddTaskForm } from "./AddTaskForm";
 import { CurrentFocus } from "./CurrentFocus";
+import { LifeThread } from "./LifeThread";
 import { TaskList } from "./TaskList";
 import { TodayLog } from "./TodayLog";
 import { TodaySummary } from "./TodaySummary";
@@ -11,7 +12,7 @@ import { TodaySummary } from "./TodaySummary";
 const BREAK_LOG = 900;
 const BREAK_TASKS = 700;
 
-export function TodayPage() {
+export function TodayPage({ onOpenLife }: { onOpenLife: () => void }) {
   const todayPanes = useUiStore((state) => state.todayPanes);
   const setTodayPaneCollapsed = useUiStore((state) => state.setTodayPaneCollapsed);
   const toggleTodayPane = useUiStore((state) => state.toggleTodayPane);
@@ -38,7 +39,13 @@ export function TodayPage() {
 
   return (
     // overflow-hidden ensures panes don't bleed outside; bg-background fills gaps
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      {/* Quiet finitude thread — the "you only live once" line, linked to Life */}
+      <div className="shrink-0 border-b border-border bg-surface-2/40">
+        <LifeThread onOpenLife={onOpenLife} />
+      </div>
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* Tasks pane — border-r separates from Focus */}
       <CollapsiblePane
         title="Tasks"
@@ -76,6 +83,7 @@ export function TodayPage() {
           <TodayLog />
         </div>
       </CollapsiblePane>
+      </div>
     </div>
   );
 }

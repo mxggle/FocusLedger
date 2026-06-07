@@ -1,12 +1,20 @@
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Check, Pause, RotateCcw, Timer } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTaskStore } from "../../stores/taskStore";
 import { getLiveTaskSeconds, useTimerStore } from "../../stores/timerStore";
 import { formatDurationCompact, formatTimer } from "../../utils/duration";
+import {
+  CELEBRATION_MS,
+  CELEBRATION_MS_REDUCED,
+  COMMIT_WHISPER_MS,
+  settle
+} from "../../utils/motion";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { CategoryDot } from "../ui/CategoryDot";
 import { EmptyState } from "../ui/EmptyState";
+import { FocusCelebration } from "./FocusCelebration";
 import { StopSessionDialog } from "./StopSessionDialog";
 
 export function CurrentFocus() {
@@ -17,7 +25,16 @@ export function CurrentFocus() {
   const pauseActiveTask = useTaskStore((state) => state.pauseActiveTask);
   const resumeTask = useTaskStore((state) => state.resumeTask);
   const now = useTimerStore((state) => state.now);
+  const reduce = useReducedMotion();
   const [stopOpen, setStopOpen] = useState(false);
+
+  // The earned payoff: holds the finished session length while the celebration
+  // plays, so it survives the store clearing the focused task on "done".
+  const [celebration, setCelebration] = useState<{ seconds: number } | null>(null);
+  // The calm bookend: a one-shot whisper when a *new* session begins.
+  const [commit, setCommit] = useState<{ id: number; minutes: number | null } | null>(
+    null
+  );
 
   const isRunning = Boolean(
     focusedTask && activeEntry && activeEntry.task_id === focusedTask.id
@@ -30,23 +47,61 @@ export function CurrentFocus() {
   const progress = hasEstimate ? (elapsedSeconds / estimateSeconds) * 100 : 0;
   const overrun = hasEstimate && elapsedSeconds > estimateSeconds;
 
-  if (!focusedTask) {
+  // Read the live elapsed without making effects depend on every tick.
+  const elapsedRef = useRef(0);
+  elapsedRef.current = elapsedSeconds;
+
+  // Commit moment — fires when focus moves to a *new* task that's running.
+  // `undefined` on first mount means an already-running session (e.g. app
+  // reopened) does not replay the whisper. Switching tasks counts as a new
+  // commit; resuming from pause (same id) does not.
+  const prevFocusIdRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const prev = prevFocusIdRef.current;
+    const curId = focusedTask?.id ?? null;
+    if (prev !== undefined && curId && curId !== prev && isRunning) {
+      setCommit({ id: Date.now(), minutes: focusedTask?.estimated_minutes ?? null });
+    }
+    prevFocusIdRef.current = curId;
+  }, [focusedTask?.id, focusedTask?.estimated_minutes, isRunning]);
+
+  useEffect(() => {
+    if (!commit) return;
+    const timer = setTimeout(() => setCommit(null), COMMIT_WHISPER_MS);
+    return () => clearTimeout(timer);
+  }, [commit]);
+
+  useEffect(() => {
+    if (!celebration) return;
+    const timer = setTimeout(
+      () => setCelebration(null),
+      reduce ? CELEBRATION_MS_REDUCED : CELEBRATION_MS
+    );
+    return () => clearTimeout(timer);
+  }, [celebration, reduce]);
+
+  if (!focusedTask && !celebration) {
     return (
       <EmptyState
         icon={Timer}
-        title="No active focus session"
-        hint="Start a task from the Tasks pane when you are ready."
+        title="Nothing running — your time's just ticking."
+        hint="Pick a task from the Tasks pane and make the next block count."
         className="h-full min-h-[400px]"
         dashed
       />
     );
   }
 
-  const category = categories.find((item) => item.id === focusedTask.category_id);
+  const category = focusedTask
+    ? categories.find((item) => item.id === focusedTask.category_id)
+    : undefined;
   const pct = Math.round(Math.min(progress, 100));
+  const commitMinutes = commit?.minutes ?? null;
 
   return (
-    <div className="flex h-full min-h-[460px] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-card">
+    <div className="relative flex h-full min-h-[460px] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-card">
+      {focusedTask ? (
+        <>
       {/* Header band with subtle accent gradient */}
       <div className="bg-gradient-to-b from-primary-soft/60 to-transparent px-6 pt-5 pb-4">
         <div className="flex items-center gap-2">
@@ -114,6 +169,20 @@ export function CurrentFocus() {
             }`}
             style={{ width: "clamp(220px, 78%, 360px)", aspectRatio: "1" }}
           />
+          {/* Commit ignite — a one-shot glow when a new session begins */}
+          <AnimatePresence>
+            {commit && !reduce ? (
+              <motion.div
+                key={commit.id}
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/25 blur-3xl"
+                style={{ width: "clamp(220px, 80%, 380px)", aspectRatio: "1" }}
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: [0, 0.32, 0.16], scale: 1 }}
+                exit={{ opacity: 0 }}
+                transition={settle}
+              />
+            ) : null}
+          </AnimatePresence>
         </div>
 
         {/* ── Focus orb: progress ring + timer ── */}
@@ -158,6 +227,27 @@ export function CurrentFocus() {
             )}
           </div>
         </div>
+
+        {/* Commit whisper — fades in and out, never holds layout */}
+        <AnimatePresence>
+          {commit ? (
+            <motion.p
+              key={commit.id}
+              className="pointer-events-none absolute inset-x-0 bottom-5 text-center text-xs italic text-muted-foreground"
+              initial={{ opacity: 0, y: reduce ? 0 : 6 }}
+              animate={{ opacity: [0, 1, 1, 0], y: 0 }}
+              transition={{
+                duration: COMMIT_WHISPER_MS / 1000,
+                times: [0, 0.18, 0.8, 1],
+                ease: "easeOut"
+              }}
+            >
+              {commitMinutes
+                ? `The next ${commitMinutes} minutes are yours.`
+                : "This block is yours."}
+            </motion.p>
+          ) : null}
+        </AnimatePresence>
       </div>
 
       {/* Controls — collapse to icon-only on narrow panes (see .focus-controls
@@ -200,8 +290,20 @@ export function CurrentFocus() {
           <span className="focus-control-label truncate">Done</span>
         </Button>
       </div>
+        </>
+      ) : null}
 
-      <StopSessionDialog open={stopOpen} onOpenChange={setStopOpen} />
+      {/* Earned payoff — sits over the stage and lingers after focus clears */}
+      <AnimatePresence>
+        {celebration ? <FocusCelebration seconds={celebration.seconds} /> : null}
+      </AnimatePresence>
+
+      <StopSessionDialog
+        open={stopOpen}
+        onOpenChange={setStopOpen}
+        getElapsedSeconds={() => elapsedRef.current}
+        onDone={(seconds) => setCelebration({ seconds })}
+      />
     </div>
   );
 }

@@ -75,7 +75,7 @@ export default function App() {
         activeRoute={route}
         onRouteChange={setRoute}
         title="Yolo"
-        subtitle="Turn tasks into time records."
+        subtitle="Make your time count."
       >
         {!initialized && loading ? (
           <div className="p-6">
@@ -90,7 +90,7 @@ export default function App() {
             <p className="text-sm text-muted-foreground">{error}</p>
           </div>
         ) : route === "today" ? (
-          <TodayPage />
+          <TodayPage onOpenLife={() => setRoute("life")} />
         ) : route === "backlog" ? (
           <BacklogPage />
         ) : route === "plan" ? (

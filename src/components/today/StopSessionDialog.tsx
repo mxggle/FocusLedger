@@ -6,10 +6,16 @@ import { Field, Input, Textarea } from "../ui/Field";
 
 export function StopSessionDialog({
   open,
-  onOpenChange
+  onOpenChange,
+  getElapsedSeconds,
+  onDone
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Snapshot of the live session length, read before the save clears focus. */
+  getElapsedSeconds?: () => number;
+  /** Fires after a successful "done" save, with the session length in seconds. */
+  onDone?: (seconds: number) => void;
 }) {
   const stopActiveTask = useTaskStore((state) => state.stopActiveTask);
   const [note, setNote] = useState("");
@@ -29,6 +35,9 @@ export function StopSessionDialog({
 
   async function save(outcome: "paused" | "done" | "dropped") {
     if (!completionRateValid || saving) return;
+    // Capture the session length now — the save clears the focused task, so the
+    // celebration can't read it afterwards.
+    const elapsedAtDone = outcome === "done" ? getElapsedSeconds?.() ?? 0 : 0;
     setSaving(true);
     const result = await stopActiveTask(outcome, {
       note,
@@ -43,6 +52,7 @@ export function StopSessionDialog({
     setNextAction("");
     setCompletionRate("");
     onOpenChange(false);
+    if (outcome === "done") onDone?.(elapsedAtDone);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -58,9 +68,9 @@ export function StopSessionDialog({
       className="p-6"
     >
       <form onSubmit={handleSubmit}>
-        <DialogTitle className="text-lg">Wrap up this session</DialogTitle>
+        <DialogTitle className="text-lg">What did this time buy you?</DialogTitle>
         <DialogDescription className="mt-1 text-sm">
-          A quick reflection before you stop.
+          A quick, honest note before you stop.
         </DialogDescription>
         <div className="mt-5 grid gap-4">
           <Field label="What did you work on?">
