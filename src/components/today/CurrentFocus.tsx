@@ -1,4 +1,4 @@
-import { Check, Pause, RotateCcw, Square, Timer } from "lucide-react";
+import { Check, Pause, RotateCcw, Timer } from "lucide-react";
 import { useState } from "react";
 import { useTaskStore } from "../../stores/taskStore";
 import { getLiveTaskSeconds, useTimerStore } from "../../stores/timerStore";
@@ -16,7 +16,6 @@ export function CurrentFocus() {
   const closedTaskDurations = useTaskStore((state) => state.closedTaskDurations);
   const pauseActiveTask = useTaskStore((state) => state.pauseActiveTask);
   const resumeTask = useTaskStore((state) => state.resumeTask);
-  const completeTask = useTaskStore((state) => state.completeTask);
   const now = useTimerStore((state) => state.now);
   const [stopOpen, setStopOpen] = useState(false);
 
@@ -191,24 +190,11 @@ export function CurrentFocus() {
         )}
         <Button
           type="button"
-          variant="secondary"
-          className="min-w-0 flex-1 px-3"
-          aria-label="Stop"
-          title="Stop"
-          onClick={() => setStopOpen(true)}
-        >
-          <Square className="h-4 w-4 shrink-0" />
-          <span className="focus-control-label truncate">Stop</span>
-        </Button>
-        <Button
-          type="button"
           variant={isRunning ? "primary" : "secondary"}
           className="min-w-0 flex-1 px-3"
           aria-label="Done"
           title="Done"
-          onClick={() =>
-            void completeTask(focusedTask.id, "Completed from current focus")
-          }
+          onClick={() => setStopOpen(true)}
         >
           <Check className="h-4 w-4 shrink-0" />
           <span className="focus-control-label truncate">Done</span>

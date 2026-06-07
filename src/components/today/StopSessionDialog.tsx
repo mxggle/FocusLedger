@@ -15,15 +15,17 @@ export function StopSessionDialog({
   const [note, setNote] = useState("");
   const [blocker, setBlocker] = useState("");
   const [nextAction, setNextAction] = useState("");
-  const [completionRate, setCompletionRate] = useState("50");
+  const [completionRate, setCompletionRate] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const hasCompletionRate = completionRate.trim() !== "";
   const parsedCompletionRate = Number(completionRate);
+  // Empty is allowed (the field is optional); only flag an out-of-range value.
   const completionRateValid =
-    completionRate.trim() !== "" &&
-    Number.isFinite(parsedCompletionRate) &&
-    parsedCompletionRate >= 0 &&
-    parsedCompletionRate <= 100;
+    !hasCompletionRate ||
+    (Number.isFinite(parsedCompletionRate) &&
+      parsedCompletionRate >= 0 &&
+      parsedCompletionRate <= 100);
 
   async function save(outcome: "paused" | "done" | "dropped") {
     if (!completionRateValid || saving) return;
@@ -32,14 +34,14 @@ export function StopSessionDialog({
       note,
       blocker,
       next_action: nextAction,
-      completion_rate: parsedCompletionRate
+      completion_rate: hasCompletionRate ? parsedCompletionRate : null
     });
     setSaving(false);
     if (!result.ok) return;
     setNote("");
     setBlocker("");
     setNextAction("");
-    setCompletionRate("50");
+    setCompletionRate("");
     onOpenChange(false);
   }
 
@@ -85,7 +87,7 @@ export function StopSessionDialog({
             </Field>
           </div>
           <Field
-            label="Completion rate (0–100)"
+            label="Completion rate (optional, 0–100)"
             error={
               completionRateValid
                 ? undefined
@@ -96,6 +98,7 @@ export function StopSessionDialog({
               type="number"
               min="0"
               max="100"
+              placeholder="e.g. 80"
               value={completionRate}
               onChange={(event) => setCompletionRate(event.target.value)}
             />
