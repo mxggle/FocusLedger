@@ -25,6 +25,14 @@ fn show_main_window(app: &AppHandle) {
     }
 }
 
+/// Bring the main window to the foreground. Exposed so a notification click (and
+/// any other JS-side trigger) can reuse the exact path the tray "Show" uses,
+/// which reliably activates the app on macOS.
+#[tauri::command]
+fn focus_main_window(app: AppHandle) {
+    show_main_window(&app);
+}
+
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
@@ -72,7 +80,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
-        .invoke_handler(tauri::generate_handler![update_tray_status])
+        .invoke_handler(tauri::generate_handler![update_tray_status, focus_main_window])
         .run(tauri::generate_context!())
         .expect("error while running Yolo");
 }

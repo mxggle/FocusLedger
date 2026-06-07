@@ -14,6 +14,7 @@ import { SkeletonList } from "./components/ui/Skeleton";
 import { ToastViewport } from "./components/ui/ToastViewport";
 import { TooltipProvider } from "./components/ui/Tooltip";
 import { useDayRollover } from "./hooks/useDayRollover";
+import { useNotificationPermissionPrompt } from "./hooks/useNotificationPermission";
 import { useQuickAddShortcuts } from "./hooks/useQuickAddShortcuts";
 import { useTaskReminders } from "./hooks/useTaskReminders";
 import { useTrayStatus } from "./hooks/useTrayStatus";
@@ -50,6 +51,7 @@ export default function App() {
 
   useTrayStatus();
   useQuickAddShortcuts();
+  useNotificationPermissionPrompt();
   useTaskReminders({ onOpenToday: openToday });
   useDayRollover();
 
