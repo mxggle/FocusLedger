@@ -26,3 +26,14 @@ export type StopSessionInput = {
   next_action?: string | null;
   completion_rate?: number | null;
 };
+
+/**
+ * Full overwrite of an entry's reflection fields. Unlike StopSessionInput,
+ * null means "clear the field", so editing can remove a stale note.
+ */
+export type UpdateEntryDetailsInput = {
+  note: string | null;
+  blocker: string | null;
+  next_action: string | null;
+  completion_rate: number | null;
+};

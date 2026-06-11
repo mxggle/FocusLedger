@@ -19,6 +19,7 @@ import type {
   TaskTemplate,
   TimeEntry,
   TimeEntryWithTask,
+  UpdateEntryDetailsInput,
   UpdateTaskTemplateInput,
   TodayStats,
   UpdateTaskInput
@@ -69,6 +70,7 @@ type TaskState = {
   pauseActiveTask: () => Promise<MutationResult>;
   resumeTask: (taskId: string) => Promise<StartTaskResult>;
   stopActiveTask: (outcome: StopOutcome, input: StopSessionInput) => Promise<MutationResult>;
+  updateEntryDetails: (entryId: string, input: UpdateEntryDetailsInput) => Promise<MutationResult>;
   completeTask: (taskId: string, note?: string) => Promise<MutationResult>;
   dropTask: (taskId: string) => Promise<MutationResult>;
   rescheduleTask: (taskId: string, dueDate: string) => Promise<MutationResult>;
@@ -487,6 +489,26 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     } catch (error) {
       reportError("Session could not be stopped", error);
       return mutationFailure(error, "Session could not be stopped");
+    }
+  },
+
+  updateEntryDetails: async (entryId, input) => {
+    try {
+      if (
+        input.completion_rate !== null &&
+        (!Number.isFinite(input.completion_rate) ||
+          input.completion_rate < 0 ||
+          input.completion_rate > 100)
+      ) {
+        throw new Error("Completion rate must be between 0 and 100.");
+      }
+      await timeEntryRepository.updateEntryDetails(entryId, input);
+      await get().refresh();
+      useUiStore.getState().addToast({ kind: "success", title: "Entry updated" });
+      return { ok: true };
+    } catch (error) {
+      reportError("Entry could not be updated", error);
+      return mutationFailure(error, "Entry could not be updated");
     }
   },
 

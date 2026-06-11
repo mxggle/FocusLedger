@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { Clock, Minus } from "lucide-react";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { splitEntrySecondsByDate } from "../../services/statsService";
 import { useTaskStore } from "../../stores/taskStore";
 import { useTimerStore } from "../../stores/timerStore";
@@ -9,6 +9,7 @@ import { cn } from "../../utils/cn";
 import { toDateKey } from "../../utils/date";
 import { formatDurationCompact } from "../../utils/duration";
 import { EmptyState } from "../ui/EmptyState";
+import { EntryDetailDialog } from "./EntryDetailDialog";
 
 // Ignore sub-minute slivers between back-to-back entries; surface real breaks.
 const MIN_GAP_SECONDS = 60;
@@ -17,6 +18,9 @@ export function TodayLog() {
   const entries = useTaskStore((state) => state.todayEntries);
   const now = useTimerStore((state) => state.now);
   const today = toDateKey(now);
+  // Track the open entry by id so the dialog stays in sync after a refresh.
+  const [detailEntryId, setDetailEntryId] = useState<string | null>(null);
+  const detailEntry = entries.find((entry) => entry.id === detailEntryId) ?? null;
 
   // Entries arrive newest-first; a day timeline reads earliest → latest.
   const timeline = [...entries].sort(
@@ -103,10 +107,14 @@ export function TodayLog() {
                   {!isLast ? <span className="w-px flex-1 bg-border" /> : null}
                 </div>
 
-                {/* Entry card */}
-                <div
+                {/* Entry card — opens the detail/edit dialog. */}
+                <button
+                  type="button"
+                  onClick={() => setDetailEntryId(entry.id)}
                   className={cn(
-                    "mb-2 min-w-0 flex-1 rounded-xl border bg-surface p-3 shadow-card",
+                    "mb-2 min-w-0 flex-1 rounded-xl border bg-surface p-3 text-left shadow-card",
+                    "transition-[border-color,box-shadow] duration-fast hover:border-border-strong",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     ongoing ? "border-primary/40 ring-1 ring-primary/10" : "border-border"
                   )}
                 >
@@ -140,13 +148,18 @@ export function TodayLog() {
                       {entry.note}
                     </div>
                   ) : null}
-                </div>
+                </button>
               </li>
               </Fragment>
             );
           })}
         </ol>
       )}
+      <EntryDetailDialog
+        entry={detailEntry}
+        open={detailEntry !== null}
+        onClose={() => setDetailEntryId(null)}
+      />
     </div>
   );
 }

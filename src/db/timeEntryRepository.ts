@@ -1,5 +1,5 @@
 import { getDatabase } from "./client";
-import type { StopSessionInput, TimeEntry, TimeEntryWithTask } from "../types";
+import type { StopSessionInput, TimeEntry, TimeEntryWithTask, UpdateEntryDetailsInput } from "../types";
 import { endOfDateKey, startOfDateKey } from "../utils/date";
 import { createId } from "../utils/id";
 
@@ -197,6 +197,37 @@ export const timeEntryRepository = {
         input.next_action?.trim() || existing.next_action,
         input.completion_rate ?? existing.completion_rate,
         updatedAt,
+        id
+      ]
+    );
+  },
+
+  /**
+   * Overwrite an entry's reflection fields from the edit dialog. Unlike
+   * updateReflection, blank values clear the stored field rather than keeping
+   * the previous one.
+   */
+  async updateEntryDetails(id: string, input: UpdateEntryDetailsInput): Promise<void> {
+    const existing = await this.getById(id);
+    if (!existing) {
+      throw new Error("Time entry not found");
+    }
+
+    const db = await getDatabase();
+    await db.execute(
+      `UPDATE time_entries SET
+        note = $1,
+        blocker = $2,
+        next_action = $3,
+        completion_rate = $4,
+        updated_at = $5
+       WHERE id = $6`,
+      [
+        input.note?.trim() || null,
+        input.blocker?.trim() || null,
+        input.next_action?.trim() || null,
+        input.completion_rate,
+        new Date().toISOString(),
         id
       ]
     );
