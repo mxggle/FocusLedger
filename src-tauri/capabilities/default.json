@@ -15,6 +15,10 @@
     },
     "sql:default",
     "sql:allow-execute",
+    {
+      "identifier": "http:default",
+      "allow": [{ "url": "https://**" }]
+    },
     "notification:default",
     "global-shortcut:allow-is-registered",
     "global-shortcut:allow-register",

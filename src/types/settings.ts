@@ -1,5 +1,7 @@
 export type AppTheme = "system" | "light" | "dark";
 
+export type AiProvider = "anthropic" | "openai" | "gemini" | "custom";
+
 export type AppSettings = {
   defaultCategoryId: string;
   dailyFocusTargetMinutes: number;
@@ -12,6 +14,14 @@ export type AppSettings = {
   birthDate: string;
   /** Life-expectancy horizon (years) for the "life in weeks" grid. */
   lifeExpectancyYears: number;
+  /** Which AI provider powers debriefs and other AI features. */
+  aiProvider: AiProvider;
+  /** User-supplied API key for the selected provider (BYO key). */
+  aiApiKey: string;
+  /** Model ID override; empty uses the provider's default model. */
+  aiModel: string;
+  /** Base URL for OpenAI-compatible custom providers (e.g. http://localhost:11434/v1). */
+  aiBaseUrl: string;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -23,5 +33,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   enableNotifications: true,
   globalShortcut: "CommandOrControl+Shift+Space",
   birthDate: "",
-  lifeExpectancyYears: 80
+  lifeExpectancyYears: 80,
+  aiProvider: "anthropic",
+  aiApiKey: "",
+  aiModel: "",
+  aiBaseUrl: ""
 };

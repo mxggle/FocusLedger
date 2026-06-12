@@ -3,6 +3,7 @@ import { useUiStore } from "../../stores/uiStore";
 import { CollapsiblePane } from "../ui/CollapsiblePane";
 import { AddTaskForm } from "./AddTaskForm";
 import { CurrentFocus } from "./CurrentFocus";
+import { DebriefCard } from "./DebriefCard";
 import { LifeThread } from "./LifeThread";
 import { TaskList } from "./TaskList";
 import { TodayLog } from "./TodayLog";
@@ -81,6 +82,7 @@ export function TodayPage({ onOpenLife }: { onOpenLife: () => void }) {
       >
         <TodaySummary />
         <div className="p-4">
+          <DebriefCard />
           <TodayLog />
         </div>
       </CollapsiblePane>

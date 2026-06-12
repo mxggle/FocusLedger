@@ -79,6 +79,14 @@ const SCHEMA_STATEMENTS = [
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS daily_debriefs (
+    date TEXT PRIMARY KEY,
+    content TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
   `CREATE INDEX IF NOT EXISTS idx_tasks_due_status ON tasks(due_date, status)`,
   `CREATE INDEX IF NOT EXISTS idx_task_templates_enabled ON task_templates(enabled)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_template_occurrences_date

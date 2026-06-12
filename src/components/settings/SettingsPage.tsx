@@ -1,9 +1,10 @@
-import { Bell, Keyboard, MonitorCog, SlidersHorizontal, Tags } from "lucide-react";
+import { Bell, Keyboard, MonitorCog, SlidersHorizontal, Sparkles, Tags } from "lucide-react";
 import { ChangeEvent } from "react";
 import { useNotificationPermission } from "../../hooks/useNotificationPermission";
+import { DEFAULT_MODELS, PROVIDER_LABELS } from "../../services/ai/providers";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
-import type { AppTheme } from "../../types";
+import type { AiProvider, AppTheme } from "../../types";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Field, Input, Select } from "../ui/Field";
@@ -40,8 +41,8 @@ export function SettingsPage() {
         <PageHeader
           icon={MonitorCog}
           eyebrow="Settings"
-          title="Local preferences"
-          description="Everything is stored on this device."
+          title="Preferences"
+          description="Tune how Yolo plans, tracks, and reflects on your time."
         />
 
         <div className="grid gap-5">
@@ -84,6 +85,66 @@ export function SettingsPage() {
                   <option value="dark">Dark</option>
                 </Select>
               </Field>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            icon={Sparkles}
+            title="AI"
+            description="Bring your own API key to power AI features like the daily debrief. Your key is only sent to the provider you choose."
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Provider">
+                <Select
+                  value={settings.aiProvider}
+                  onChange={(event) =>
+                    void updateSetting("aiProvider", event.target.value as AiProvider)
+                  }
+                >
+                  {(Object.keys(PROVIDER_LABELS) as AiProvider[]).map((provider) => (
+                    <option key={provider} value={provider}>
+                      {PROVIDER_LABELS[provider]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="API key">
+                <Input
+                  type="password"
+                  autoComplete="off"
+                  placeholder="Paste your API key"
+                  value={settings.aiApiKey}
+                  onChange={(event) => void updateSetting("aiApiKey", event.target.value)}
+                />
+              </Field>
+              <Field
+                label="Model"
+                hint={
+                  DEFAULT_MODELS[settings.aiProvider]
+                    ? `Leave empty for ${DEFAULT_MODELS[settings.aiProvider]}`
+                    : "Model ID served by your endpoint"
+                }
+              >
+                <Input
+                  type="text"
+                  placeholder={DEFAULT_MODELS[settings.aiProvider] || "e.g. llama3"}
+                  value={settings.aiModel}
+                  onChange={(event) => void updateSetting("aiModel", event.target.value)}
+                />
+              </Field>
+              {settings.aiProvider === "custom" ? (
+                <Field
+                  label="Base URL"
+                  hint="OpenAI-compatible endpoint, e.g. http://localhost:11434/v1"
+                >
+                  <Input
+                    type="text"
+                    placeholder="https://your-endpoint/v1"
+                    value={settings.aiBaseUrl}
+                    onChange={(event) => void updateSetting("aiBaseUrl", event.target.value)}
+                  />
+                </Field>
+              ) : null}
             </div>
           </SettingsSection>
 

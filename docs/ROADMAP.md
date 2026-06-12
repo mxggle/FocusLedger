@@ -16,9 +16,11 @@ roughly by value and dependency: each AI tier builds on the one before it.
 The highest-value use of data we already have. Read-only AI over existing records — low
 UI risk, no new capture flow.
 
-- **Daily debrief** — at day's end, summarize where time actually went from `time_entries`
-  + stop-notes: estimate-vs-actual gaps, recurring blockers, one concrete thing to change
-  tomorrow.
+- **Daily debrief (shipped)** — at day's end, summarize where time actually went from
+  `time_entries` + stop-notes: estimate-vs-actual gaps, recurring blockers, one concrete
+  thing to change tomorrow. Lives in the Today Log pane; one debrief per day, saved to
+  `daily_debriefs` so a reviewable journal accumulates. Built on a provider-agnostic AI
+  layer (`src/services/ai/`) that the rest of Phase 1–3 reuses.
 - **Tomorrow planner** — propose tomorrow's list from backlog + due dates, sized to your
   *real* capacity (average focus hours actually logged), not an idealized schedule.
 - **Estimate calibration** — learn your personal fudge factor per category
@@ -76,17 +78,11 @@ These run in parallel with the AI work — they make Yolo a first-class desktop 
 
 ---
 
-## Open design decision · how AI is delivered
+## Design decision · how AI is delivered — RESOLVED
 
-AI features introduce a delivery decision that affects quality, setup, cost, and desktop
-UX. The model must be settled before Phase 1 ships. Options under consideration:
-
-- **BYO API key (cloud)** — user supplies their own Claude/OpenAI key. Best quality, zero
-  server cost, no backend.
-- **On-device model (Ollama)** — self-contained, but heavier, weaker results, and a larger
-  install.
-- **Hybrid** — lightweight local parsing for quick-add, cloud models for deep reasoning
-  such as debriefs and planning. Most flexible, most complexity.
-
-Likely direction: BYO key first, with capture-only features degrading gracefully when no
-key is set.
+**BYO API key, multi-provider.** Settings → AI lets the user pick Claude (Anthropic),
+OpenAI, Google Gemini, or any OpenAI-compatible endpoint (covers Ollama, Groq, DeepSeek,
+LM Studio, …) and paste their own key. Requests go through `tauri-plugin-http` (Rust
+proxies the call, so provider CORS policies don't apply). No backend, zero server cost.
+Features degrade gracefully when no key is set — the debrief card explains how to connect
+a provider instead of erroring.
