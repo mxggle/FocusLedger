@@ -1,6 +1,7 @@
 import { Bell, Keyboard, MonitorCog, SlidersHorizontal, Sparkles, Tags } from "lucide-react";
 import { ChangeEvent } from "react";
 import { useNotificationPermission } from "../../hooks/useNotificationPermission";
+import { AI_LANGUAGES } from "../../services/ai/languages";
 import { DEFAULT_MODELS, PROVIDER_LABELS } from "../../services/ai/providers";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
@@ -145,6 +146,21 @@ export function SettingsPage() {
                   />
                 </Field>
               ) : null}
+              <Field
+                label="Output language"
+                hint="The language AI features write in, e.g. the daily debrief"
+              >
+                <Select
+                  value={settings.aiLanguage}
+                  onChange={(event) => void updateSetting("aiLanguage", event.target.value)}
+                >
+                  {AI_LANGUAGES.map((language) => (
+                    <option key={language.value} value={language.value}>
+                      {language.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
             </div>
           </SettingsSection>
 

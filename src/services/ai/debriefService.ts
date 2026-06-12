@@ -8,18 +8,33 @@ export type DebriefData = {
   tasks: Task[];
   entries: TimeEntryWithTask[];
   stats: TodayStats | null;
+  /** Output language (English name, e.g. "Japanese"); empty lets the model decide. */
+  language?: string;
 };
 
-export const DEBRIEF_SYSTEM_PROMPT = [
-  "You are the reflection companion inside Yolo, a desktop app whose motto is \"make your time count\".",
-  "You receive an honest record of one person's day: their tasks, focus sessions, stop-notes, blockers, and estimate-vs-actual numbers.",
-  "Write a short end-of-day debrief in Markdown with exactly these three sections:",
-  "## Where the time went — 2-3 sentences on how the day actually unfolded, naming the dominant categories or tasks.",
-  "## Estimate vs reality — point out the clearest gaps between planned and actual time, and any recurring blockers from the notes. If there is too little data, say so honestly.",
-  "## One change for tomorrow — a single, concrete, small suggestion grounded in today's record. Never more than one.",
-  "Tone: warm but candid, like a coach who respects the user's time. No filler praise, no generic productivity advice, no bullet spam.",
-  "Keep the whole debrief under 180 words. Refer to tasks by their titles."
-].join("\n");
+export function buildDebriefSystemPrompt(language?: string): string {
+  const target = language?.trim();
+  const lines = [
+    'You are the reflection companion inside Yolo, a desktop app whose motto is "make your time count".',
+    "You receive an honest record of one person's day: their tasks, focus sessions, stop-notes, blockers, and estimate-vs-actual numbers.",
+    "Write a short end-of-day debrief in Markdown with exactly these three sections:",
+    "## Where the time went — 2-3 sentences on how the day actually unfolded, naming the dominant categories or tasks.",
+    "## Estimate vs reality — point out the clearest gaps between planned and actual time, and any recurring blockers from the notes. If there is too little data, say so honestly.",
+    "## One change for tomorrow — a single, concrete, small suggestion grounded in today's record. Never more than one.",
+    "Tone: warm but candid, like a coach who respects the user's time. No filler praise, no generic productivity advice, no bullet spam.",
+    "Keep the whole debrief under 180 words. Refer to tasks by their titles."
+  ];
+  if (target) {
+    lines.push(
+      `Write the entire debrief in ${target}, including the three section headings (translate them naturally). Keep task titles exactly as the user wrote them.`
+    );
+  } else {
+    lines.push(
+      "Write the debrief in the language the user's task titles and notes are mostly written in; fall back to English if unclear."
+    );
+  }
+  return lines.join("\n");
+}
 
 function formatMinutes(seconds: number): string {
   return seconds > 0 ? formatDurationCompact(seconds) : "0m";
@@ -86,7 +101,7 @@ export function buildDebriefPrompt(data: DebriefData): string {
 
 export async function generateDebrief(settings: AiSettings, data: DebriefData): Promise<string> {
   return generateText(settings, {
-    system: DEBRIEF_SYSTEM_PROMPT,
+    system: buildDebriefSystemPrompt(data.language),
     prompt: buildDebriefPrompt(data)
   });
 }

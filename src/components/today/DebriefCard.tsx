@@ -64,7 +64,8 @@ export function DebriefCard() {
         date: today,
         tasks: allTasks,
         entries: todayEntries,
-        stats
+        stats,
+        language: settings.aiLanguage
       });
       const saved = await debriefRepository.save({
         date: today,

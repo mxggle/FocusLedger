@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Task, TimeEntryWithTask, TodayStats } from "../../types";
-import { buildDebriefPrompt } from "./debriefService";
+import { buildDebriefPrompt, buildDebriefSystemPrompt } from "./debriefService";
 
 const task: Task = {
   id: "task-1",
@@ -102,5 +102,21 @@ describe("buildDebriefPrompt", () => {
     });
 
     expect(prompt.indexOf("Morning warmup")).toBeLessThan(prompt.indexOf("Drafted the outline"));
+  });
+});
+
+describe("buildDebriefSystemPrompt", () => {
+  it("instructs the model to write in the chosen language", () => {
+    const system = buildDebriefSystemPrompt("Japanese");
+    expect(system).toContain("Write the entire debrief in Japanese");
+    expect(system).toContain("translate them naturally");
+  });
+
+  it("mirrors the user's own language when none is chosen", () => {
+    for (const language of [undefined, "", "  "]) {
+      const system = buildDebriefSystemPrompt(language);
+      expect(system).toContain("language the user's task titles and notes");
+      expect(system).not.toContain("Write the entire debrief in");
+    }
   });
 });
