@@ -33,6 +33,16 @@ export function resolveDatabasePath(options: ResolveOptions = {}): string {
 }
 
 /**
+ * Whether the server should run in read-only mode (no write tools registered,
+ * connection opened read-only). Opt-in via `YOLO_MCP_READONLY=1` for users who
+ * want agents to look but not touch.
+ */
+export function resolveReadonly(env: NodeJS.ProcessEnv = process.env): boolean {
+  const value = env.YOLO_MCP_READONLY?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
+/**
  * Mirror Tauri's `AppConfig` base directory per platform so we read the same
  * file the desktop app writes.
  */

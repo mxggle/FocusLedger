@@ -8,6 +8,7 @@ export const listTasksTool = defineTool({
   title: "List tasks",
   description:
     "List Yolo tasks. Use `scope` for the common views: 'today' (due today or earlier plus anything in progress), 'backlog' (no due date, not finished), or 'all'. Optionally filter by status, category, or due date.",
+  annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
     scope: z.enum(["today", "backlog", "all"]).default("all").describe("Which view to list"),
     status: z.array(TASK_STATUS).optional().describe("Only include these statuses"),

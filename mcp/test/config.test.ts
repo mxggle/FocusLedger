@@ -1,6 +1,6 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { resolveDatabasePath } from "../src/config.js";
+import { resolveDatabasePath, resolveReadonly } from "../src/config.js";
 
 describe("resolveDatabasePath", () => {
   it("prefers the YOLO_DB_PATH override", () => {
@@ -26,5 +26,19 @@ describe("resolveDatabasePath", () => {
   it("uses APPDATA on windows", () => {
     const resolved = resolveDatabasePath({ env: { APPDATA: "C:\\Users\\u\\AppData\\Roaming" }, platform: "win32" });
     expect(resolved).toContain("com.yolo.desktop");
+  });
+});
+
+describe("resolveReadonly", () => {
+  it("defaults to read-write", () => {
+    expect(resolveReadonly({})).toBe(false);
+  });
+
+  it.each(["1", "true", "TRUE", " yes "])("treats %j as read-only", (value) => {
+    expect(resolveReadonly({ YOLO_MCP_READONLY: value })).toBe(true);
+  });
+
+  it.each(["0", "false", ""])("treats %j as read-write", (value) => {
+    expect(resolveReadonly({ YOLO_MCP_READONLY: value })).toBe(false);
   });
 });

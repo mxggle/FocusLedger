@@ -3,6 +3,7 @@ import { createTaskRepository, type TaskRepository } from "./repositories/taskRe
 import { createTimeEntryRepository, type TimeEntryRepository } from "./repositories/timeEntryRepository.js";
 import { createCategoryRepository, type CategoryRepository } from "./repositories/categoryRepository.js";
 import { createSummaryService, type SummaryService } from "./services/summaryService.js";
+import { createSessionService, type SessionService } from "./services/sessionService.js";
 
 /**
  * Shared dependencies handed to every tool handler.
@@ -17,6 +18,7 @@ export interface Context {
   timeEntries: TimeEntryRepository;
   categories: CategoryRepository;
   summary: SummaryService;
+  session: SessionService;
 }
 
 export function createContext(db: SqliteDatabase): Context {
@@ -24,5 +26,6 @@ export function createContext(db: SqliteDatabase): Context {
   const timeEntries = createTimeEntryRepository(db);
   const categories = createCategoryRepository(db);
   const summary = createSummaryService({ tasks, timeEntries, categories });
-  return { tasks, timeEntries, categories, summary };
+  const session = createSessionService({ db, tasks, timeEntries });
+  return { tasks, timeEntries, categories, summary, session };
 }
