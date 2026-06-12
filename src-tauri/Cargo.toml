@@ -1,6 +1,6 @@
 [package]
 name = "yolo"
-version = "0.2.0"
+version = "0.3.0"
 description = "An AI-native desktop app for mastering your time — turn daily tasks into honest time records."
 authors = ["Yolo"]
 edition = "2021"
