@@ -4,6 +4,7 @@ export const listCategoriesTool = defineTool({
   name: "list_categories",
   title: "List categories",
   description: "List all task categories (id, name, color). Useful for resolving category filters.",
+  annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {},
   handler: (_args, ctx) => {
     const categories = ctx.categories.list();

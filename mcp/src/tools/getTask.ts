@@ -6,6 +6,7 @@ export const getTaskTool = defineTool({
   title: "Get task",
   description:
     "Get one task by id, including its time entries and the total tracked time across all sessions.",
+  annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
     id: z.string().describe("Task id")
   },

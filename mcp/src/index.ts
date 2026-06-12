@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { existsSync } from "node:fs";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { resolveDatabasePath } from "./config.js";
+import { resolveDatabasePath, resolveReadonly } from "./config.js";
 import { openDatabase } from "./db/database.js";
 import { createContext } from "./context.js";
 import { buildServer, SERVER_NAME } from "./server.js";
@@ -20,13 +20,14 @@ async function main(): Promise<void> {
     );
   }
 
-  const db = openDatabase({ path: dbPath, readonly: true });
+  const readonly = resolveReadonly();
+  const db = openDatabase({ path: dbPath, readonly });
   const ctx = createContext(db);
-  const server = buildServer(ctx);
+  const server = buildServer(ctx, { readonly });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  log(`ready (db: ${dbPath})`);
+  log(`ready (db: ${dbPath}, mode: ${readonly ? "read-only" : "read-write"})`);
 }
 
 main().catch((error: unknown) => {

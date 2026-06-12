@@ -7,6 +7,7 @@ export const dailySummaryTool = defineTool({
   title: "Daily summary",
   description:
     "Summarize one day: total focus time, time per category, tasks completed/dropped, and estimated-vs-actual minutes. Defaults to today.",
+  annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
     date: z.string().optional().describe("YYYY-MM-DD; defaults to today")
   },

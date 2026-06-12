@@ -1,5 +1,5 @@
 import type { z, ZodRawShape } from "zod";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import type { Context } from "../context.js";
 
 /**
@@ -11,6 +11,10 @@ export interface ToolModule<Shape extends ZodRawShape = ZodRawShape> {
   name: string;
   title: string;
   description: string;
+  /** Tools that mutate the database; skipped when the server runs read-only. */
+  writes?: boolean;
+  /** MCP behaviour hints (readOnlyHint, destructiveHint, …) surfaced to clients. */
+  annotations?: ToolAnnotations;
   inputSchema: Shape;
   handler: (args: z.infer<z.ZodObject<Shape>>, ctx: Context) => CallToolResult | Promise<CallToolResult>;
 }

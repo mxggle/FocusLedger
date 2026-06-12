@@ -7,6 +7,7 @@ export const listTimeEntriesTool = defineTool({
   title: "List time entries",
   description:
     "List tracked time sessions (with task and category) overlapping a window. Provide either `date` (a single YYYY-MM-DD day) or an explicit `start`/`end` ISO range.",
+  annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
     date: z.string().optional().describe("YYYY-MM-DD; a single day"),
     start: z.string().optional().describe("ISO timestamp; range start (inclusive)"),

@@ -46,18 +46,20 @@ AI nudges and light actions. Highest "wow," but only credible once reflection wo
 
 ---
 
-## Track B — Agent-readable (MCP)
+## Track B — Agent-native (MCP)
 
 - **MCP server (v1 — shipped, read-only)** — a standalone server (`mcp/`) exposes tasks
   and time records as MCP tools so external agents (Claude Desktop/Code, Cursor, …) can
-  read your day. It reads the same `yolo.db` read-only — agents can look, not touch.
-  Tools: `list_tasks`, `get_task`, `list_time_entries`, `daily_summary`, `list_categories`.
-  See [`../mcp/README.md`](../mcp/README.md) for setup.
+  read your day. Tools: `list_tasks`, `get_task`, `list_time_entries`, `daily_summary`,
+  `list_categories`. See [`../mcp/README.md`](../mcp/README.md) for setup.
   - Built on a tool-registry + `Context` seam so new tools (including the AI features
     above) drop in as one file — the same extension point future work plugs into.
-- **MCP server (v2 — next) — write tools** — `add_task`, `start`/`stop`, complete/drop,
-  behind the app's business rules (one active task, etc.). Connection opens read-write
-  only here.
+- **MCP server (v2 — shipped) — write tools** — agents can now manage the day:
+  `add_task`, `update_task`, `start_task`, `pause_task`, `complete_task`, `drop_task`,
+  all behind the app's business rules (one active session, auto-pause on switch,
+  continuation window, trivial-block discard) via a shared `sessionService`. The app
+  refreshes on window focus so agent changes appear immediately; `YOLO_MCP_READONLY=1`
+  restores look-but-don't-touch mode.
 - **Life-weeks meaning layer** — connect daily time data to the big picture:
   "at this rate you'll spend ~X weeks of your remaining life in meetings."
 

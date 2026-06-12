@@ -1,9 +1,9 @@
 {
   "name": "yolo-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "MCP server exposing Yolo tasks and time records to AI agents (read-only).",
+  "description": "MCP server letting AI agents read and manage Yolo tasks and time records.",
   "bin": {
     "yolo-mcp": "dist/index.js"
   },
