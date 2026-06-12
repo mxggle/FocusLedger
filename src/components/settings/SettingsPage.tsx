@@ -162,6 +162,28 @@ export function SettingsPage() {
                 </Select>
               </Field>
             </div>
+
+            <div className="mt-4 border-t border-border pt-1">
+              <SettingRow
+                label="Automatic daily debrief"
+                hint="Generate the debrief on a schedule and notify you when it's ready."
+                value={settings.debriefAutoEnabled}
+                onChange={(value) => void updateSetting("debriefAutoEnabled", value)}
+              />
+              {settings.debriefAutoEnabled ? (
+                <div className="max-w-[12rem] pb-3">
+                  <Field label="Debrief time" hint="Local time, every day">
+                    <Input
+                      type="time"
+                      value={settings.debriefAutoTime}
+                      onChange={(event) =>
+                        void updateSetting("debriefAutoTime", event.target.value)
+                      }
+                    />
+                  </Field>
+                </div>
+              ) : null}
+            </div>
           </SettingsSection>
 
           <SettingsSection

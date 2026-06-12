@@ -24,6 +24,10 @@ export type AppSettings = {
   aiBaseUrl: string;
   /** Language for AI output (English name, e.g. "Japanese"); empty lets the model decide. */
   aiLanguage: string;
+  /** Generate the daily debrief automatically at `debriefAutoTime`. */
+  debriefAutoEnabled: boolean;
+  /** Local time of day (`HH:mm`) for the automatic debrief. */
+  debriefAutoTime: string;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -40,5 +44,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   aiApiKey: "",
   aiModel: "",
   aiBaseUrl: "",
-  aiLanguage: ""
+  aiLanguage: "",
+  debriefAutoEnabled: false,
+  debriefAutoTime: "23:00"
 };

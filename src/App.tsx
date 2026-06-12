@@ -8,6 +8,7 @@ import { LifePage } from "./components/life/LifePage";
 import { PlanPage } from "./components/plan/PlanPage";
 import { QuickAddDialog } from "./components/quick-add/QuickAddDialog";
 import { SettingsPage } from "./components/settings/SettingsPage";
+import { DebriefDialog } from "./components/today/DebriefDialog";
 import { FocusZenOverlay } from "./components/today/FocusZenOverlay";
 import { TodayPage } from "./components/today/TodayPage";
 import { ConfirmDialog } from "./components/ui/ConfirmDialog";
@@ -15,6 +16,7 @@ import { SkeletonList } from "./components/ui/Skeleton";
 import { ToastViewport } from "./components/ui/ToastViewport";
 import { TooltipProvider } from "./components/ui/Tooltip";
 import { useDayRollover } from "./hooks/useDayRollover";
+import { useDebriefSchedule } from "./hooks/useDebriefSchedule";
 import { useNotificationPermissionPrompt } from "./hooks/useNotificationPermission";
 import { useQuickAddShortcuts } from "./hooks/useQuickAddShortcuts";
 import { useTaskReminders } from "./hooks/useTaskReminders";
@@ -55,6 +57,7 @@ export default function App() {
   useNotificationPermissionPrompt();
   useTaskReminders({ onOpenToday: openToday });
   useDayRollover();
+  useDebriefSchedule();
 
   useEffect(() => {
     void initialize();
@@ -107,6 +110,7 @@ export default function App() {
         )}
       </AppShell>
       <FocusZenOverlay />
+      <DebriefDialog />
       <QuickAddDialog />
       <ConfirmDialog />
       <ToastViewport />

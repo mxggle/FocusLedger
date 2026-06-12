@@ -1,38 +1,37 @@
 import { RefreshCw, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { debriefRepository } from "../../db/debriefRepository";
-import { generateDebrief } from "../../services/ai/debriefService";
 import { hasAiKey } from "../../services/ai/aiClient";
-import { resolveModel } from "../../services/ai/providers";
-import { calculateTodayStats } from "../../services/statsService";
+import { runTodayDebrief } from "../../services/ai/debriefRunner";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
 import { useTimerStore } from "../../stores/timerStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { DailyDebrief } from "../../types";
-import { toDateKey } from "../../utils/date";
+import { formatDateLabel, toDateKey } from "../../utils/date";
 import { Button } from "../ui/Button";
-import { Card } from "../ui/Card";
+import { Dialog, DialogDescription, DialogTitle } from "../ui/Dialog";
 
 /**
- * End-of-day AI debrief: turns today's tasks, sessions, and stop-notes into a
- * short reflection. Saved per day so History accumulates a reviewable journal.
+ * Daily debrief dialog: shows today's saved debrief, or generates one from
+ * today's tasks, sessions, and stop-notes. Opened from the Today page button
+ * or the toast that follows a scheduled auto-debrief.
  */
-export function DebriefCard() {
-  const settings = useSettingsStore((state) => state.settings);
-  const allTasks = useTaskStore((state) => state.allTasks);
-  const todayEntries = useTaskStore((state) => state.todayEntries);
-  const categories = useTaskStore((state) => state.categories);
-  const initialized = useTaskStore((state) => state.initialized);
-  const now = useTimerStore((state) => state.now);
+export function DebriefDialog() {
+  const open = useUiStore((state) => state.debriefDialogOpen);
+  const setOpen = useUiStore((state) => state.setDebriefDialogOpen);
   const addToast = useUiStore((state) => state.addToast);
+  const settings = useSettingsStore((state) => state.settings);
+  const todayEntries = useTaskStore((state) => state.todayEntries);
+  const now = useTimerStore((state) => state.now);
 
   const today = toDateKey(now);
   const [debrief, setDebrief] = useState<DailyDebrief | null>(null);
   const [generating, setGenerating] = useState(false);
 
+  // Re-read on every open so a scheduler-generated debrief shows up.
   useEffect(() => {
-    if (!initialized) return;
+    if (!open) return;
     let cancelled = false;
     debriefRepository
       .getForDate(today)
@@ -45,7 +44,7 @@ export function DebriefCard() {
     return () => {
       cancelled = true;
     };
-  }, [initialized, today]);
+  }, [open, today]);
 
   const keyConfigured = hasAiKey(settings);
   const hasActivity = todayEntries.length > 0;
@@ -53,27 +52,7 @@ export function DebriefCard() {
   async function handleGenerate() {
     setGenerating(true);
     try {
-      const stats = calculateTodayStats({
-        date: today,
-        tasks: allTasks,
-        timeEntries: todayEntries,
-        categories,
-        now
-      });
-      const content = await generateDebrief(settings, {
-        date: today,
-        tasks: allTasks,
-        entries: todayEntries,
-        stats,
-        language: settings.aiLanguage
-      });
-      const saved = await debriefRepository.save({
-        date: today,
-        content,
-        provider: settings.aiProvider,
-        model: resolveModel(settings)
-      });
-      setDebrief(saved);
+      setDebrief(await runTodayDebrief(now));
     } catch (error) {
       console.error("Failed to generate debrief", error);
       addToast({
@@ -87,13 +66,19 @@ export function DebriefCard() {
   }
 
   return (
-    <Card
-      className="mb-4"
-      header={
-        <>
-          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-            <Sparkles className="h-4 w-4 text-primary" aria-hidden />
-            Daily debrief
+    <Dialog open={open} onClose={() => setOpen(false)} size="md" align="top">
+      <div className="p-5">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <DialogTitle>
+              <span className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" aria-hidden />
+                Daily debrief
+              </span>
+            </DialogTitle>
+            <DialogDescription className="mt-1">
+              {formatDateLabel(today)}
+            </DialogDescription>
           </div>
           {debrief ? (
             <Button
@@ -108,40 +93,40 @@ export function DebriefCard() {
               Regenerate
             </Button>
           ) : null}
-        </>
-      }
-    >
-      {debrief ? (
-        <DebriefContent content={debrief.content} />
-      ) : !keyConfigured ? (
-        <p className="text-sm text-muted-foreground">
-          Connect an AI provider in Settings → AI to get an end-of-day read on
-          where your time went and one thing to change tomorrow.
-        </p>
-      ) : !hasActivity ? (
-        <p className="text-sm text-muted-foreground">
-          Once you log some focus time today, generate a debrief to see where
-          the day actually went.
-        </p>
-      ) : (
-        <div className="flex flex-col items-start gap-3">
-          <p className="text-sm text-muted-foreground">
-            Turn today&apos;s sessions and stop-notes into a short, honest
-            reflection.
-          </p>
-          <Button
-            type="button"
-            size="sm"
-            variant="soft"
-            loading={generating}
-            onClick={() => void handleGenerate()}
-          >
-            <Sparkles className="h-3.5 w-3.5" aria-hidden />
-            Generate debrief
-          </Button>
         </div>
-      )}
-    </Card>
+
+        {debrief ? (
+          <DebriefContent content={debrief.content} />
+        ) : !keyConfigured ? (
+          <p className="text-sm text-muted-foreground">
+            Connect an AI provider in Settings → AI to get an end-of-day read on
+            where your time went and one thing to change tomorrow.
+          </p>
+        ) : !hasActivity ? (
+          <p className="text-sm text-muted-foreground">
+            Once you log some focus time today, generate a debrief to see where
+            the day actually went.
+          </p>
+        ) : (
+          <div className="flex flex-col items-start gap-3">
+            <p className="text-sm text-muted-foreground">
+              Turn today&apos;s sessions and stop-notes into a short, honest
+              reflection.
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="soft"
+              loading={generating}
+              onClick={() => void handleGenerate()}
+            >
+              <Sparkles className="h-3.5 w-3.5" aria-hidden />
+              Generate debrief
+            </Button>
+          </div>
+        )}
+      </div>
+    </Dialog>
   );
 }
 

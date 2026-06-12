@@ -122,6 +122,11 @@ type UiState = {
   focusZen: boolean;
   setFocusZen: (value: boolean) => void;
   toggleFocusZen: () => void;
+
+  // Daily debrief dialog — opened from the Today page button or a toast action
+  // after the scheduled auto-debrief completes.
+  debriefDialogOpen: boolean;
+  setDebriefDialogOpen: (value: boolean) => void;
 };
 
 export const useUiStore = create<UiState>((set) => ({
@@ -224,5 +229,8 @@ export const useUiStore = create<UiState>((set) => ({
 
   focusZen: false,
   setFocusZen: (value) => set({ focusZen: value }),
-  toggleFocusZen: () => set((state) => ({ focusZen: !state.focusZen }))
+  toggleFocusZen: () => set((state) => ({ focusZen: !state.focusZen })),
+
+  debriefDialogOpen: false,
+  setDebriefDialogOpen: (value) => set({ debriefDialogOpen: value })
 }));
