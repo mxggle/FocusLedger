@@ -1,6 +1,6 @@
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    tray::TrayIconBuilder,
     AppHandle, Emitter, Manager, State, Wry,
 };
 
@@ -105,9 +105,11 @@ pub fn run() {
                 reminders,
             });
 
+            // Left-click opens the dropdown menu on both platforms; the window
+            // is reached via the menu's "Show Yolo" item.
             let mut tray = TrayIconBuilder::with_id(TRAY_ID)
                 .menu(&menu)
-                .show_menu_on_left_click(false)
+                .show_menu_on_left_click(true)
                 .tooltip("Yolo")
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "show" => show_main_window(app),
@@ -126,23 +128,6 @@ pub fn run() {
                         let _ = app.emit("tray://toggle-reminders", ());
                     }
                     _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    let should_show = matches!(
-                        event,
-                        TrayIconEvent::Click {
-                            button: MouseButton::Left,
-                            button_state: MouseButtonState::Up,
-                            ..
-                        } | TrayIconEvent::DoubleClick {
-                            button: MouseButton::Left,
-                            ..
-                        }
-                    );
-
-                    if should_show {
-                        show_main_window(tray.app_handle());
-                    }
                 });
 
             if let Some(icon) = app.default_window_icon().cloned() {
