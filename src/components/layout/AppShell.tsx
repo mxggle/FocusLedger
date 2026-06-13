@@ -36,7 +36,16 @@ export function AppShell<T extends string>({
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background text-foreground">
+    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+      {/* ── Title bar ──────────────────────────────────────────────────────────
+          One full-width drag region across the very top. It houses the native
+          macOS traffic lights and lets the user drag the whole window. The
+          column divider lives below it, so the lights never clash with the
+          sidebar border — even when collapsed. No interactive children, so
+          dragging can never trigger a click. */}
+      <div data-tauri-drag-region className="h-9 shrink-0" aria-hidden="true" />
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* ── Sidebar ────────────────────────────────────────────────────────── */}
       <aside
         className={cn(
@@ -148,6 +157,7 @@ export function AppShell<T extends string>({
 
       {/* ── Main content ───────────────────────────────────────────────────── */}
       <main className="min-w-0 flex-1 overflow-auto">{children}</main>
+      </div>
     </div>
   );
 }

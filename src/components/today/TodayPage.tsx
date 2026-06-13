@@ -41,7 +41,7 @@ export function TodayPage({ onOpenLife }: { onOpenLife: () => void }) {
 
   return (
     // overflow-hidden ensures panes don't bleed outside; bg-background fills gaps
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
+    <div className="flex h-full flex-col overflow-hidden bg-background">
       {/* Quiet finitude thread — the "you only live once" line, linked to Life */}
       <div className="shrink-0 border-b border-border bg-surface-2/40">
         <LifeThread onOpenLife={onOpenLife} />
