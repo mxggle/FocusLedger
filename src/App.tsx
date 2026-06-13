@@ -1,14 +1,14 @@
-import { AlertCircle, BarChart3, CalendarDays, CheckSquare, Hourglass, Inbox, Info, Settings } from "lucide-react";
+import { AlertCircle, BarChart3, CalendarDays, CheckSquare, Hourglass, Inbox, Info, Settings, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AboutPage } from "./components/about/AboutPage";
 import { BacklogPage } from "./components/backlog/BacklogPage";
 import { HistoryPage } from "./components/history/HistoryPage";
 import { AppShell } from "./components/layout/AppShell";
 import { LifePage } from "./components/life/LifePage";
+import { MyDayPage } from "./components/myday/MyDayPage";
 import { PlanPage } from "./components/plan/PlanPage";
 import { QuickAddDialog } from "./components/quick-add/QuickAddDialog";
 import { SettingsPage } from "./components/settings/SettingsPage";
-import { DebriefDialog } from "./components/today/DebriefDialog";
 import { FocusZenOverlay } from "./components/today/FocusZenOverlay";
 import { TodayPage } from "./components/today/TodayPage";
 import { ConfirmDialog } from "./components/ui/ConfirmDialog";
@@ -23,9 +23,11 @@ import { useTaskReminders } from "./hooks/useTaskReminders";
 import { useTrayStatus } from "./hooks/useTrayStatus";
 import { useSettingsStore } from "./stores/settingsStore";
 import { useTaskStore } from "./stores/taskStore";
+import { useUiStore } from "./stores/uiStore";
 
 type RouteId =
   | "today"
+  | "my-day"
   | "backlog"
   | "plan"
   | "life"
@@ -35,6 +37,7 @@ type RouteId =
 
 const routes = [
   { id: "today" as const, label: "Today", icon: CheckSquare },
+  { id: "my-day" as const, label: "My Day", icon: Sparkles },
   { id: "backlog" as const, label: "Backlog", icon: Inbox },
   { id: "plan" as const, label: "Plan", icon: CalendarDays },
   { id: "life" as const, label: "Life", icon: Hourglass },
@@ -43,6 +46,8 @@ const routes = [
   { id: "about" as const, label: "About", icon: Info }
 ];
 
+const ROUTE_IDS = new Set<string>(routes.map((entry) => entry.id));
+
 export default function App() {
   const [route, setRoute] = useState<RouteId>("today");
   const initialize = useTaskStore((state) => state.initialize);
@@ -50,6 +55,8 @@ export default function App() {
   const loading = useTaskStore((state) => state.loading);
   const error = useTaskStore((state) => state.error);
   const theme = useSettingsStore((state) => state.settings.theme);
+  const requestedRoute = useUiStore((state) => state.requestedRoute);
+  const clearRequestedRoute = useUiStore((state) => state.clearRequestedRoute);
   const openToday = useCallback(() => setRoute("today"), []);
 
   useTrayStatus();
@@ -62,6 +69,17 @@ export default function App() {
   useEffect(() => {
     void initialize();
   }, [initialize]);
+
+  // Apply cross-component navigation requests (e.g. the Today "My Day" button
+  // or the scheduled-debrief toast), then clear so it fires once.
+  useEffect(() => {
+    if (requestedRoute && ROUTE_IDS.has(requestedRoute)) {
+      setRoute(requestedRoute as RouteId);
+    }
+    if (requestedRoute) {
+      clearRequestedRoute();
+    }
+  }, [requestedRoute, clearRequestedRoute]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -95,6 +113,8 @@ export default function App() {
           </div>
         ) : route === "today" ? (
           <TodayPage onOpenLife={() => setRoute("life")} />
+        ) : route === "my-day" ? (
+          <MyDayPage />
         ) : route === "backlog" ? (
           <BacklogPage />
         ) : route === "plan" ? (
@@ -110,7 +130,6 @@ export default function App() {
         )}
       </AppShell>
       <FocusZenOverlay />
-      <DebriefDialog />
       <QuickAddDialog />
       <ConfirmDialog />
       <ToastViewport />

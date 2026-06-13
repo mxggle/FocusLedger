@@ -99,9 +99,34 @@ export function buildDebriefPrompt(data: DebriefData): string {
   return sections.join("\n\n");
 }
 
+/**
+ * Low temperature keeps the debrief stable: regenerating on the same day's data
+ * yields near-identical wording instead of a fresh take every time.
+ */
+const DEBRIEF_TEMPERATURE = 0.2;
+
+/** Tiny stable string hash (djb2) — enough to detect input changes, not crypto. */
+function hashString(input: string): string {
+  let hash = 5381;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = ((hash << 5) + hash + input.charCodeAt(i)) | 0;
+  }
+  return (hash >>> 0).toString(36);
+}
+
+/**
+ * Fingerprints exactly what the model sees (system + prompt). Two days with the
+ * same fingerprint would produce the same debrief, so regeneration is pointless
+ * unless this value changes.
+ */
+export function debriefInputHash(data: DebriefData): string {
+  return hashString(`${buildDebriefSystemPrompt(data.language)}\n---\n${buildDebriefPrompt(data)}`);
+}
+
 export async function generateDebrief(settings: AiSettings, data: DebriefData): Promise<string> {
   return generateText(settings, {
     system: buildDebriefSystemPrompt(data.language),
-    prompt: buildDebriefPrompt(data)
+    prompt: buildDebriefPrompt(data),
+    temperature: DEBRIEF_TEMPERATURE
   });
 }

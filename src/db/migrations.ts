@@ -84,6 +84,7 @@ const SCHEMA_STATEMENTS = [
     content TEXT NOT NULL,
     provider TEXT NOT NULL,
     model TEXT NOT NULL,
+    input_hash TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )`,
@@ -117,6 +118,7 @@ export async function runMigrations(db: SqlDatabase): Promise<void> {
   }
 
   await ensureTaskScheduleColumns(db);
+  await ensureDebriefInputHashColumn(db);
   await db.execute("CREATE INDEX IF NOT EXISTS idx_tasks_template_due ON tasks(template_id, due_date)");
   await ensureTemplateStartTimeNullable(db);
   await seedDefaultCategories(db);
@@ -170,6 +172,13 @@ async function ensureTaskScheduleColumns(db: SqlDatabase): Promise<void> {
     if (!existing.has(column)) {
       await db.execute(statement);
     }
+  }
+}
+
+async function ensureDebriefInputHashColumn(db: SqlDatabase): Promise<void> {
+  const columns = await db.select<Array<{ name: string }>>("PRAGMA table_info(daily_debriefs)");
+  if (!columns.some((column) => column.name === "input_hash")) {
+    await db.execute("ALTER TABLE daily_debriefs ADD COLUMN input_hash TEXT");
   }
 }
 

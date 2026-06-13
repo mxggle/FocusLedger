@@ -63,7 +63,7 @@ export function useDebriefSchedule() {
             {
               label: "View",
               variant: "primary",
-              onClick: () => useUiStore.getState().setDebriefDialogOpen(true)
+              onClick: () => useUiStore.getState().requestRoute("my-day")
             }
           ]
         });

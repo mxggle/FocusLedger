@@ -2,9 +2,9 @@ import { Sparkles } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { Button } from "../ui/Button";
 
-/** Opens the daily debrief dialog from the Today Log pane. */
+/** Opens the My Day review page from the Today Log pane. */
 export function DebriefButton() {
-  const setDebriefDialogOpen = useUiStore((state) => state.setDebriefDialogOpen);
+  const requestRoute = useUiStore((state) => state.requestRoute);
 
   return (
     <Button
@@ -12,10 +12,10 @@ export function DebriefButton() {
       size="sm"
       variant="soft"
       className="mb-4 w-full"
-      onClick={() => setDebriefDialogOpen(true)}
+      onClick={() => requestRoute("my-day")}
     >
       <Sparkles className="h-3.5 w-3.5" aria-hidden />
-      Daily debrief
+      My Day
     </Button>
   );
 }

@@ -16,18 +16,20 @@ export const debriefRepository = {
     content: string;
     provider: string;
     model: string;
+    inputHash: string;
   }): Promise<DailyDebrief> {
     const db = await getDatabase();
     const now = new Date().toISOString();
     await db.execute(
-      `INSERT INTO daily_debriefs (date, content, provider, model, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $5)
+      `INSERT INTO daily_debriefs (date, content, provider, model, input_hash, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $6)
        ON CONFLICT(date) DO UPDATE SET
          content = excluded.content,
          provider = excluded.provider,
          model = excluded.model,
+         input_hash = excluded.input_hash,
          updated_at = excluded.updated_at`,
-      [input.date, input.content, input.provider, input.model, now]
+      [input.date, input.content, input.provider, input.model, input.inputHash, now]
     );
     const saved = await this.getForDate(input.date);
     if (!saved) {

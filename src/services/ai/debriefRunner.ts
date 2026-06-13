@@ -1,10 +1,11 @@
 import { debriefRepository } from "../../db/debriefRepository";
+import { timeEntryRepository } from "../../db/timeEntryRepository";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
-import type { DailyDebrief } from "../../types";
+import type { DailyDebrief, TimeEntryWithTask } from "../../types";
 import { toDateKey } from "../../utils/date";
 import { calculateTodayStats } from "../statsService";
-import { generateDebrief } from "./debriefService";
+import { debriefInputHash, generateDebrief, type DebriefData } from "./debriefService";
 import { resolveModel } from "./providers";
 
 /**
@@ -45,34 +46,89 @@ export function shouldRunAutoDebrief(check: AutoDebriefCheck): boolean {
 }
 
 /**
- * Generates and saves today's debrief from current store state. Shared by the
- * debrief dialog (manual) and the scheduler (automatic).
+ * Assembles the debrief input for a specific date from explicit entries plus
+ * current store state (tasks, categories, language). Pure given its inputs, so
+ * the runner and the page's change-detection fingerprint always agree.
  */
-export async function runTodayDebrief(now = new Date()): Promise<DailyDebrief> {
+function buildDebriefDataForDate(
+  date: string,
+  entries: TimeEntryWithTask[],
+  now: Date
+): DebriefData {
   const settings = useSettingsStore.getState().settings;
-  const { allTasks, todayEntries, categories } = useTaskStore.getState();
-  const date = toDateKey(now);
+  const { allTasks, categories } = useTaskStore.getState();
 
   const stats = calculateTodayStats({
     date,
     tasks: allTasks,
-    timeEntries: todayEntries,
+    timeEntries: entries,
     categories,
     now
   });
 
-  const content = await generateDebrief(settings, {
+  return {
     date,
     tasks: allTasks,
-    entries: todayEntries,
+    entries,
     stats,
     language: settings.aiLanguage
-  });
+  };
+}
+
+/**
+ * Resolves the focus sessions for a date: today reads the live store (so a
+ * just-finished session counts); past days load from the repository.
+ */
+async function resolveEntriesForDate(date: string, now: Date): Promise<TimeEntryWithTask[]> {
+  if (date === toDateKey(now)) {
+    return useTaskStore.getState().todayEntries;
+  }
+  return timeEntryRepository.getEntriesForDate(date, now.toISOString());
+}
+
+/**
+ * Fingerprint of a date's debrief inputs given its already-loaded entries. The
+ * My Day page compares this to the saved debrief's hash to decide whether
+ * regenerating would actually produce anything new.
+ */
+export function debriefInputHashForEntries(
+  date: string,
+  entries: TimeEntryWithTask[],
+  now = new Date()
+): string {
+  return debriefInputHash(buildDebriefDataForDate(date, entries, now));
+}
+
+/** Today-only fingerprint wrapper backed by the live store. */
+export function todayDebriefInputHash(now = new Date()): string {
+  return debriefInputHashForEntries(
+    toDateKey(now),
+    useTaskStore.getState().todayEntries,
+    now
+  );
+}
+
+/**
+ * Generates and saves the debrief for any date. Shared by the My Day page
+ * (manual, today or a past day) and the scheduler (automatic, today).
+ */
+export async function runDebrief(date: string, now = new Date()): Promise<DailyDebrief> {
+  const settings = useSettingsStore.getState().settings;
+  const entries = await resolveEntriesForDate(date, now);
+  const data = buildDebriefDataForDate(date, entries, now);
+
+  const content = await generateDebrief(settings, data);
 
   return debriefRepository.save({
-    date,
+    date: data.date,
     content,
     provider: settings.aiProvider,
-    model: resolveModel(settings)
+    model: resolveModel(settings),
+    inputHash: debriefInputHash(data)
   });
+}
+
+/** Today-only generation wrapper used by the auto-debrief scheduler. */
+export async function runTodayDebrief(now = new Date()): Promise<DailyDebrief> {
+  return runDebrief(toDateKey(now), now);
 }

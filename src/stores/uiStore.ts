@@ -123,10 +123,12 @@ type UiState = {
   setFocusZen: (value: boolean) => void;
   toggleFocusZen: () => void;
 
-  // Daily debrief dialog — opened from the Today page button or a toast action
-  // after the scheduled auto-debrief completes.
-  debriefDialogOpen: boolean;
-  setDebriefDialogOpen: (value: boolean) => void;
+  // Cross-component navigation request. Components without access to App's
+  // route state (the Today debrief button, the scheduled-debrief toast) set
+  // this; App applies it and clears it. `null` means no pending navigation.
+  requestedRoute: string | null;
+  requestRoute: (route: string) => void;
+  clearRequestedRoute: () => void;
 };
 
 export const useUiStore = create<UiState>((set) => ({
@@ -231,6 +233,7 @@ export const useUiStore = create<UiState>((set) => ({
   setFocusZen: (value) => set({ focusZen: value }),
   toggleFocusZen: () => set((state) => ({ focusZen: !state.focusZen })),
 
-  debriefDialogOpen: false,
-  setDebriefDialogOpen: (value) => set({ debriefDialogOpen: value })
+  requestedRoute: null,
+  requestRoute: (route) => set({ requestedRoute: route }),
+  clearRequestedRoute: () => set({ requestedRoute: null })
 }));

@@ -910,6 +910,20 @@
     "@tauri-apps/cli-win32-ia32-msvc" "2.11.2"
     "@tauri-apps/cli-win32-x64-msvc" "2.11.2"
 
+"@tauri-apps/plugin-clipboard-manager@^2.3.2":
+  version "2.3.2"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/plugin-clipboard-manager/-/plugin-clipboard-manager-2.3.2.tgz#41def8a008eca94fd5abe2915d26a9c4b6ce54ca"
+  integrity sha512-CUlb5Hqi2oZbcZf4VUyUH53XWPPdtpw43EUpCza5HWZJwxEoDowFzNUDt1tRUXA8Uq+XPn17Ysfptip33sG4eQ==
+  dependencies:
+    "@tauri-apps/api" "^2.8.0"
+
+"@tauri-apps/plugin-dialog@^2.7.1":
+  version "2.7.1"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/plugin-dialog/-/plugin-dialog-2.7.1.tgz#fc83387de807c8d064d2b64b1b813b84e8286a12"
+  integrity sha512-OK1UBXYt+ojcmxMktzzuyonYIFta8CmAASpX+CA+DTGK24KlHjhYI6x2iOJ/TjZF4N7/ACK1oFmEOjIY9IhzOQ==
+  dependencies:
+    "@tauri-apps/api" "^2.11.0"
+
 "@tauri-apps/plugin-global-shortcut@^2.3.2":
   version "2.3.2"
   resolved "https://registry.npmjs.org/@tauri-apps/plugin-global-shortcut/-/plugin-global-shortcut-2.3.2.tgz"
@@ -1554,6 +1568,11 @@ html-encoding-sniffer@^4.0.0:
   integrity sha512-Y22oTqIU4uuPgEemfz7NDJz6OeKf12Lsu+QC+s3BVpda64lTiMYCyGwg5ki4vFxkMwQdeZDl2adZoqUgdFuTgQ==
   dependencies:
     whatwg-encoding "^3.1.1"
+
+html-to-image@^1.11.13:
+  version "1.11.13"
+  resolved "https://registry.yarnpkg.com/html-to-image/-/html-to-image-1.11.13.tgz#adbc989c993b7aaf90b629c0cacf833db84d5f43"
+  integrity sha512-cuOPoI7WApyhBElTTb9oqsawRvZ0rHhaHwghRLlTuffoD1B2aDemlCruLeZrUIIdvG7gs9xeELEPm6PhuASqrg==
 
 http-proxy-agent@^7.0.2:
   version "7.0.2"

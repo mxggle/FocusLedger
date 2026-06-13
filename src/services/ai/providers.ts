@@ -15,6 +15,12 @@ export type GenerateInput = {
   system: string;
   prompt: string;
   maxTokens?: number;
+  /**
+   * Sampling temperature. Lower values make output more deterministic, so the
+   * same input produces near-identical text on regeneration. Omitted lets the
+   * provider use its (high) default.
+   */
+  temperature?: number;
 };
 
 export const PROVIDER_LABELS: Record<AiProvider, string> = {
@@ -59,7 +65,8 @@ function buildOpenAiCompatibleRequest(
       messages: [
         { role: "system", content: input.system },
         { role: "user", content: input.prompt }
-      ]
+      ],
+      ...(input.temperature !== undefined ? { temperature: input.temperature } : {})
     }
   };
 }
@@ -78,7 +85,8 @@ export function buildAiRequest(settings: AiSettings, input: GenerateInput): AiRe
           model: resolveModel(settings),
           max_tokens: input.maxTokens ?? DEFAULT_MAX_TOKENS,
           system: input.system,
-          messages: [{ role: "user", content: input.prompt }]
+          messages: [{ role: "user", content: input.prompt }],
+          ...(input.temperature !== undefined ? { temperature: input.temperature } : {})
         }
       };
     case "openai":
@@ -93,7 +101,10 @@ export function buildAiRequest(settings: AiSettings, input: GenerateInput): AiRe
         },
         body: {
           systemInstruction: { parts: [{ text: input.system }] },
-          contents: [{ role: "user", parts: [{ text: input.prompt }] }]
+          contents: [{ role: "user", parts: [{ text: input.prompt }] }],
+          ...(input.temperature !== undefined
+            ? { generationConfig: { temperature: input.temperature } }
+            : {})
         }
       };
     }

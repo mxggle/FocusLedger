@@ -33,6 +33,14 @@ fn focus_main_window(app: AppHandle) {
     show_main_window(&app);
 }
 
+/// Writes raw bytes to an absolute path the user already chose via the save
+/// dialog. Keeping this in Rust avoids the fs-plugin path-scope dance for a
+/// one-shot "export image to where the user picked" flow.
+#[tauri::command]
+fn write_binary_file(path: String, contents: Vec<u8>) -> Result<(), String> {
+    std::fs::write(&path, &contents).map_err(|error| error.to_string())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
@@ -81,7 +89,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
-        .invoke_handler(tauri::generate_handler![update_tray_status, focus_main_window])
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .invoke_handler(tauri::generate_handler![
+            update_tray_status,
+            focus_main_window,
+            write_binary_file
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Yolo");
 }
