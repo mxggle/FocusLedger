@@ -20,6 +20,7 @@ import { useDebriefSchedule } from "./hooks/useDebriefSchedule";
 import { useNotificationPermissionPrompt } from "./hooks/useNotificationPermission";
 import { useQuickAddShortcuts } from "./hooks/useQuickAddShortcuts";
 import { useTaskReminders } from "./hooks/useTaskReminders";
+import { useTrayMenu } from "./hooks/useTrayMenu";
 import { useTrayStatus } from "./hooks/useTrayStatus";
 import { useSettingsStore } from "./stores/settingsStore";
 import { useTaskStore } from "./stores/taskStore";
@@ -60,6 +61,7 @@ export default function App() {
   const openToday = useCallback(() => setRoute("today"), []);
 
   useTrayStatus();
+  useTrayMenu();
   useQuickAddShortcuts();
   useNotificationPermissionPrompt();
   useTaskReminders({ onOpenToday: openToday });
