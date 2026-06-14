@@ -5,6 +5,7 @@ import { useSettingsStore } from "../stores/settingsStore";
 import { useTaskStore } from "../stores/taskStore";
 import { useTimerStore } from "../stores/timerStore";
 import { useUiStore } from "../stores/uiStore";
+import type { NotificationStyle } from "../types";
 import { formatDurationCompact } from "../utils/duration";
 
 const MY_DAY_ROUTE = "my-day";
@@ -27,6 +28,7 @@ export function useTrayMenu() {
   const focusedTask = useTaskStore((state) => state.focusedTask);
   const now = useTimerStore((state) => state.now);
   const enableNotifications = useSettingsStore((state) => state.settings.enableNotifications);
+  const notificationStyle = useSettingsStore((state) => state.settings.notificationStyle);
 
   // Push current state into the native menu.
   useEffect(() => {
@@ -53,11 +55,12 @@ export function useTrayMenu() {
       statusLabel,
       focusLabel,
       focusEnabled,
-      remindersEnabled: enableNotifications
+      remindersEnabled: enableNotifications,
+      notificationStyle
     }).catch((error) => {
       console.warn("Tray menu could not be updated", error);
     });
-  }, [todayStats, activeEntry, focusedTask, now, enableNotifications]);
+  }, [todayStats, activeEntry, focusedTask, now, enableNotifications, notificationStyle]);
 
   // Wire menu actions back into the app (registered once).
   useEffect(() => {
@@ -83,6 +86,9 @@ export function useTrayMenu() {
       listen("tray://toggle-reminders", () => {
         const { settings, updateSetting } = useSettingsStore.getState();
         void updateSetting("enableNotifications", !settings.enableNotifications);
+      }),
+      listen<NotificationStyle>("tray://set-notification-style", (event) => {
+        useSettingsStore.getState().updateSetting("notificationStyle", event.payload);
       })
     ];
 

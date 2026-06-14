@@ -22,6 +22,7 @@ import { useQuickAddShortcuts } from "./hooks/useQuickAddShortcuts";
 import { useTaskReminders } from "./hooks/useTaskReminders";
 import { useTrayMenu } from "./hooks/useTrayMenu";
 import { useTrayStatus } from "./hooks/useTrayStatus";
+import { ensureNotifyCenter } from "./notify/notifyCenter";
 import { useSettingsStore } from "./stores/settingsStore";
 import { useTaskStore } from "./stores/taskStore";
 import { useUiStore } from "./stores/uiStore";
@@ -71,6 +72,12 @@ export default function App() {
   useEffect(() => {
     void initialize();
   }, [initialize]);
+
+  // Wire the popup/fullscreen notification action listeners once, so their
+  // buttons route back to the real handlers in this (main) webview.
+  useEffect(() => {
+    void ensureNotifyCenter();
+  }, []);
 
   // Apply cross-component navigation requests (e.g. the Today "My Day" button
   // or the scheduled-debrief toast), then clear so it fires once.

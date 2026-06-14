@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Opt out of macOS App Nap so the reminder heartbeat keeps running while
+       Yolo is hidden to the tray. Without this the process is suspended in the
+       background and time-based reminders never fire until the app is reopened. -->
+  <key>NSAppSleepDisabled</key>
+  <true/>
+</dict>
+</plist>

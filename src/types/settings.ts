@@ -2,6 +2,9 @@ export type AppTheme = "system" | "light" | "dark";
 
 export type AiProvider = "anthropic" | "openai" | "gemini" | "custom";
 
+/** How task reminders reach the user when they need attention. */
+export type NotificationStyle = "system" | "popup" | "fullscreen";
+
 export type AppSettings = {
   defaultCategoryId: string;
   dailyFocusTargetMinutes: number;
@@ -9,6 +12,8 @@ export type AppSettings = {
   theme: AppTheme;
   enableTray: boolean;
   enableNotifications: boolean;
+  /** Which presentation style reminders use: system banner, pop-up, or full screen. */
+  notificationStyle: NotificationStyle;
   globalShortcut: string;
   /** `YYYY-MM-DD`; empty until the user sets it. Powers the Life page. */
   birthDate: string;
@@ -37,6 +42,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: "system",
   enableTray: true,
   enableNotifications: true,
+  notificationStyle: "system",
   globalShortcut: "CommandOrControl+Shift+Space",
   birthDate: "",
   lifeExpectancyYears: 80,
