@@ -1,9 +1,10 @@
 import { addDays, addMinutes } from "date-fns";
 import { useEffect, useRef, useState } from "react";
+import { showStyledNotification } from "../notify/notifyCenter";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useTaskStore } from "../stores/taskStore";
 import { getLiveTaskSeconds } from "../stores/timerStore";
-import type { Task } from "../types";
+import type { NotificationStyle, Task } from "../types";
 import { parseDateKey, toDateKey } from "../utils/date";
 import { formatDurationCompact } from "../utils/duration";
 import { useUiStore } from "../stores/uiStore";
@@ -99,7 +100,16 @@ async function sendSystemNotification({
   // reflect that grant inside the Tauri webview.
   if (isTauriRuntime()) {
     try {
-      const { sendNotification } = await import("@tauri-apps/plugin-notification");
+      const { isPermissionGranted, sendNotification } = await import(
+        "@tauri-apps/plugin-notification"
+      );
+      // Verify the grant first: sendNotification silently no-ops when
+      // permission is missing/revoked, which looks like "the notification just
+      // didn't show". Surface that instead of swallowing it.
+      if (!(await isPermissionGranted())) {
+        console.warn("System notification skipped: OS permission not granted");
+        return;
+      }
       sendNotification({ title, body });
       return;
     } catch (error) {
@@ -133,6 +143,7 @@ async function sendSystemNotification({
 
 export function useTaskReminders({ onOpenToday }: ReminderOptions = {}) {
   const enableNotifications = useSettingsStore((state) => state.settings.enableNotifications);
+  const notificationStyle = useSettingsStore((state) => state.settings.notificationStyle);
   const initialized = useTaskStore((state) => state.initialized);
   const tasks = useTaskStore((state) => state.tasks);
   const activeEntry = useTaskStore((state) => state.activeEntry);
@@ -199,6 +210,38 @@ export function useTaskReminders({ onOpenToday }: ReminderOptions = {}) {
     const intervalId = window.setInterval(() => setNow(new Date()), REMINDER_TICK_MS);
     return () => window.clearInterval(intervalId);
   }, [enableNotifications, initialized]);
+
+  // The JS interval above is throttled or frozen when the window is hidden to
+  // the tray, so reminders would stall in the background. The Rust side emits a
+  // native heartbeat (immune to WebKit throttling) that we use to re-evaluate
+  // reminders on schedule regardless of focus/visibility.
+  useEffect(() => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        const stop = await listen("reminders://tick", () => setNow(new Date()));
+        if (cancelled) {
+          stop();
+        } else {
+          unlisten = stop;
+        }
+      } catch (error) {
+        console.warn("Could not subscribe to reminder heartbeat", error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (!enableNotifications || !initialized) {
@@ -292,28 +335,67 @@ export function useTaskReminders({ onOpenToday }: ReminderOptions = {}) {
       }
 
       notifiedKeysRef.current.add(notificationKey);
-      // Only raise an OS banner when the app isn't in the foreground; otherwise
-      // the in-app toast below already alerts the user (and carries the action
-      // buttons the OS banner lacks), so a banner would just double up.
-      if (!appIsFocused()) {
+
+      const styledActions = actions.map((action) => ({
+        label: action.label,
+        variant: action.variant,
+        onClick: () => action.onClick(baseKey)
+      }));
+
+      const showToast = () =>
+        addToast({
+          kind: "info",
+          title,
+          description,
+          durationMs: TOAST_DURATION_MS,
+          actions: styledActions
+        });
+
+      const showBanner = () =>
         void sendSystemNotification({
           title,
           body: description,
           tag: notificationKey,
           onClick: openToday
         });
+
+      // A full-screen takeover always interrupts and carries the actions, so it
+      // replaces the in-app toast for this reminder.
+      if (notificationStyle === "fullscreen") {
+        void showStyledNotification("fullscreen", {
+          kind: "info",
+          title,
+          description,
+          actions: styledActions
+        }).catch((error) => {
+          console.warn("Full-screen notification failed; falling back", error);
+          if (!appIsFocused()) {
+            showBanner();
+          }
+          showToast();
+        });
+        return;
       }
-      addToast({
-        kind: "info",
-        title,
-        description,
-        durationMs: TOAST_DURATION_MS,
-        actions: actions.map((action) => ({
-          label: action.label,
-          variant: action.variant,
-          onClick: () => action.onClick(baseKey)
-        }))
-      });
+
+      // system / pop-up: the in-app toast is the in-focus experience; only reach
+      // outside the app (banner or pop-up window) when it isn't focused, so we
+      // don't double-alert.
+      if (!appIsFocused()) {
+        if (notificationStyle === "popup") {
+          void showStyledNotification("popup", {
+            kind: "info",
+            title,
+            description,
+            actions: styledActions
+          }).catch((error) => {
+            console.warn("Pop-up notification failed; falling back to banner", error);
+            showBanner();
+          });
+        } else {
+          showBanner();
+        }
+      }
+      showToast();
     };
 
     for (const task of tasks) {
@@ -458,6 +540,7 @@ export function useTaskReminders({ onOpenToday }: ReminderOptions = {}) {
     enableNotifications,
     initialized,
     moveTaskToBacklog,
+    notificationStyle,
     now,
     onOpenToday,
     pauseActiveTask,

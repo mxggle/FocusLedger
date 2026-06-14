@@ -57,6 +57,49 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   return (await window.Notification.requestPermission()) as NotificationPermissionStatus;
 }
 
+export type TestNotificationResult = "sent" | "denied" | "unsupported";
+
+/**
+ * Send a one-off test notification so the user can confirm desktop banners
+ * actually reach them. Requests permission first if needed. Returns "sent" when
+ * the banner was dispatched, "denied" when the OS won't allow it, and
+ * "unsupported" when notifications aren't available in this runtime.
+ */
+export async function sendTestNotification(): Promise<TestNotificationResult> {
+  const title = "Yolo test notification";
+  const body = "Notifications are working. This is what a reminder looks like.";
+
+  if (isTauriRuntime()) {
+    try {
+      const { isPermissionGranted, requestPermission, sendNotification } = await import(
+        "@tauri-apps/plugin-notification"
+      );
+      const granted = (await isPermissionGranted()) || (await requestPermission()) === "granted";
+      if (!granted) {
+        return "denied";
+      }
+      sendNotification({ title, body });
+      return "sent";
+    } catch {
+      return "unsupported";
+    }
+  }
+
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    return "unsupported";
+  }
+  const permission =
+    window.Notification.permission === "default"
+      ? await window.Notification.requestPermission()
+      : window.Notification.permission;
+  if (permission !== "granted") {
+    return "denied";
+  }
+  // eslint-disable-next-line no-new
+  new window.Notification(title, { body });
+  return "sent";
+}
+
 function systemNotificationSettingsUrl(): string | null {
   if (typeof navigator === "undefined") {
     return null;
