@@ -1,15 +1,15 @@
 /**
  * Shared types and event channels for the multi-window notification system.
  *
- * The main webview owns all logic; the popup/fullscreen windows are view-only
+ * The main webview owns all logic; the fullscreen window is view-only
  * and exchange data with main exclusively through these serializable payloads
  * and events. No closures ever cross the window boundary.
  */
 
-export type NotifyStyle = "system" | "popup" | "fullscreen";
+export type NotifyStyle = "system" | "fullscreen";
 
 /** Aux windows that render a styled notification. */
-export type NotifyWindowKind = "popup" | "fullscreen";
+export type NotifyWindowKind = "fullscreen";
 
 export type NotifyKind = "info" | "success" | "error";
 

@@ -4,7 +4,7 @@ use std::sync::Mutex;
 
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
-    tray::{TrayIconBuilder, TrayIconEvent},
+    tray::TrayIconBuilder,
     AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewUrl,
     WebviewWindowBuilder, WindowEvent, Wry,
 };
@@ -23,11 +23,10 @@ struct TrayMenuItems {
     toggle_focus: MenuItem<Wry>,
     reminders: CheckMenuItem<Wry>,
     style_system: CheckMenuItem<Wry>,
-    style_popup: CheckMenuItem<Wry>,
     style_fullscreen: CheckMenuItem<Wry>,
 }
 
-/// Serializable notification shown in the popup / fullscreen windows. Mirrors
+/// Serializable notification shown in the fullscreen window. Mirrors
 /// the frontend `NotifyPayload` — no behavior crosses the window boundary, only
 /// action ids the aux window reports back.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -50,20 +49,11 @@ struct NotifyPayload {
 }
 
 /// Payload staged by the main webview for an aux window to pick up on mount.
-/// Keyed by window label ("popup" / "fullscreen").
+/// Keyed by window label ("fullscreen").
 struct NotificationPayloads(Mutex<HashMap<String, NotifyPayload>>);
 
 /// Set just before a real quit so the close-to-tray handler doesn't swallow it.
 struct Quitting(AtomicBool);
-
-/// Last known tray icon anchor as (center_x, bottom_y) in physical pixels,
-/// captured from tray events so the pop-up bubble can point exactly at the icon.
-struct TrayAnchor(Mutex<Option<(f64, f64)>>);
-
-// Sized with headroom around the bubble so the soft drop-shadow and the
-// drop-down (scale) animation are never clipped by the transparent window edges.
-const POPUP_WIDTH: f64 = 348.0;
-const POPUP_HEIGHT: f64 = 104.0;
 
 #[tauri::command]
 fn update_tray_status(app: AppHandle, title: Option<String>, tooltip: String) -> Result<(), String> {
@@ -103,10 +93,6 @@ fn update_tray_menu(
         .set_checked(notification_style == "system")
         .map_err(|error| error.to_string())?;
     items
-        .style_popup
-        .set_checked(notification_style == "popup")
-        .map_err(|error| error.to_string())?;
-    items
         .style_fullscreen
         .set_checked(notification_style == "fullscreen")
         .map_err(|error| error.to_string())
@@ -136,20 +122,19 @@ fn write_binary_file(path: String, contents: Vec<u8>) -> Result<(), String> {
     std::fs::write(&path, &contents).map_err(|error| error.to_string())
 }
 
-/// Resolve a notification window kind ("popup" / "fullscreen") to its label,
-/// rejecting anything else so we never create stray windows.
+/// Resolve a notification window kind ("fullscreen") to its label, rejecting
+/// anything else so we never create stray windows.
 fn notification_label(kind: &str) -> Result<&'static str, String> {
     match kind {
-        "popup" => Ok("popup"),
         "fullscreen" => Ok("fullscreen"),
         other => Err(format!("unknown notification window kind: {other}")),
     }
 }
 
-/// Show (creating if needed) the popup or fullscreen notification window with
-/// the given payload. The window is borderless and always-on-top; the payload
-/// is staged so the freshly created webview can pull it on mount, and also
-/// emitted so an already-open window updates in place.
+/// Show (creating if needed) the fullscreen notification window with the given
+/// payload. The window is borderless and always-on-top; the payload is staged
+/// so the freshly created webview can pull it on mount, and also emitted so an
+/// already-open window updates in place.
 #[tauri::command]
 fn show_notification_window(
     app: AppHandle,
@@ -167,13 +152,8 @@ fn show_notification_window(
 
     if let Some(window) = app.get_webview_window(label) {
         let _ = window.show();
-        // The pop-up is a passive hint, so don't steal focus; the fullscreen
-        // overlay is a deliberate interrupt and should come forward.
-        if label == "fullscreen" {
-            let _ = window.set_focus();
-        } else {
-            reposition_popup(&app, &window);
-        }
+        // The fullscreen overlay is a deliberate interrupt and should come forward.
+        let _ = window.set_focus();
         app.emit_to(label, "notif://show", payload)
             .map_err(|error| error.to_string())?;
         return Ok(());
@@ -184,35 +164,22 @@ fn show_notification_window(
     // `reveal_notification_window`). Showing a transparent webview before its
     // first paint flashes the opaque page background across the whole screen —
     // the same problem Electron solves with `show: false` + `ready-to-show`.
-    let mut builder = WebviewWindowBuilder::new(&app, label, WebviewUrl::App("index.html".into()))
+    let builder = WebviewWindowBuilder::new(&app, label, WebviewUrl::App("index.html".into()))
         .title("Yolo")
         .decorations(false)
         .always_on_top(true)
         .skip_taskbar(true)
         .resizable(false)
-        .visible(false);
-
-    if label == "popup" {
-        // A light, transparent bubble that doesn't take focus from the user.
-        builder = builder
-            .inner_size(POPUP_WIDTH, POPUP_HEIGHT)
-            .transparent(true)
-            .shadow(false)
-            .focused(false);
-    } else {
+        .visible(false)
         // Fullscreen: a transparent, borderless overlay sized to the monitor
         // (set below, while still hidden, so there is no visible size jump).
-        builder = builder
-            .inner_size(800.0, 600.0)
-            .transparent(true)
-            .shadow(false);
-    }
+        .inner_size(800.0, 600.0)
+        .transparent(true)
+        .shadow(false);
 
     let window = builder.build().map_err(|error| error.to_string())?;
 
-    if label == "popup" {
-        reposition_popup(&app, &window);
-    } else if let Ok(Some(monitor)) = window.primary_monitor() {
+    if let Ok(Some(monitor)) = window.primary_monitor() {
         let size = monitor.size();
         let position = monitor.position();
         let _ = window.set_position(PhysicalPosition::new(position.x as f64, position.y as f64));
@@ -220,44 +187,6 @@ fn show_notification_window(
     }
 
     Ok(())
-}
-
-/// Place the pop-up bubble centered just under the tray icon when we know where
-/// it is, falling back to the top-right corner under the menu bar.
-fn reposition_popup(app: &AppHandle, window: &tauri::WebviewWindow) {
-    let Ok(Some(monitor)) = window.primary_monitor() else {
-        return;
-    };
-    let size = monitor.size();
-    let origin = monitor.position();
-    let scale = monitor.scale_factor();
-    let phys_width = POPUP_WIDTH * scale;
-
-    let anchor = app
-        .try_state::<TrayAnchor>()
-        .and_then(|state| state.0.lock().ok().and_then(|guard| *guard));
-
-    let (mut x, y) = match anchor {
-        // Center the bubble under the icon, snug below the menu bar.
-        Some((center_x, bottom_y)) => (center_x - phys_width / 2.0, bottom_y + 3.0 * scale),
-        None => {
-            let margin = 16.0 * scale;
-            (
-                origin.x as f64 + size.width as f64 - phys_width - margin,
-                origin.y as f64 + 32.0 * scale,
-            )
-        }
-    };
-
-    // Keep the bubble fully on-screen.
-    let edge = 8.0 * scale;
-    let min_x = origin.x as f64 + edge;
-    let max_x = origin.x as f64 + size.width as f64 - phys_width - edge;
-    if max_x >= min_x {
-        x = x.clamp(min_x, max_x);
-    }
-
-    let _ = window.set_position(PhysicalPosition::new(x, y));
 }
 
 /// Hand the staged payload to an aux window that just mounted.
@@ -277,16 +206,13 @@ fn reveal_notification_window(app: AppHandle, kind: String) -> Result<(), String
     let label = notification_label(&kind)?;
     if let Some(window) = app.get_webview_window(label) {
         let _ = window.show();
-        // The fullscreen overlay is a deliberate interrupt and comes forward;
-        // the popup is a passive hint that must not steal focus.
-        if label == "fullscreen" {
-            let _ = window.set_focus();
-        }
+        // The fullscreen overlay is a deliberate interrupt and comes forward.
+        let _ = window.set_focus();
     }
     Ok(())
 }
 
-/// Close the popup or fullscreen notification window and drop its payload.
+/// Close the fullscreen notification window and drop its payload.
 #[tauri::command]
 fn close_notification_window(
     app: AppHandle,
@@ -322,8 +248,6 @@ pub fn run() {
                 true,
                 None::<&str>,
             )?;
-            let style_popup =
-                CheckMenuItem::with_id(app, "style_popup", "Small Pop-up", true, false, None::<&str>)?;
             let style_fullscreen = CheckMenuItem::with_id(
                 app,
                 "style_fullscreen",
@@ -336,7 +260,7 @@ pub fn run() {
                 app,
                 "Notification Style",
                 true,
-                &[&style_system, &style_popup, &style_fullscreen],
+                &[&style_system, &style_fullscreen],
             )?;
 
             let quit = MenuItem::with_id(app, "quit", "Quit Yolo", true, Some("CmdOrControl+Q"))?;
@@ -363,12 +287,10 @@ pub fn run() {
                 toggle_focus,
                 reminders,
                 style_system,
-                style_popup,
                 style_fullscreen,
             });
             app.manage(NotificationPayloads(Mutex::new(HashMap::new())));
             app.manage(Quitting(AtomicBool::new(false)));
-            app.manage(TrayAnchor(Mutex::new(None)));
 
             // Left-click opens the dropdown menu on both platforms; the window
             // is reached via the menu's "Show Yolo" item.
@@ -376,32 +298,6 @@ pub fn run() {
                 .menu(&menu)
                 .show_menu_on_left_click(true)
                 .tooltip("Yolo")
-                // Remember the icon's bounding box so the pop-up bubble can
-                // drop down centered exactly beneath it.
-                .on_tray_icon_event(|tray, event| {
-                    let rect = match &event {
-                        TrayIconEvent::Click { rect, .. }
-                        | TrayIconEvent::Enter { rect, .. }
-                        | TrayIconEvent::Move { rect, .. } => Some(rect.clone()),
-                        _ => None,
-                    };
-                    if let Some(rect) = rect {
-                        let app = tray.app_handle();
-                        let scale = app
-                            .get_webview_window("main")
-                            .and_then(|window| window.scale_factor().ok())
-                            .unwrap_or(1.0);
-                        let position = rect.position.to_physical::<f64>(scale);
-                        let size = rect.size.to_physical::<f64>(scale);
-                        let center_x = position.x + size.width / 2.0;
-                        let bottom_y = position.y + size.height;
-                        if let Some(anchor) = app.try_state::<TrayAnchor>() {
-                            if let Ok(mut guard) = anchor.0.lock() {
-                                *guard = Some((center_x, bottom_y));
-                            }
-                        }
-                    }
-                })
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "show" => show_main_window(app),
                     "quick_add" => {
@@ -420,9 +316,6 @@ pub fn run() {
                     }
                     "style_system" => {
                         let _ = app.emit("tray://set-notification-style", "system");
-                    }
-                    "style_popup" => {
-                        let _ = app.emit("tray://set-notification-style", "popup");
                     }
                     "style_fullscreen" => {
                         let _ = app.emit("tray://set-notification-style", "fullscreen");

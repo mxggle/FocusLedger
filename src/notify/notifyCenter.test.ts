@@ -33,7 +33,7 @@ describe("notifyCenter", () => {
   });
 
   it("serializes actions to id/label/variant without leaking closures", async () => {
-    await showStyledNotification("popup", {
+    await showStyledNotification("fullscreen", {
       title: "Task is ready",
       description: "Start now?",
       actions: [
@@ -44,7 +44,7 @@ describe("notifyCenter", () => {
 
     expect(invokeMock).toHaveBeenCalledWith(
       "show_notification_window",
-      expect.objectContaining({ kind: "popup" })
+      expect.objectContaining({ kind: "fullscreen" })
     );
 
     const payload = invokeMock.mock.calls[0][1].payload;
@@ -83,7 +83,7 @@ describe("notifyCenter", () => {
 
   it("does not re-run a handler after its notification is consumed", async () => {
     const handler = vi.fn();
-    await showStyledNotification("popup", {
+    await showStyledNotification("fullscreen", {
       title: "Once",
       description: "Only once",
       actions: [{ label: "Do it", onClick: handler }]

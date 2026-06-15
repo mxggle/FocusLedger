@@ -1,3 +1,4 @@
+import containerQueries from "@tailwindcss/container-queries";
 var config = {
     darkMode: ["class"],
     content: ["./index.html", "./src/**/*.{ts,tsx}"],
@@ -136,6 +137,6 @@ var config = {
             }
         }
     },
-    plugins: []
+    plugins: [containerQueries]
 };
 export default config;
