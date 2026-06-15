@@ -109,7 +109,7 @@ export function TodaySummary() {
         </div>
 
         {/* Row 2: glanceable key figures as soft stat pills */}
-        <div className="flex items-center gap-2 pl-[2.375rem]">
+        <div className="flex flex-wrap items-center gap-2 pl-[2.375rem]">
           <StatPill
             icon={Zap}
             label="Focus"
@@ -199,9 +199,14 @@ function StatPill({
   value: string;
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-surface/70 py-1 pl-2 pr-2.5 text-xs shadow-xs">
+    <span
+      title={`${label}: ${value}`}
+      className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border/70 bg-surface/70 py-1 pl-2 pr-2.5 text-xs shadow-xs"
+    >
       <Icon className="h-3 w-3 shrink-0 text-muted-foreground" />
-      <span className="text-muted-foreground">{label}</span>
+      {/* Label word is kept whenever there's room — the pill row wraps before
+          labels drop — and only collapses below ~13rem of pane width. */}
+      <span className="hidden text-muted-foreground @[13rem]:inline">{label}</span>
       <span className="font-semibold tabular-nums text-foreground">{value}</span>
     </span>
   );

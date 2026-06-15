@@ -377,23 +377,10 @@ export function useTaskReminders({ onOpenToday }: ReminderOptions = {}) {
         return;
       }
 
-      // system / pop-up: the in-app toast is the in-focus experience; only reach
-      // outside the app (banner or pop-up window) when it isn't focused, so we
-      // don't double-alert.
+      // system: the in-app toast is the in-focus experience; only reach outside
+      // the app (system banner) when it isn't focused, so we don't double-alert.
       if (!appIsFocused()) {
-        if (notificationStyle === "popup") {
-          void showStyledNotification("popup", {
-            kind: "info",
-            title,
-            description,
-            actions: styledActions
-          }).catch((error) => {
-            console.warn("Pop-up notification failed; falling back to banner", error);
-            showBanner();
-          });
-        } else {
-          showBanner();
-        }
+        showBanner();
       }
       showToast();
     };

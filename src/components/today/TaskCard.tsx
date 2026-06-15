@@ -369,36 +369,53 @@ export function TaskCard({ task }: { task: Task }) {
         </div>
       </div>
 
-      {/* Action row */}
-      <div className="mt-3.5 flex items-center gap-2">
-        {task.status === "paused" ? (
-          <Button type="button" size="sm" onClick={handleStart}>
-            <RotateCcw className="h-3.5 w-3.5" />
-            Resume
-          </Button>
-        ) : (
+      {/* Action row. Text labels are kept whenever there's room: the action
+          buttons wrap to a second line before their labels are dropped, so the
+          menu is never clipped. Labels only collapse to icon-only below ~12rem
+          of pane width, where even a wrapped layout would get too tall. */}
+      <div className="mt-3.5 flex items-start gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {task.status === "paused" ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleStart}
+              aria-label="Resume"
+              title="Resume"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span className="hidden @[12rem]:inline">Resume</span>
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant={isActive ? "soft" : "primary"}
+              onClick={handleStart}
+              disabled={isActive}
+              aria-label={isActive ? "Running" : "Start"}
+              title={isActive ? "Running" : "Start"}
+            >
+              <Play className="h-3.5 w-3.5" />
+              <span className="hidden @[12rem]:inline">
+                {isActive ? "Running" : "Start"}
+              </span>
+            </Button>
+          )}
           <Button
             type="button"
             size="sm"
-            variant={isActive ? "soft" : "primary"}
-            onClick={handleStart}
-            disabled={isActive}
+            variant="secondary"
+            onClick={() => void completeTask(task.id, "Marked done from task list")}
+            aria-label="Done"
+            title="Done"
           >
-            <Play className="h-3.5 w-3.5" />
-            {isActive ? "Running" : "Start"}
+            <Check className="h-3.5 w-3.5" />
+            <span className="hidden @[12rem]:inline">Done</span>
           </Button>
-        )}
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          onClick={() => void completeTask(task.id, "Marked done from task list")}
-        >
-          <Check className="h-3.5 w-3.5" />
-          Done
-        </Button>
+        </div>
 
-        <div className="ml-auto">
+        <div className="ml-auto shrink-0">
           <Menu
             align="end"
             trigger={

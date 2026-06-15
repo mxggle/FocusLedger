@@ -27,6 +27,12 @@ export const settingsRepository = {
       }
     }
 
+    // The "popup" notification style was removed; fall back to the system banner
+    // for anyone who had it saved.
+    if ((settings.notificationStyle as string) === "popup") {
+      settings.notificationStyle = "system";
+    }
+
     return settings;
   },
 

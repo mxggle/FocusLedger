@@ -43,17 +43,14 @@ export function SettingsPage() {
   async function testNotification() {
     const style = settings.notificationStyle;
 
-    // Pop-up / full-screen render in their own windows; preview them directly so
-    // the user sees exactly what a real reminder looks like.
-    if (style === "popup" || style === "fullscreen") {
+    // Full-screen renders in its own window; preview it directly so the user
+    // sees exactly what a real reminder looks like.
+    if (style === "fullscreen") {
       try {
         await showStyledNotification(style, {
           kind: "info",
-          title: style === "fullscreen" ? "Time's up" : "Yolo test notification",
-          description:
-            style === "fullscreen"
-              ? "This is a full-screen reminder. Pick how you want to continue."
-              : "This is a small pop-up notification near your menu bar.",
+          title: "Time's up",
+          description: "This is a full-screen reminder. Pick how you want to continue.",
           actions: [
             { label: "Continue", variant: "primary", onClick: () => {} },
             { label: "Open Yolo", variant: "secondary", onClick: () => void notificationPermission.refresh() }
@@ -61,7 +58,7 @@ export function SettingsPage() {
         });
         addToast({
           kind: "success",
-          title: `Test ${style === "fullscreen" ? "full-screen" : "pop-up"} shown`,
+          title: "Test full-screen shown",
           description: "If no window appeared, run the desktop app (yarn tauri dev)."
         });
       } catch (error) {
@@ -296,8 +293,8 @@ export function SettingsPage() {
                       Notification style
                     </div>
                     <div className="mt-0.5 text-xs text-muted-foreground">
-                      How reminders reach you: a system banner, a small pop-up by
-                      the menu bar, or a full-screen alert.
+                      How reminders reach you: a system banner or a full-screen
+                      alert.
                     </div>
                   </div>
                   <div className="w-44 shrink-0">
@@ -311,7 +308,6 @@ export function SettingsPage() {
                       }
                     >
                       <option value="system">System notification</option>
-                      <option value="popup">Small pop-up</option>
                       <option value="fullscreen">Full screen</option>
                     </Select>
                   </div>

@@ -73,8 +73,8 @@ export default function App() {
     void initialize();
   }, [initialize]);
 
-  // Wire the popup/fullscreen notification action listeners once, so their
-  // buttons route back to the real handlers in this (main) webview.
+  // Wire the fullscreen notification action listeners once, so their buttons
+  // route back to the real handlers in this (main) webview.
   useEffect(() => {
     void ensureNotifyCenter();
   }, []);

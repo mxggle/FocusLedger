@@ -9,12 +9,12 @@ function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
-const AUX_WINDOWS = new Set<string>(["popup", "fullscreen"]);
+const AUX_WINDOWS = new Set<string>(["fullscreen"]);
 
 /**
- * One bundle serves every window. The label tells us which: the popup and
- * fullscreen windows render only the lightweight notification view (no DB,
- * no stores); everything else is the main app.
+ * One bundle serves every window. The label tells us which: the fullscreen
+ * window renders only the lightweight notification view (no DB, no stores);
+ * everything else is the main app.
  */
 async function resolveRoot(): Promise<React.ReactElement> {
   if (isTauriRuntime()) {

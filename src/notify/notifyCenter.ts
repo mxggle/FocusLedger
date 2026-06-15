@@ -13,10 +13,10 @@ import {
 } from "./types";
 
 /**
- * The notification center lives in the MAIN webview. It dispatches popup and
- * fullscreen notifications (which render in separate windows) and routes their
- * button clicks back to the real handlers here, since the action closures can't
- * cross the window boundary — only ids do.
+ * The notification center lives in the MAIN webview. It dispatches fullscreen
+ * notifications (which render in a separate window) and routes their button
+ * clicks back to the real handlers here, since the action closures can't cross
+ * the window boundary — only ids do.
  */
 
 type LiveAction = { onClick: () => void | Promise<unknown> };
@@ -65,9 +65,9 @@ export type StyledNotification = {
 };
 
 /**
- * Show a notification in the popup or fullscreen window. The action closures are
- * kept in the local registry and invoked when the aux window reports a click.
- * Throws if the window could not be shown so callers can fall back.
+ * Show a notification in the fullscreen window. The action closures are kept in
+ * the local registry and invoked when the aux window reports a click. Throws if
+ * the window could not be shown so callers can fall back.
  */
 export async function showStyledNotification(
   style: NotifyWindowKind,

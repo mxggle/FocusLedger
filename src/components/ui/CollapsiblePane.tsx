@@ -94,8 +94,10 @@ export function CollapsiblePane({
         </button>
       </div>
 
-      {/* Scrollable content */}
-      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+      {/* Scrollable content — a query container so inner UI (task cards, the
+          summary scorecard) can adapt to the pane's width rather than the
+          viewport's. Panes split the window, so pane width ≠ viewport width. */}
+      <div className="@container min-h-0 flex-1 overflow-y-auto">{children}</div>
     </div>
   );
 }
