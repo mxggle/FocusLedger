@@ -11,6 +11,82 @@ use tauri::{
 
 const TRAY_ID: &str = "yolo-status";
 
+/// Inset of the native macOS traffic-light buttons from the window's top-left,
+/// in points. Tuned so the buttons land inside the floating sidebar's header
+/// (see `AppShell`'s macOS layout). Adjust together with the sidebar's top/left
+/// margins if those change.
+#[cfg(target_os = "macos")]
+const TRAFFIC_LIGHT_INSET_X: f64 = 19.0;
+#[cfg(target_os = "macos")]
+const TRAFFIC_LIGHT_INSET_Y: f64 = 22.0;
+
+/// Move the native window buttons (close/minimize/zoom) to the given inset from
+/// the window's top-left corner. macOS re-lays these out on resize and
+/// fullscreen transitions, so this must be re-applied on `Resized` events.
+///
+/// Takes the raw `NSWindow` pointer (from `WebviewWindow::ns_window`) so it can
+/// be called from both setup and the window-event handler without juggling
+/// Tauri window types.
+#[cfg(target_os = "macos")]
+#[allow(deprecated)] // `cocoa` crate is in maintenance; its API still works.
+fn position_traffic_lights(ns_window_ptr: *mut std::ffi::c_void, x: f64, y: f64) {
+    use cocoa::appkit::{NSWindow, NSWindowButton};
+    use cocoa::base::id;
+    use cocoa::foundation::{NSPoint, NSRect};
+    use objc::{msg_send, sel, sel_impl};
+
+    if ns_window_ptr.is_null() {
+        return;
+    }
+    let ns_window = ns_window_ptr as id;
+
+    // SAFETY: standard AppKit calls dispatched on the main thread (Tauri setup
+    // and window events run there); every handle is null-checked before use.
+    unsafe {
+        let close: id = ns_window.standardWindowButton_(NSWindowButton::NSWindowCloseButton);
+        let miniaturize: id =
+            ns_window.standardWindowButton_(NSWindowButton::NSWindowMiniaturizeButton);
+        let zoom: id = ns_window.standardWindowButton_(NSWindowButton::NSWindowZoomButton);
+        if close.is_null() || miniaturize.is_null() || zoom.is_null() {
+            return;
+        }
+
+        let container: id = msg_send![close, superview];
+        if container.is_null() {
+            return;
+        }
+        let container_frame: NSRect = msg_send![container, frame];
+        let close_frame: NSRect = msg_send![close, frame];
+        let miniaturize_frame: NSRect = msg_send![miniaturize, frame];
+
+        // Preserve the native horizontal spacing between buttons; fall back to a
+        // sane default if AppKit hasn't laid them out yet.
+        let mut spacing = miniaturize_frame.origin.x - close_frame.origin.x;
+        if spacing <= 0.0 {
+            spacing = 20.0;
+        }
+
+        // Cocoa views use a bottom-left origin, so convert the requested inset
+        // (measured from the top) into the container's coordinate space.
+        let top_y = container_frame.size.height - y - close_frame.size.height;
+
+        let _: () = msg_send![close, setFrameOrigin: NSPoint::new(x, top_y)];
+        let _: () = msg_send![miniaturize, setFrameOrigin: NSPoint::new(x + spacing, top_y)];
+        let _: () = msg_send![zoom, setFrameOrigin: NSPoint::new(x + spacing * 2.0, top_y)];
+    }
+}
+
+/// Apply the traffic-light inset to the main window, if present. No-op when the
+/// pointer can't be obtained.
+#[cfg(target_os = "macos")]
+fn apply_main_traffic_lights(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        if let Ok(ptr) = window.ns_window() {
+            position_traffic_lights(ptr, TRAFFIC_LIGHT_INSET_X, TRAFFIC_LIGHT_INSET_Y);
+        }
+    }
+}
+
 /// How often the native heartbeat nudges the webview to re-evaluate reminders.
 /// Kept below the JS tick so a throttled webview timer never sets the cadence.
 const REMINDER_HEARTBEAT_SECS: u64 = 20;
@@ -333,6 +409,11 @@ pub fn run() {
 
             tray.build(app)?;
 
+            // Inset the native traffic lights so they sit inside the floating
+            // sidebar (macOS only). Re-applied on resize in `on_window_event`.
+            #[cfg(target_os = "macos")]
+            apply_main_traffic_lights(&app.handle());
+
             // The reminder engine lives in the main webview's JS, whose
             // setInterval is throttled or frozen while the window is hidden to
             // the tray (WebKit hidden-page throttling + macOS App Nap, the
@@ -353,15 +434,26 @@ pub fn run() {
         // Closing the main window hides it to the tray (the app keeps running so
         // reminders and the tray menu stay alive); a real quit sets the flag.
         .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "main" {
-                    let app = window.app_handle();
-                    let quitting = app.state::<Quitting>().0.load(Ordering::SeqCst);
-                    if !quitting {
-                        let _ = window.hide();
-                        api.prevent_close();
+            match event {
+                WindowEvent::CloseRequested { api, .. } => {
+                    if window.label() == "main" {
+                        let app = window.app_handle();
+                        let quitting = app.state::<Quitting>().0.load(Ordering::SeqCst);
+                        if !quitting {
+                            let _ = window.hide();
+                            api.prevent_close();
+                        }
                     }
                 }
+                // macOS resets the native button layout on resize/fullscreen, so
+                // re-apply our inset to keep the lights inside the sidebar.
+                #[cfg(target_os = "macos")]
+                WindowEvent::Resized(_) => {
+                    if window.label() == "main" {
+                        apply_main_traffic_lights(&window.app_handle());
+                    }
+                }
+                _ => {}
             }
         })
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())

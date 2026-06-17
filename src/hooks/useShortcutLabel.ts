@@ -1,7 +1,5 @@
 import { useSettingsStore } from "../stores/settingsStore";
-
-const isMac =
-  typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
+import { isMac } from "../utils/platform";
 
 const PART_DISPLAY: Record<string, string> = {
   cmdorctrl: isMac ? "⌘" : "Ctrl",
