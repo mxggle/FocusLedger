@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAiRequest,
+  buildChatRequest,
   extractErrorMessage,
   parseAiResponse,
   resolveModel,
-  type AiSettings
+  type AiSettings,
+  type ChatInput
 } from "./providers";
 
 function settings(overrides: Partial<AiSettings> = {}): AiSettings {
@@ -123,8 +125,6 @@ describe("extractErrorMessage", () => {
     expect(extractErrorMessage("nope")).toBeNull();
   });
 });
-
-import { buildChatRequest, type ChatInput } from "./providers";
 
 const chatInput: ChatInput = {
   system: "You are a planner.",

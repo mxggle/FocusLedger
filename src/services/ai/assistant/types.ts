@@ -1,4 +1,7 @@
 import type { CreateTaskInput, TaskPriority, TaskStatus } from "../../../types";
+import type { ChatRole } from "../providers";
+
+export type { ChatRole };
 
 /** The six v1 capabilities. Extend here + add a registry entry in actions.ts. */
 export type AssistantActionType =
@@ -22,7 +25,8 @@ export interface AssistantTaskStore {
   startTask(taskId: string): Promise<"started" | "failed">;
 }
 
-/** Compact task shape handed to the model so it can reference tasks by id. */
+/** Compact task shape handed to the model. Intentionally camelCase (mapped from
+ *  the snake_case Task model) — keep in sync with the context builder. */
 export type ContextTask = {
   id: string;
   title: string;
@@ -38,8 +42,6 @@ export type AssistantContext = {
   tasks: ContextTask[]; // today's tasks
   backlog: ContextTask[]; // capped slice of backlog
 };
-
-export type ChatRole = "user" | "assistant";
 
 /** One proposed change, rendered as a confirm card. `params` is validated. */
 export type ProposedAction = {
