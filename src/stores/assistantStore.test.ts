@@ -71,6 +71,21 @@ describe("assistantStore.applyAction", () => {
     expect(applied?.status).toBe("applied");
   });
 
+  it("marks the action failed and toasts when the store method throws", async () => {
+    taskState.createTask.mockRejectedValue(new Error("boom"));
+    runAssistantTurn.mockResolvedValue({
+      reply: "ok",
+      actions: [{ id: "a1", type: "create_task", params: { title: "X" }, summary: "Create X", destructive: false, status: "pending" }]
+    });
+    await useAssistantStore.getState().send("add X");
+    const msg = useAssistantStore.getState().messages[1];
+    await useAssistantStore.getState().applyAction(msg.id, "a1");
+    const failed = useAssistantStore.getState().messages[1].actions?.[0];
+    expect(failed?.status).toBe("failed");
+    expect(failed?.error).toBe("boom");
+    expect(uiState.addToast).toHaveBeenCalled();
+  });
+
   it("confirms before a destructive action and marks failed on error", async () => {
     taskState.dropTask = vi.fn().mockResolvedValue({ ok: false, message: "nope" });
     runAssistantTurn.mockResolvedValue({

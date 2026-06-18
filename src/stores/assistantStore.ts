@@ -107,14 +107,19 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     }
 
     const descriptor = ACTION_REGISTRY[action.type];
-    const result = await descriptor.execute(action.params, useTaskStore.getState());
-
-    if (result.ok) {
-      await useTaskStore.getState().refresh();
-      set({ messages: patchAction(get().messages, messageId, actionId, { status: "applied" }) });
-    } else {
-      set({ messages: patchAction(get().messages, messageId, actionId, { status: "failed", error: result.message }) });
-      useUiStore.getState().addToast({ kind: "error", title: "Could not apply", description: result.message });
+    try {
+      const result = await descriptor.execute(action.params, useTaskStore.getState());
+      if (result.ok) {
+        await useTaskStore.getState().refresh();
+        set({ messages: patchAction(get().messages, messageId, actionId, { status: "applied" }) });
+      } else {
+        set({ messages: patchAction(get().messages, messageId, actionId, { status: "failed", error: result.message }) });
+        useUiStore.getState().addToast({ kind: "error", title: "Could not apply", description: result.message });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not apply this change";
+      set({ messages: patchAction(get().messages, messageId, actionId, { status: "failed", error: message }) });
+      useUiStore.getState().addToast({ kind: "error", title: "Could not apply", description: message });
     }
   },
 
