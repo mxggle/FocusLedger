@@ -1,10 +1,11 @@
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { FolderTree, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { categoryRepository, FALLBACK_CATEGORY_ID } from "../../db/categoryRepository";
 import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { Category } from "../../types";
 import { Button } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
 import { IconButton } from "../ui/IconButton";
 import { CategoryDialog } from "./CategoryDialog";
 
@@ -46,6 +47,14 @@ export function CategoryManager() {
 
   return (
     <div className="grid gap-3">
+      {categories.length === 0 ? (
+        <EmptyState
+          icon={FolderTree}
+          title="No categories yet"
+          hint="Add a category to start grouping your focus time."
+          dashed
+        />
+      ) : (
       <ul className="divide-y divide-border rounded-lg border border-border">
         {categories.map((category) => {
           const isFallback = category.id === FALLBACK_CATEGORY_ID;
@@ -78,6 +87,7 @@ export function CategoryManager() {
           );
         })}
       </ul>
+      )}
 
       <div>
         <Button type="button" variant="secondary" size="sm" onClick={openCreate}>

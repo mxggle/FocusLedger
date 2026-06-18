@@ -10,7 +10,7 @@ import { formatDurationCompact, formatSignedDurationCompact } from "../../utils/
 export function HeroStatBand({ stats }: { stats: TodayStats }) {
   const hasPlan = stats.estimatedSeconds > 0;
   const driftTone =
-    stats.driftSeconds > 0 ? "text-amber-500" : "text-foreground";
+    stats.driftSeconds > 0 ? "text-warning" : "text-foreground";
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
