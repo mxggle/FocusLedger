@@ -123,6 +123,13 @@ type UiState = {
   setFocusZen: (value: boolean) => void;
   toggleFocusZen: () => void;
 
+  // Yolo Assistant slide-over. Ephemeral (not persisted): reopening the app
+  // should never start with the assistant open.
+  assistantOpen: boolean;
+  openAssistant: () => void;
+  closeAssistant: () => void;
+  toggleAssistant: () => void;
+
   // Cross-component navigation request. Components without access to App's
   // route state (the Today debrief button, the scheduled-debrief toast) set
   // this; App applies it and clears it. `null` means no pending navigation.
@@ -232,6 +239,11 @@ export const useUiStore = create<UiState>((set) => ({
   focusZen: false,
   setFocusZen: (value) => set({ focusZen: value }),
   toggleFocusZen: () => set((state) => ({ focusZen: !state.focusZen })),
+
+  assistantOpen: false,
+  openAssistant: () => set({ assistantOpen: true }),
+  closeAssistant: () => set({ assistantOpen: false }),
+  toggleAssistant: () => set((state) => ({ assistantOpen: !state.assistantOpen })),
 
   requestedRoute: null,
   requestRoute: (route) => set({ requestedRoute: route }),

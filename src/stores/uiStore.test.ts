@@ -156,3 +156,16 @@ describe("uiStore todaySummaryExpanded", () => {
     expect(useUiStore.getState().todaySummaryExpanded).toBe(false);
   });
 });
+
+describe("assistant panel state", () => {
+  it("toggles and sets assistant open (ephemeral, defaults closed)", () => {
+    expect(useUiStore.getState().assistantOpen).toBe(false);
+    useUiStore.getState().toggleAssistant();
+    expect(useUiStore.getState().assistantOpen).toBe(true);
+    useUiStore.getState().closeAssistant();
+    expect(useUiStore.getState().assistantOpen).toBe(false);
+    useUiStore.getState().openAssistant();
+    expect(useUiStore.getState().assistantOpen).toBe(true);
+    useUiStore.getState().closeAssistant();
+  });
+});
