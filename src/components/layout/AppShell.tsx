@@ -40,7 +40,7 @@ export function AppShell<T extends string>({
   const brand = (
     <div
       className={cn(
-        "flex h-14 shrink-0 items-center gap-2.5 px-3",
+        "flex h-14 shrink-0 items-center gap-3 px-3",
         sidebarCollapsed && "justify-center"
       )}
     >
@@ -62,7 +62,7 @@ export function AppShell<T extends string>({
 
   // ── Nav (shared) ────────────────────────────────────────────────────────
   const nav = (
-    <nav className="flex-1 space-y-1 px-2.5 py-2">
+    <nav className="flex-1 space-y-1 px-3 py-2.5">
       {routes.map((route) => {
         const Icon = route.icon;
         const active = activeRoute === route.id;
@@ -73,7 +73,7 @@ export function AppShell<T extends string>({
             aria-label={route.label}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "group relative flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium outline-none",
+              "group relative flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium outline-none",
               "transition-colors duration-fast focus-visible:shadow-ring",
               sidebarCollapsed && "justify-center",
               active
@@ -113,7 +113,7 @@ export function AppShell<T extends string>({
   // Shared styling for the floating-sidebar collapse/expand toggle so both
   // states render an identical control (only the icon + position differ).
   const toggleButtonClass =
-    "inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors duration-fast hover:bg-muted hover:text-foreground active:bg-muted focus-visible:shadow-ring";
+    "inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors duration-fast hover:bg-muted hover:text-foreground active:bg-muted focus-visible:shadow-ring";
 
   // ── macOS: floating sidebar ───────────────────────────────────────────────
   // An inset card with rounded corners and a shadow. The native traffic lights
@@ -124,16 +124,16 @@ export function AppShell<T extends string>({
       <div className="flex h-screen overflow-hidden bg-background text-foreground">
         <aside
           className={cn(
-            "my-2.5 ml-2.5 mr-2.5 flex shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-card",
+            "my-2 ml-2 mr-2 flex shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-card",
             "motion-safe:transition-[width] motion-safe:duration-normal",
             // Collapsed stays wide enough to hold the native traffic lights.
             sidebarCollapsed ? "w-[84px]" : "w-[232px]"
           )}
         >
           {/* Header: a drag region that also clears the native traffic lights
-              (top-left). px-2.5 lines the collapse toggle up with the nav rows
+              (top-left). px-3 lines the collapse toggle up with the nav rows
               below. The toggle sits at the right when expanded. */}
-          <div className="relative flex h-11 shrink-0 items-center justify-end px-2.5">
+          <div className="relative flex h-11 shrink-0 items-center justify-end px-3">
             <div
               data-tauri-drag-region
               className="absolute inset-0"
@@ -203,7 +203,7 @@ export function AppShell<T extends string>({
           {nav}
 
           {/* Collapse toggle */}
-          <div className="shrink-0 border-t border-border p-2.5">
+          <div className="shrink-0 border-t border-border p-3">
             <Tooltip
               content={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
               side="right"
@@ -217,7 +217,7 @@ export function AppShell<T extends string>({
                 aria-expanded={!sidebarCollapsed}
                 onClick={toggleSidebar}
                 className={cn(
-                  "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground outline-none",
+                  "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground outline-none",
                   "transition-colors duration-fast hover:bg-muted hover:text-foreground focus-visible:shadow-ring",
                   sidebarCollapsed && "justify-center"
                 )}
