@@ -33,7 +33,8 @@ export type LifeProgress = {
  * Parse a `YYYY-MM-DD` string as a *local* date (no timezone surprises).
  * Returns null for anything that is not a real calendar date.
  */
-export function parseLocalDate(value: string): Date | null {
+export function parseLocalDate(value: string | null | undefined): Date | null {
+  if (typeof value !== "string") return null;
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
   if (!match) return null;
 
@@ -63,7 +64,7 @@ function calendarAge(birth: Date, now: Date): number {
 }
 
 export function computeLifeProgress(
-  birthDateISO: string,
+  birthDateISO: string | null | undefined,
   lifeExpectancyYears: number,
   now: Date = new Date()
 ): LifeProgress | null {
@@ -101,7 +102,7 @@ export function computeLifeProgress(
  * (whole years, matching the grid's row) you were during it.
  */
 export function describeWeek(
-  birthDateISO: string,
+  birthDateISO: string | null | undefined,
   weekIndex: number
 ): { date: Date; age: number } | null {
   const birth = parseLocalDate(birthDateISO);
@@ -118,7 +119,7 @@ export function describeWeek(
  * can inspect or plan against.
  */
 export function weekRange(
-  birthDateISO: string,
+  birthDateISO: string | null | undefined,
   weekIndex: number
 ): { start: Date; end: Date } | null {
   const birth = parseLocalDate(birthDateISO);
@@ -131,7 +132,10 @@ export function weekRange(
  * Which life-week a given moment falls into. Used to bucket real time entries
  * onto the grid. Returns null for dates before birth or invalid input.
  */
-export function weekIndexForDate(birthDateISO: string, date: Date): number | null {
+export function weekIndexForDate(
+  birthDateISO: string | null | undefined,
+  date: Date
+): number | null {
   const birth = parseLocalDate(birthDateISO);
   if (!birth || Number.isNaN(date.getTime())) return null;
   const index = Math.floor((date.getTime() - birth.getTime()) / MS_PER_WEEK);

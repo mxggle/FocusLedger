@@ -69,7 +69,11 @@ type TaskState = {
   startTask: (taskId: string) => Promise<StartTaskResult>;
   pauseActiveTask: () => Promise<MutationResult>;
   resumeTask: (taskId: string) => Promise<StartTaskResult>;
-  stopActiveTask: (outcome: StopOutcome, input: StopSessionInput) => Promise<MutationResult>;
+  stopActiveTask: (
+    outcome: StopOutcome,
+    input: StopSessionInput,
+    taskId?: string
+  ) => Promise<MutationResult>;
   updateEntryDetails: (entryId: string, input: UpdateEntryDetailsInput) => Promise<MutationResult>;
   completeTask: (taskId: string, note?: string) => Promise<MutationResult>;
   dropTask: (taskId: string) => Promise<MutationResult>;
@@ -457,24 +461,28 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   resumeTask: async (taskId) => get().startTask(taskId),
 
-  stopActiveTask: async (outcome, input) => {
+  stopActiveTask: async (outcome, input, requestedTaskId) => {
     try {
       const activeEntry = await timeEntryRepository.getActiveEntry();
-      // Stop targets the running entry, or the focused task if it is paused.
-      const targetTaskId = activeEntry?.task_id ?? get().focusedTaskId;
+      // The focus pane targets the running/focused task. Task cards can pass an
+      // explicit target so recorded work always gets the same reflection flow.
+      const targetTaskId =
+        requestedTaskId ?? activeEntry?.task_id ?? get().focusedTaskId;
       if (!targetTaskId) {
         return { ok: true };
       }
 
-      if (activeEntry) {
+      if (activeEntry?.task_id === targetTaskId) {
         await timeEntryRepository.closeEntry(activeEntry.id, undefined, input);
       } else {
-        // Paused focus session: no open entry, so attach the wrap-up reflection
-        // to the task's most recent entry instead.
+        // A paused or previously tracked task has no open entry, so attach the
+        // wrap-up reflection to its most recent recorded block.
         const entries = await timeEntryRepository.getEntriesForTask(targetTaskId);
         const latest = entries[entries.length - 1];
         if (latest) {
           await timeEntryRepository.updateReflection(latest.id, input);
+        } else {
+          await timeEntryRepository.createReflectionEntry(targetTaskId, input);
         }
       }
 
@@ -483,7 +491,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         completed_at: outcome === "done" ? new Date().toISOString() : null,
         dropped_at: outcome === "dropped" ? new Date().toISOString() : null
       });
-      set({ focusedTaskId: null });
+      if (get().focusedTaskId === targetTaskId) {
+        set({ focusedTaskId: null });
+      }
       await get().refresh();
       return { ok: true };
     } catch (error) {

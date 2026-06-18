@@ -186,7 +186,7 @@ type Tone = "default" | "muted" | "success" | "warning";
 
 function driftTone(driftSeconds: number): Tone {
   if (driftSeconds === 0) return "muted";
-  return driftSeconds > 0 ? "warning" : "success";
+  return driftSeconds > 0 ? "warning" : "default";
 }
 
 function StatPill({

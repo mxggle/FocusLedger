@@ -51,7 +51,7 @@ export function LifeSetup({
       <div className="grid gap-4 sm:grid-cols-2">
         <Field
           label="Your birth date"
-          hint="Stored locally, only on this device."
+          hint="Used to map your life in weeks."
           error={date && !validDate ? "Pick a real date in the past." : undefined}
         >
           <Input

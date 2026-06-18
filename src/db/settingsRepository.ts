@@ -32,6 +32,9 @@ export const settingsRepository = {
     if ((settings.notificationStyle as string) === "popup") {
       settings.notificationStyle = "system";
     }
+    if (typeof settings.birthDate !== "string") {
+      settings.birthDate = "";
+    }
 
     return settings;
   },
