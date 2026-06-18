@@ -2,7 +2,7 @@ import { actionPromptSpecs } from "./actions";
 import type { AssistantContext, ContextTask } from "./types";
 
 function describeTask(task: ContextTask): string {
-  const estimate = task.estimatedMinutes ? `, est ${task.estimatedMinutes}m` : "";
+  const estimate = task.estimatedMinutes != null ? `, est ${task.estimatedMinutes}m` : "";
   return `- [${task.id}] "${task.title}" (${task.status}, ${task.priority}${estimate})`;
 }
 

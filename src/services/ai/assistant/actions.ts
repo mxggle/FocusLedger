@@ -1,4 +1,5 @@
 import type { CreateTaskInput } from "../../../types";
+import { createId } from "../../../utils/id";
 import type {
   ActionResult,
   AssistantActionType,
@@ -205,8 +206,6 @@ export function actionPromptSpecs(): PromptSpec[] {
   return ACTION_TYPES.map((type) => ACTION_REGISTRY[type].promptSpec);
 }
 
-let actionCounter = 0;
-
 /**
  * Validate one raw action object from the model. Returns a ProposedAction
  * (status "pending") or null if the type is unknown or params are invalid —
@@ -223,9 +222,8 @@ export function validateAction(
   const descriptor = ACTION_REGISTRY[type as AssistantActionType];
   try {
     const params = descriptor.validate(record, ctx);
-    actionCounter += 1;
     return {
-      id: `act_${Date.now().toString(36)}_${actionCounter}`,
+      id: createId("act"),
       type: descriptor.type,
       params,
       summary: descriptor.describe(params, ctx),
