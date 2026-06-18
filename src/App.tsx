@@ -121,7 +121,7 @@ export default function App() {
             <p className="text-sm text-muted-foreground">{error}</p>
           </div>
         ) : route === "today" ? (
-          <TodayPage onOpenLife={() => setRoute("life")} />
+          <TodayPage />
         ) : route === "my-day" ? (
           <MyDayPage />
         ) : route === "backlog" ? (

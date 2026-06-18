@@ -38,7 +38,7 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(function Sha
   const timeline = buildTimelineModel(entries, date, now);
   const hasPlan = stats.estimatedSeconds > 0;
   const highlight = topFocusLine(stats);
-  const driftColor = stats.driftSeconds > 0 ? "#d97706" : stats.driftSeconds < 0 ? "#059669" : INK;
+  const driftColor = stats.driftSeconds > 0 ? "#d97706" : INK;
 
   return (
     <div

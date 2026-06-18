@@ -4,16 +4,16 @@ import { CollapsiblePane } from "../ui/CollapsiblePane";
 import { AddTaskForm } from "./AddTaskForm";
 import { CurrentFocus } from "./CurrentFocus";
 import { DebriefButton } from "./DebriefButton";
-import { LifeThread } from "./LifeThread";
 import { TaskList } from "./TaskList";
 import { TodayLog } from "./TodayLog";
 import { TodaySummary } from "./TodaySummary";
 
-// Auto-collapse breakpoints: collapse log at <900px, tasks at <700px; focus stays.
-const BREAK_LOG = 900;
-const BREAK_TASKS = 700;
+// Preserve usable task/focus widths across the supported desktop window range.
+// Focus stays visible; the secondary Log pane gives way first.
+const BREAK_LOG = 1240;
+const BREAK_TASKS = 820;
 
-export function TodayPage({ onOpenLife }: { onOpenLife: () => void }) {
+export function TodayPage() {
   const todayPanes = useUiStore((state) => state.todayPanes);
   const setTodayPaneCollapsed = useUiStore((state) => state.setTodayPaneCollapsed);
   const toggleTodayPane = useUiStore((state) => state.toggleTodayPane);
@@ -42,11 +42,6 @@ export function TodayPage({ onOpenLife }: { onOpenLife: () => void }) {
   return (
     // overflow-hidden ensures panes don't bleed outside; bg-background fills gaps
     <div className="flex h-full flex-col overflow-hidden bg-background">
-      {/* Quiet finitude thread — the "you only live once" line, linked to Life */}
-      <div className="shrink-0 border-b border-border bg-surface-2/40">
-        <LifeThread onOpenLife={onOpenLife} />
-      </div>
-
       <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* Tasks pane — border-r separates from Focus */}
       <CollapsiblePane

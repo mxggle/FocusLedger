@@ -43,6 +43,15 @@ export function getRecentDateKeys(days: number, endDate = new Date()): string[] 
   return keys;
 }
 
-export function formatDateLabel(dateKey: string): string {
-  return format(parseDateKey(dateKey), "EEE, MMM d");
+export function formatDateLabel(
+  dateKey: string,
+  referenceDate = new Date()
+): string {
+  const date = parseDateKey(dateKey);
+  return format(
+    date,
+    date.getFullYear() === referenceDate.getFullYear()
+      ? "EEE, MMM d"
+      : "EEE, MMM d, yyyy"
+  );
 }

@@ -57,6 +57,8 @@ describe("computeLifeProgress", () => {
 
   it("returns null for invalid input", () => {
     expect(computeLifeProgress("", 80, now)).toBeNull();
+    expect(computeLifeProgress(null, 80, now)).toBeNull();
+    expect(computeLifeProgress(undefined, 80, now)).toBeNull();
     expect(computeLifeProgress("1995-06-15", 0, now)).toBeNull();
     expect(computeLifeProgress("1995-06-15", Number.NaN, now)).toBeNull();
   });

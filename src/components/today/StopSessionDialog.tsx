@@ -7,11 +7,14 @@ import { Field, Input, Textarea } from "../ui/Field";
 export function StopSessionDialog({
   open,
   onOpenChange,
+  taskId,
   getElapsedSeconds,
   onDone
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Optional task target when the dialog is opened from a task card. */
+  taskId?: string;
   /** Snapshot of the live session length, read before the save clears focus. */
   getElapsedSeconds?: () => number;
   /** Fires after a successful "done" save, with the session length in seconds. */
@@ -39,12 +42,16 @@ export function StopSessionDialog({
     // celebration can't read it afterwards.
     const elapsedAtDone = outcome === "done" ? getElapsedSeconds?.() ?? 0 : 0;
     setSaving(true);
-    const result = await stopActiveTask(outcome, {
-      note,
-      blocker,
-      next_action: nextAction,
-      completion_rate: hasCompletionRate ? parsedCompletionRate : null
-    });
+    const result = await stopActiveTask(
+      outcome,
+      {
+        note,
+        blocker,
+        next_action: nextAction,
+        completion_rate: hasCompletionRate ? parsedCompletionRate : null
+      },
+      taskId
+    );
     setSaving(false);
     if (!result.ok) return;
     setNote("");
@@ -57,7 +64,7 @@ export function StopSessionDialog({
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void save("paused");
+    void save("done");
   }
 
   return (
@@ -124,16 +131,16 @@ export function StopSessionDialog({
             Cancel
           </Button>
           <Button
-            type="submit"
+            type="button"
             variant="secondary"
+            onClick={() => void save("paused")}
             disabled={!completionRateValid || saving}
             loading={saving}
           >
             Save &amp; pause
           </Button>
           <Button
-            type="button"
-            onClick={() => void save("done")}
+            type="submit"
             disabled={!completionRateValid || saving}
           >
             Mark as done

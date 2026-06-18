@@ -60,6 +60,49 @@ export const timeEntryRepository = {
     return entry;
   },
 
+  async createReflectionEntry(
+    taskId: string,
+    input: StopSessionInput = {},
+    recordedAt = new Date().toISOString()
+  ): Promise<TimeEntry> {
+    const db = await getDatabase();
+    const entry: TimeEntry = {
+      id: createId("entry"),
+      task_id: taskId,
+      start_at: recordedAt,
+      end_at: recordedAt,
+      duration_seconds: 0,
+      note: input.note?.trim() || null,
+      blocker: input.blocker?.trim() || null,
+      next_action: input.next_action?.trim() || null,
+      completion_rate: input.completion_rate ?? null,
+      created_at: recordedAt,
+      updated_at: recordedAt
+    };
+
+    await db.execute(
+      `INSERT INTO time_entries (
+        id, task_id, start_at, end_at, duration_seconds, note, blocker,
+        next_action, completion_rate, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [
+        entry.id,
+        entry.task_id,
+        entry.start_at,
+        entry.end_at,
+        entry.duration_seconds,
+        entry.note,
+        entry.blocker,
+        entry.next_action,
+        entry.completion_rate,
+        entry.created_at,
+        entry.updated_at
+      ]
+    );
+
+    return entry;
+  },
+
   /**
    * Start tracking `taskId`. If the most recent block belongs to the same task
    * and was paused only moments ago, reopen it so a brief pause/resume reads as

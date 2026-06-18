@@ -30,6 +30,7 @@ import { IconButton } from "../ui/IconButton";
 import { Menu, MenuItem, MenuSeparator } from "../ui/Menu";
 import { cn } from "../../utils/cn";
 import { resolveCategoryColor } from "../../utils/category";
+import { StopSessionDialog } from "./StopSessionDialog";
 
 // ── Status badge mapping ──────────────────────────────────────────────────────
 
@@ -75,7 +76,6 @@ export function TaskCard({ task }: { task: Task }) {
   const activeEntry = useTaskStore((state) => state.activeEntry);
   const closedTaskDurations = useTaskStore((state) => state.closedTaskDurations);
   const startTask = useTaskStore((state) => state.startTask);
-  const completeTask = useTaskStore((state) => state.completeTask);
   const dropTask = useTaskStore((state) => state.dropTask);
   const rescheduleTask = useTaskStore((state) => state.rescheduleTask);
   const moveTaskToBacklog = useTaskStore((state) => state.moveTaskToBacklog);
@@ -92,6 +92,7 @@ export function TaskCard({ task }: { task: Task }) {
   const [categoryId, setCategoryId] = useState(task.category_id ?? "inbox");
   const [plannedStart, setPlannedStart] = useState(task.planned_start_time ?? "");
   const [plannedEnd, setPlannedEnd] = useState(task.planned_end_time ?? "");
+  const [stopOpen, setStopOpen] = useState(false);
 
   const category = categories.find((item) => item.id === task.category_id);
   const categoryColor = resolveCategoryColor(category?.color);
@@ -144,6 +145,10 @@ export function TaskCard({ task }: { task: Task }) {
   async function handleStart() {
     // Starting a task auto-pauses whatever is currently running.
     await startTask(task.id);
+  }
+
+  function handleDone() {
+    setStopOpen(true);
   }
 
   async function saveEdit() {
@@ -306,13 +311,14 @@ export function TaskCard({ task }: { task: Task }) {
   const isActive = task.status === "doing";
 
   return (
-    <div
-      className={cn(
-        "group relative overflow-hidden rounded-xl border bg-surface p-3.5 pl-4 shadow-card",
-        "transition-[box-shadow,border-color,transform] duration-fast hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md",
-        isActive ? "border-primary/40 ring-1 ring-inset ring-primary/10" : "border-border"
-      )}
-    >
+    <>
+      <div
+        className={cn(
+          "group relative overflow-hidden rounded-xl border bg-surface p-3.5 pl-4 shadow-card",
+          "transition-[box-shadow,border-color,transform] duration-fast hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md",
+          isActive ? "border-primary/40 ring-1 ring-inset ring-primary/10" : "border-border"
+        )}
+      >
       {/* Category accent rail */}
       <span
         className="absolute inset-y-0 left-0 w-1"
@@ -406,7 +412,7 @@ export function TaskCard({ task }: { task: Task }) {
             type="button"
             size="sm"
             variant="secondary"
-            onClick={() => void completeTask(task.id, "Marked done from task list")}
+            onClick={handleDone}
             aria-label="Done"
             title="Done"
           >
@@ -491,6 +497,13 @@ export function TaskCard({ task }: { task: Task }) {
           </Menu>
         </div>
       </div>
-    </div>
+      </div>
+      <StopSessionDialog
+        open={stopOpen}
+        onOpenChange={setStopOpen}
+        taskId={task.id}
+        getElapsedSeconds={() => elapsedSeconds}
+      />
+    </>
   );
 }
