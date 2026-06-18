@@ -1,8 +1,10 @@
 import { format } from "date-fns";
 import { ArrowRight, Hourglass, Pencil } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
+import { useUiStore } from "../../stores/uiStore";
 import {
   loadLifeWeekFocus,
   peakDay,
@@ -12,6 +14,8 @@ import { toDateKey } from "../../utils/date";
 import { formatDurationCompact } from "../../utils/duration";
 import { computeLifeProgress, weekRange } from "../../utils/lifeWeeks";
 import { Button } from "../ui/Button";
+import { PageHeader } from "../ui/PageHeader";
+import { Skeleton } from "../ui/Skeleton";
 import { LifeSetup } from "./LifeSetup";
 import { LifeWeeksGrid } from "./LifeWeeksGrid";
 
@@ -27,12 +31,12 @@ export function LifePage({ onNavigate }: LifePageProps) {
   const settings = useSettingsStore((state) => state.settings);
   const updateSetting = useSettingsStore((state) => state.updateSetting);
   const setSelectedDate = useTaskStore((state) => state.setSelectedDate);
+  const addToast = useUiStore((state) => state.addToast);
   const { birthDate, lifeExpectancyYears } = settings;
 
   const [editing, setEditing] = useState(false);
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [hoveredWeek, setHoveredWeek] = useState<number | null>(null);
-  const [focus, setFocus] = useState<LifeWeekFocus>(EMPTY_FOCUS);
 
   const progress = useMemo(
     () => computeLifeProgress(birthDate, lifeExpectancyYears),
@@ -40,23 +44,23 @@ export function LifePage({ onNavigate }: LifePageProps) {
   );
 
   // Pull real tracked focus onto the grid (re-runs whenever this page mounts).
-  useEffect(() => {
-    let cancelled = false;
-    if (!progress) {
-      setFocus(EMPTY_FOCUS);
-      return;
+  const focusResource = useAsyncResource<LifeWeekFocus>(
+    () => loadLifeWeekFocus(birthDate),
+    EMPTY_FOCUS,
+    [birthDate, progress],
+    {
+      enabled: Boolean(progress),
+      onError: (error) => {
+        console.error("Failed to load life focus", error);
+        addToast({
+          kind: "error",
+          title: "Couldn't load your focus history",
+          description: "The grid is showing without tracked focus. Try again."
+        });
+      }
     }
-    void loadLifeWeekFocus(birthDate)
-      .then((result) => {
-        if (!cancelled) setFocus(result);
-      })
-      .catch(() => {
-        if (!cancelled) setFocus(EMPTY_FOCUS);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [birthDate, progress]);
+  );
+  const focus = focusResource.data;
 
   async function handleSave(nextDate: string, nextYears: number) {
     if (nextDate !== birthDate) await updateSetting("birthDate", nextDate);
@@ -80,7 +84,12 @@ export function LifePage({ onNavigate }: LifePageProps) {
     return (
       <div className="h-full overflow-y-auto px-6 py-7">
         <div className="mx-auto max-w-2xl">
-          <Header onEdit={null} />
+          <PageHeader
+            icon={Hourglass}
+            eyebrow="Memento Mori"
+            title="Your life in weeks"
+            description="Set your details to see every week of your life as a grid."
+          />
           <section className="rounded-xl border border-border bg-surface p-5 shadow-card">
             <LifeSetup
               birthDate={birthDate}
@@ -101,7 +110,17 @@ export function LifePage({ onNavigate }: LifePageProps) {
 
   return (
     <div className="flex h-full flex-col px-6 py-5">
-      <Header onEdit={() => setEditing((value) => !value)} />
+      <PageHeader
+        icon={Hourglass}
+        eyebrow="Memento Mori"
+        title="Your life in weeks"
+        actions={
+          <Button variant="secondary" size="sm" onClick={() => setEditing((value) => !value)}>
+            <Pencil className="h-3.5 w-3.5" />
+            Adjust
+          </Button>
+        }
+      />
 
       {editing ? (
         <section className="mb-4 rounded-xl border border-border bg-surface p-5 shadow-card">
@@ -115,7 +134,7 @@ export function LifePage({ onNavigate }: LifePageProps) {
         </section>
       ) : null}
 
-      <div className="mt-4 flex min-h-0 flex-1 gap-5">
+      <div className="flex min-h-0 flex-1 gap-5">
         {/* The grid */}
         <section className="flex min-w-0 flex-1 flex-col rounded-xl border border-border bg-surface p-4 shadow-card">
           <div className="min-h-0 flex-1">
@@ -167,6 +186,7 @@ export function LifePage({ onNavigate }: LifePageProps) {
             currentWeekIndex={progress.currentWeekIndex}
             weeksLived={progress.weeksLived}
             focus={focus}
+            focusLoading={focusResource.loading}
             onOpenToday={() => onNavigate?.("today")}
             onInspectHistory={() => inspectInHistory(activeWeek)}
           />
@@ -178,34 +198,13 @@ export function LifePage({ onNavigate }: LifePageProps) {
   );
 }
 
-function Header({ onEdit }: { onEdit: (() => void) | null }) {
-  return (
-    <div className="flex shrink-0 items-center justify-between gap-4">
-      <div>
-        <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          <Hourglass className="h-3.5 w-3.5" />
-          Memento Mori
-        </div>
-        <h1 className="mt-0.5 text-xl font-semibold tracking-tight text-foreground">
-          Your life in weeks
-        </h1>
-      </div>
-      {onEdit ? (
-        <Button variant="secondary" size="sm" onClick={onEdit}>
-          <Pencil className="h-3.5 w-3.5" />
-          Adjust
-        </Button>
-      ) : null}
-    </div>
-  );
-}
-
 function WeekInspector({
   birthDate,
   weekIndex,
   currentWeekIndex,
   weeksLived,
   focus,
+  focusLoading,
   onOpenToday,
   onInspectHistory
 }: {
@@ -214,6 +213,7 @@ function WeekInspector({
   currentWeekIndex: number;
   weeksLived: number;
   focus: LifeWeekFocus;
+  focusLoading: boolean;
   onOpenToday: () => void;
   onInspectHistory: () => void;
 }) {
@@ -249,7 +249,12 @@ function WeekInspector({
 
       {/* Real tracked focus for this week */}
       <div className="mt-3 border-t border-border pt-3">
-        {week ? (
+        {focusLoading ? (
+          <div className="grid gap-2">
+            <Skeleton className="h-5 w-2/3" />
+            <Skeleton className="h-3 w-1/3" />
+          </div>
+        ) : week ? (
           <div className="grid gap-2">
             <div className="flex items-baseline justify-between">
               <span className="text-xs text-muted-foreground">Focus logged</span>

@@ -1,5 +1,7 @@
+import { PieChart } from "lucide-react";
 import type { TodayStats } from "../../types";
 import { formatDurationCompact } from "../../utils/duration";
+import { EmptyState } from "../ui/EmptyState";
 import { buildDonutModel, DONUT_CIRCUMFERENCE } from "./donutModel";
 import { Panel } from "./Panel";
 
@@ -13,13 +15,25 @@ export function CategoryDonut({ stats }: { stats: TodayStats }) {
   return (
     <Panel title="Where the time went">
       {segments.length === 0 ? (
-        <p className="py-6 text-center text-sm text-muted-foreground">
-          No category time to break down yet.
-        </p>
+        <EmptyState
+          icon={PieChart}
+          title="Nothing to break down"
+          hint="Track focus against categories to see where time went."
+          className="py-8"
+        />
       ) : (
         <div className="flex items-center gap-6">
           <div className="relative shrink-0">
-            <svg width="120" height="120" viewBox="0 0 42 42" className="-rotate-90">
+            <svg
+              width="120"
+              height="120"
+              viewBox="0 0 42 42"
+              className="-rotate-90"
+              role="img"
+              aria-label={`Time by category: ${segments
+                .map((segment) => `${segment.categoryName} ${Math.round(segment.pct)}%`)
+                .join(", ")}`}
+            >
               <circle
                 cx={CENTER}
                 cy={CENTER}

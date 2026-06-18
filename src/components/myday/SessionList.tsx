@@ -1,7 +1,8 @@
 import { format } from "date-fns";
-import { AlertTriangle, ArrowRight } from "lucide-react";
+import { AlertTriangle, ArrowRight, ListChecks } from "lucide-react";
 import type { TimeEntryWithTask } from "../../types";
 import { formatDurationCompact } from "../../utils/duration";
+import { EmptyState } from "../ui/EmptyState";
 import { Panel } from "./Panel";
 
 /** Per-session detail: note, blocker, next action, and felt-completion. */
@@ -12,9 +13,12 @@ export function SessionList({ entries }: { entries: TimeEntryWithTask[] }) {
   return (
     <Panel title="Focus sessions" aside={<span className="text-xs text-muted-foreground">{entries.length}</span>}>
       {chronological.length === 0 ? (
-        <p className="py-6 text-center text-sm text-muted-foreground">
-          No focus sessions to show for this day.
-        </p>
+        <EmptyState
+          icon={ListChecks}
+          title="No focus sessions"
+          hint="Sessions you run on this day show up here with their notes."
+          className="py-8"
+        />
       ) : (
         <ul className="space-y-2.5">
           {chronological.map((entry) => (
@@ -39,7 +43,7 @@ function SessionRow({ entry }: { entry: TimeEntryWithTask }) {
             <span
               aria-hidden
               className="h-2.5 w-2.5 shrink-0 rounded-full"
-              style={{ backgroundColor: entry.category_color ?? "#71717a" }}
+              style={{ backgroundColor: entry.category_color ?? "hsl(var(--muted-foreground))" }}
             />
             <span className="truncate text-sm font-medium text-foreground">{entry.task_title}</span>
           </div>
@@ -63,7 +67,7 @@ function SessionRow({ entry }: { entry: TimeEntryWithTask }) {
       ) : null}
 
       {entry.blocker ? (
-        <div className="mt-2 flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-500">
+        <div className="mt-2 flex items-start gap-1.5 text-xs text-warning">
           <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
           <span>{entry.blocker}</span>
         </div>
@@ -80,7 +84,7 @@ function SessionRow({ entry }: { entry: TimeEntryWithTask }) {
         <div className="mt-2.5 flex items-center gap-2">
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted/60">
             <div
-              className="h-full rounded-full bg-emerald-500"
+              className="h-full rounded-full bg-success"
               style={{ width: `${Math.min(100, Math.max(0, completion))}%` }}
             />
           </div>

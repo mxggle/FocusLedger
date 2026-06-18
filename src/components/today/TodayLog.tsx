@@ -114,7 +114,7 @@ export function TodayLog() {
                   className={cn(
                     "mb-2 min-w-0 flex-1 rounded-xl border bg-surface p-3 text-left shadow-card",
                     "transition-[border-color,box-shadow] duration-fast hover:border-border-strong",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    "focus-visible:outline-none focus-visible:shadow-ring",
                     ongoing ? "border-primary/40 ring-1 ring-primary/10" : "border-border"
                   )}
                 >

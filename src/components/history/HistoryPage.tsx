@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { CalendarDays, Clock } from "lucide-react";
+import { useState } from "react";
 import { splitEntrySecondsByDate } from "../../services/statsService";
 import { useTaskStore } from "../../stores/taskStore";
 import { formatDateLabel } from "../../utils/date";
@@ -17,6 +18,18 @@ export function HistoryPage() {
   const historyStats = useTaskStore((state) => state.historyStats);
   const entries = useTaskStore((state) => state.selectedDateEntries);
 
+  // The store refresh is async; dim the detail area while a switch is in flight
+  // so the panel doesn't look frozen mid-load.
+  const [switching, setSwitching] = useState(false);
+  async function changeDate(date: string) {
+    setSwitching(true);
+    try {
+      await setSelectedDate(date);
+    } finally {
+      setSwitching(false);
+    }
+  }
+
   return (
     <div className="h-full overflow-y-auto px-6 py-7">
       <PageHeader
@@ -28,7 +41,7 @@ export function HistoryPage() {
             <Input
               type="date"
               value={selectedDate}
-              onChange={(event) => void setSelectedDate(event.target.value)}
+              onChange={(event) => void changeDate(event.target.value)}
             />
           </Field>
         }
@@ -42,7 +55,7 @@ export function HistoryPage() {
             <button
               key={day.date}
               type="button"
-              onClick={() => void setSelectedDate(day.date)}
+              onClick={() => void changeDate(day.date)}
               aria-pressed={isSelected}
               className={`rounded-xl border p-3 text-left outline-none transition-[transform,box-shadow,border-color,background-color] duration-fast hover:-translate-y-0.5 focus-visible:shadow-ring ${
                 isSelected
@@ -69,7 +82,12 @@ export function HistoryPage() {
       </div>
 
       {/* Detail area */}
-      <div className="mt-6 grid gap-5 lg:grid-cols-[280px_1fr]">
+      <div
+        aria-busy={switching}
+        className={`mt-6 grid gap-5 transition-opacity duration-fast lg:grid-cols-[280px_1fr] ${
+          switching ? "opacity-60" : "opacity-100"
+        }`}
+      >
         {/* Stats sidebar */}
         <aside className="rounded-xl border border-border bg-surface p-4 shadow-card">
           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

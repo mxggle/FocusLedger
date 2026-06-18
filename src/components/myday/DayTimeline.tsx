@@ -1,6 +1,8 @@
 import { motion } from "framer-motion";
+import { Clock } from "lucide-react";
 import type { TimeEntryWithTask } from "../../types";
 import { formatDurationCompact } from "../../utils/duration";
+import { EmptyState } from "../ui/EmptyState";
 import { Panel } from "./Panel";
 import { buildTimelineModel, formatHourMark } from "./timelineLayout";
 
@@ -24,9 +26,12 @@ export function DayTimeline({
   return (
     <Panel title="Day timeline">
       {model.empty ? (
-        <p className="py-6 text-center text-sm text-muted-foreground">
-          No focus sessions recorded on this day.
-        </p>
+        <EmptyState
+          icon={Clock}
+          title="No timeline yet"
+          hint="Focus sessions appear here as blocks across the day."
+          className="py-8"
+        />
       ) : (
         <div>
           <div className="relative h-16 overflow-hidden rounded-xl bg-muted/50 ring-1 ring-inset ring-border/60">
@@ -57,6 +62,8 @@ export function DayTimeline({
                   transformOrigin: "left"
                 }}
                 className="group absolute top-2 bottom-2 flex items-center overflow-hidden rounded-md px-2 shadow-sm"
+                role="img"
+                aria-label={`${block.taskTitle}, ${block.categoryName}, ${block.startLabel} to ${block.endLabel}, ${formatDurationCompact(block.durationSeconds)}`}
                 title={`${block.taskTitle} · ${block.categoryName}\n${block.startLabel}–${block.endLabel} · ${formatDurationCompact(block.durationSeconds)}`}
               >
                 <span className="truncate text-[11px] font-medium text-white/95 drop-shadow-sm">
