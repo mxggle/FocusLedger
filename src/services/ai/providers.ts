@@ -23,6 +23,17 @@ export type GenerateInput = {
   temperature?: number;
 };
 
+export type ChatRole = "user" | "assistant";
+
+export type ChatTurn = { role: ChatRole; content: string };
+
+export type ChatInput = {
+  system: string;
+  messages: ChatTurn[];
+  maxTokens?: number;
+  temperature?: number;
+};
+
 export const PROVIDER_LABELS: Record<AiProvider, string> = {
   anthropic: "Claude (Anthropic)",
   openai: "OpenAI",
@@ -113,6 +124,77 @@ export function buildAiRequest(settings: AiSettings, input: GenerateInput): AiRe
         throw new Error("Custom provider needs a base URL (e.g. http://localhost:11434/v1)");
       }
       return buildOpenAiCompatibleRequest(settings.aiBaseUrl, settings, input);
+    }
+  }
+}
+
+function buildOpenAiCompatibleChatRequest(
+  baseUrl: string,
+  settings: AiSettings,
+  input: ChatInput
+): AiRequest {
+  return {
+    url: `${normalizeBaseUrl(baseUrl)}/chat/completions`,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${settings.aiApiKey}`
+    },
+    body: {
+      model: resolveModel(settings),
+      messages: [
+        { role: "system", content: input.system },
+        ...input.messages
+      ],
+      ...(input.temperature !== undefined ? { temperature: input.temperature } : {})
+    }
+  };
+}
+
+export function buildChatRequest(settings: AiSettings, input: ChatInput): AiRequest {
+  switch (settings.aiProvider) {
+    case "anthropic":
+      return {
+        url: "https://api.anthropic.com/v1/messages",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": settings.aiApiKey,
+          "anthropic-version": "2023-06-01"
+        },
+        body: {
+          model: resolveModel(settings),
+          max_tokens: input.maxTokens ?? DEFAULT_MAX_TOKENS,
+          system: input.system,
+          messages: input.messages,
+          ...(input.temperature !== undefined ? { temperature: input.temperature } : {})
+        }
+      };
+    case "openai":
+      return buildOpenAiCompatibleChatRequest("https://api.openai.com/v1", settings, input);
+    case "gemini": {
+      const model = resolveModel(settings);
+      return {
+        url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": settings.aiApiKey
+        },
+        body: {
+          systemInstruction: { parts: [{ text: input.system }] },
+          contents: input.messages.map((turn) => ({
+            role: turn.role === "assistant" ? "model" : "user",
+            parts: [{ text: turn.content }]
+          })),
+          ...(input.temperature !== undefined
+            ? { generationConfig: { temperature: input.temperature } }
+            : {})
+        }
+      };
+    }
+    case "custom": {
+      if (normalizeBaseUrl(settings.aiBaseUrl).length === 0) {
+        throw new Error("Custom provider needs a base URL (e.g. http://localhost:11434/v1)");
+      }
+      return buildOpenAiCompatibleChatRequest(settings.aiBaseUrl, settings, input);
     }
   }
 }

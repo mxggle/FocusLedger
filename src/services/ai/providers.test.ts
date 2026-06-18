@@ -123,3 +123,48 @@ describe("extractErrorMessage", () => {
     expect(extractErrorMessage("nope")).toBeNull();
   });
 });
+
+import { buildChatRequest, type ChatInput } from "./providers";
+
+const chatInput: ChatInput = {
+  system: "You are a planner.",
+  messages: [
+    { role: "user", content: "Plan my day" },
+    { role: "assistant", content: "Sure" },
+    { role: "user", content: "Add a task" }
+  ]
+};
+
+describe("buildChatRequest", () => {
+  it("anthropic: system top-level, messages mapped through", () => {
+    const req = buildChatRequest(settings({ aiProvider: "anthropic" }), chatInput);
+    expect(req.url).toBe("https://api.anthropic.com/v1/messages");
+    expect(req.body.system).toBe("You are a planner.");
+    expect(req.body.messages).toEqual(chatInput.messages);
+    expect(req.headers["x-api-key"]).toBe("test-key");
+  });
+
+  it("openai: system injected as first message", () => {
+    const req = buildChatRequest(settings({ aiProvider: "openai" }), chatInput);
+    expect(req.url).toBe("https://api.openai.com/v1/chat/completions");
+    const msgs = req.body.messages as Array<{ role: string; content: string }>;
+    expect(msgs[0]).toEqual({ role: "system", content: "You are a planner." });
+    expect(msgs).toHaveLength(4);
+  });
+
+  it("gemini: assistant role mapped to model, system as instruction", () => {
+    const req = buildChatRequest(settings({ aiProvider: "gemini", aiModel: "gemini-2.5-flash" }), chatInput);
+    expect(req.url).toContain("gemini-2.5-flash:generateContent");
+    const contents = req.body.contents as Array<{ role: string }>;
+    expect(contents.map((c) => c.role)).toEqual(["user", "model", "user"]);
+    expect(req.body.systemInstruction).toEqual({ parts: [{ text: "You are a planner." }] });
+  });
+
+  it("custom: requires base url, posts to /chat/completions", () => {
+    const req = buildChatRequest(
+      settings({ aiProvider: "custom", aiBaseUrl: "http://localhost:11434/v1/" }),
+      chatInput
+    );
+    expect(req.url).toBe("http://localhost:11434/v1/chat/completions");
+  });
+});
