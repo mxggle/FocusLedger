@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseAssistantResponse } from "./responseParser";
+import { parseAssistantResponse, parseLoopStep } from "./responseParser";
 import type { AssistantContext } from "./types";
 
 const ctx: AssistantContext = {
@@ -50,5 +50,31 @@ describe("parseAssistantResponse", () => {
   it("defaults a missing actions field to an empty array", () => {
     const result = parseAssistantResponse(JSON.stringify({ reply: "hello" }), ctx);
     expect(result.actions).toEqual([]);
+  });
+});
+
+describe("parseLoopStep", () => {
+  it("classifies a non-empty lookups array as a lookups step", () => {
+    const raw = JSON.stringify({ lookups: [{ tool: "search_tasks", query: "report" }] });
+    const step = parseLoopStep(raw);
+    expect(step.kind).toBe("lookups");
+    if (step.kind === "lookups") {
+      expect(step.lookups).toHaveLength(1);
+      expect(step.lookups[0].tool).toBe("search_tasks");
+    }
+  });
+
+  it("treats a reply/actions object as final", () => {
+    const raw = JSON.stringify({ reply: "done", actions: [] });
+    expect(parseLoopStep(raw).kind).toBe("final");
+  });
+
+  it("treats an empty lookups array as final (nothing to look up)", () => {
+    const raw = JSON.stringify({ lookups: [], reply: "hi" });
+    expect(parseLoopStep(raw).kind).toBe("final");
+  });
+
+  it("treats unparseable text as final", () => {
+    expect(parseLoopStep("plain text").kind).toBe("final");
   });
 });
