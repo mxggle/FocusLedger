@@ -24,11 +24,22 @@ export function Composer() {
     el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
   }, [value]);
 
+  const isLongDump = value.trim().length > 200;
+
   function submit() {
     const text = value.trim();
     if (text.length === 0 || thinking || !keyConfigured) return;
     setValue("");
     void send(text);
+  }
+
+  function planThis() {
+    const text = value.trim();
+    if (text.length === 0 || thinking || !keyConfigured) return;
+    setValue("");
+    void send(
+      `Organize the following into well-scoped tasks. Check for duplicates first and estimate from my history:\n\n${text}`
+    );
   }
 
   function handleSubmit(event: FormEvent) {
@@ -72,10 +83,21 @@ export function Composer() {
         />
       </div>
       {keyConfigured ? (
-        <p className="mt-1.5 pl-1 text-[11px] text-muted-foreground">
-          <kbd className="rounded border border-border bg-muted px-1 font-sans">⌘↵</kbd> to send ·{" "}
-          <kbd className="rounded border border-border bg-muted px-1 font-sans">↵</kbd> for a new line
-        </p>
+        <div className="mt-1.5 flex items-center justify-between gap-2 pl-1">
+          <p className="text-[11px] text-muted-foreground">
+            <kbd className="rounded border border-border bg-muted px-1 font-sans">⌘↵</kbd> to send ·{" "}
+            <kbd className="rounded border border-border bg-muted px-1 font-sans">↵</kbd> for a new line
+          </p>
+          {isLongDump && !thinking ? (
+            <button
+              type="button"
+              onClick={planThis}
+              className="shrink-0 rounded-md border border-primary/40 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10"
+            >
+              ✨ Plan this
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </form>
   );

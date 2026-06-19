@@ -8,6 +8,7 @@ import { MessageBubble } from "./MessageBubble";
 export function MessageList() {
   const messages = useAssistantStore((state) => state.messages);
   const status = useAssistantStore((state) => state.status);
+  const steps = useAssistantStore((state) => state.steps);
   const error = useAssistantStore((state) => state.error);
   const send = useAssistantStore((state) => state.send);
   const settings = useSettingsStore((s) => s.settings);
@@ -35,9 +36,17 @@ export function MessageList() {
             <MessageBubble key={message.id} message={message} />
           ))}
           {status === "thinking" ? (
-            <div className="flex items-center gap-1.5 pl-1 text-xs text-muted-foreground">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground" />
-              Thinking…
+            <div className="flex flex-col gap-1 pl-1 text-xs text-muted-foreground">
+              {steps.map((label, index) => (
+                <div key={index} className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary/60" />
+                  {label}
+                </div>
+              ))}
+              <div className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground" />
+                {steps.length > 0 ? "Drafting…" : "Thinking…"}
+              </div>
             </div>
           ) : null}
           {status === "error" && error ? (
