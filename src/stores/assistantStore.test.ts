@@ -3,6 +3,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { runAssistantTurn } = vi.hoisted(() => ({ runAssistantTurn: vi.fn() }));
 vi.mock("../services/ai/assistant/assistantRunner", () => ({ runAssistantTurn }));
 
+vi.mock("../services/retrospect", () => ({
+  buildRetrospectiveInsights: vi.fn(async () => ({
+    windowDays: 30,
+    hasData: true,
+    calibration: { overall: null, byCategory: [] },
+    slips: { items: [], moreCount: 0, blockerThemes: [] },
+    weekly: {
+      thisWeekMinutes: 0,
+      lastWeekMinutes: 0,
+      deltaMinutes: 0,
+      categoryDeltas: [],
+      completedCount: 0,
+      droppedCount: 0
+    }
+  }))
+}));
+
 const taskState = {
   selectedDate: "2026-06-18",
   tasks: [],
@@ -27,6 +44,7 @@ vi.mock("./settingsStore", () => ({
 }));
 
 import { useAssistantStore } from "./assistantStore";
+import { buildRetrospectiveInsights } from "../services/retrospect";
 
 beforeEach(() => {
   useAssistantStore.setState({ messages: [], status: "idle", error: null });
@@ -97,5 +115,36 @@ describe("assistantStore.applyAction", () => {
     await useAssistantStore.getState().applyAction(msg.id, "d1");
     expect(uiState.confirm).toHaveBeenCalled();
     expect(useAssistantStore.getState().messages[1].actions?.[0].status).toBe("failed");
+  });
+});
+
+describe("assistantStore.insights", () => {
+  it("loads insights once and forwards them to the runner", async () => {
+    useAssistantStore.setState({ messages: [], status: "idle", error: null, insights: null });
+    runAssistantTurn.mockResolvedValue({ reply: "ok", actions: [] });
+
+    await useAssistantStore.getState().send("plan my day");
+    await useAssistantStore.getState().send("and tomorrow?");
+
+    expect(buildRetrospectiveInsights).toHaveBeenCalledTimes(1); // cached after first load
+    const calls = (runAssistantTurn as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const lastArg = calls[calls.length - 1][0];
+    expect(lastArg.insights).not.toBeNull();
+  });
+
+  it("keeps insights when the conversation is cleared", () => {
+    const cached = {
+      windowDays: 30,
+      hasData: true,
+      calibration: { overall: null, byCategory: [] },
+      slips: { items: [], moreCount: 0, blockerThemes: [] },
+      weekly: { thisWeekMinutes: 0, lastWeekMinutes: 0, deltaMinutes: 0, categoryDeltas: [], completedCount: 0, droppedCount: 0 }
+    };
+    useAssistantStore.setState({ messages: [], status: "idle", error: null, insights: cached });
+
+    useAssistantStore.getState().clear();
+
+    expect(useAssistantStore.getState().messages).toEqual([]);
+    expect(useAssistantStore.getState().insights).toBe(cached);
   });
 });
