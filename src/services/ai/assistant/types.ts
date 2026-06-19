@@ -42,6 +42,7 @@ export type AssistantContext = {
   categories: { id: string; name: string }[];
   tasks: ContextTask[]; // today's tasks
   backlog: ContextTask[]; // capped slice of backlog
+  allTasksCount?: number; // total tasks searchable via search_tasks
   retro?: RetrospectiveInsights; // present only when there is history to report
 };
 

@@ -17,7 +17,8 @@ const snapshot: AssistantStoreSnapshot = {
   selectedDate: "2026-06-18",
   tasks: [task({})],
   backlogTasks: [task({ id: "b1", title: "Backlog item", due_date: null })],
-  categories: [cat]
+  categories: [cat],
+  allTasks: [task({}), task({ id: "b1", title: "Backlog item", due_date: null })]
 };
 
 const retroInsights: RetrospectiveInsights = {
@@ -39,7 +40,8 @@ const snapshotRetro: AssistantStoreSnapshot = {
   selectedDate: "2026-06-19",
   tasks: [],
   backlogTasks: [],
-  categories: []
+  categories: [],
+  allTasks: []
 };
 
 describe("buildAssistantContext", () => {
@@ -66,5 +68,10 @@ describe("buildAssistantContext", () => {
 
   it("attaches retro when insights have data", () => {
     expect(buildAssistantContext(snapshotRetro, retroInsights).retro).toBe(retroInsights);
+  });
+
+  it("exposes allTasksCount from the snapshot", () => {
+    expect(buildAssistantContext(snapshot).allTasksCount).toBe(2);
+    expect(buildAssistantContext(snapshotRetro).allTasksCount).toBe(0);
   });
 });

@@ -10,6 +10,7 @@ export type AssistantStoreSnapshot = {
   tasks: Task[];
   backlogTasks: Task[];
   categories: Category[];
+  allTasks: Task[];
 };
 
 function toContextTask(task: Task): ContextTask {
@@ -33,6 +34,7 @@ export function buildAssistantContext(
     categories: snapshot.categories.map((category) => ({ id: category.id, name: category.name })),
     tasks: snapshot.tasks.map(toContextTask),
     backlog: snapshot.backlogTasks.slice(0, BACKLOG_CAP).map(toContextTask),
+    allTasksCount: snapshot.allTasks.length,
     ...(insights && insights.hasData ? { retro: insights } : {})
   };
 }
