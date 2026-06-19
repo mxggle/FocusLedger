@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { categoryRepository, FALLBACK_CATEGORY_ID } from "../db/categoryRepository";
+import { findCategoryIdByName } from "./categoryResolve";
 import { initializeDatabase } from "../db/client";
 import { taskRepository } from "../db/taskRepository";
 import { taskTemplateRepository } from "../db/taskTemplateRepository";
@@ -61,6 +62,7 @@ type TaskState = {
   updateTask: (id: string, input: UpdateTaskInput) => Promise<MutationResult>;
   deleteTask: (id: string) => Promise<MutationResult>;
   createCategory: (input: CreateCategoryInput) => Promise<MutationResult>;
+  ensureCategory: (name: string) => Promise<string>;
   updateCategory: (id: string, input: UpdateCategoryInput) => Promise<MutationResult>;
   deleteCategory: (id: string) => Promise<MutationResult>;
   createScheduleTemplate: (input: CreateTaskTemplateInput) => Promise<MutationResult>;
@@ -337,6 +339,17 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       reportError("Category could not be created", error);
       return mutationFailure(error, "Category could not be created");
     }
+  },
+
+  ensureCategory: async (name) => {
+    const trimmed = name.trim();
+    const existing = findCategoryIdByName(get().categories, trimmed);
+    if (existing) return existing;
+    const result = await get().createCategory({ name: trimmed });
+    if (!result.ok) throw new Error(result.message);
+    const created = findCategoryIdByName(get().categories, trimmed);
+    if (!created) throw new Error(`Category "${trimmed}" was not created`);
+    return created;
   },
 
   updateCategory: async (id, input) => {
