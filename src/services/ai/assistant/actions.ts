@@ -123,13 +123,12 @@ const createTask: ActionDescriptor<CreateParams> = {
     return `Create task "${params.title}" ${where}${project}`;
   },
   execute: async (params, store) => {
-    let categoryId = params.category_id ?? null;
-    if (params.new_category_name) {
-      categoryId = await store.ensureCategory(params.new_category_name);
-    }
     const { new_category_name, ...rest } = params;
-    void new_category_name;
-    return store.createTask({ ...rest, category_id: categoryId });
+    if (new_category_name) {
+      const categoryId = await store.ensureCategory(new_category_name);
+      return store.createTask({ ...rest, category_id: categoryId });
+    }
+    return store.createTask(rest);
   }
 };
 

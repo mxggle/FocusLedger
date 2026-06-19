@@ -17,9 +17,11 @@ type AssistantState = {
   messages: ChatMessage[];
   status: AssistantStatus;
   error: string | null;
+  steps: string[];
   insights: RetrospectiveInsights | null;
   send: (text: string) => Promise<void>;
   applyAction: (messageId: string, actionId: string) => Promise<void>;
+  applyAll: (messageId: string) => Promise<void>;
   updateActionParams: (messageId: string, actionId: string, patch: Record<string, unknown>) => void;
   dismissAction: (messageId: string, actionId: string) => void;
   clear: () => void;
@@ -27,13 +29,21 @@ type AssistantState = {
   refreshInsights: () => Promise<void>;
 };
 
+/** Ids of actions in a message that are safe to bulk-apply (pending, non-destructive). */
+export function nextAfterApplyAll(messages: ChatMessage[], messageId: string): string[] {
+  const message = messages.find((m) => m.id === messageId);
+  if (!message?.actions) return [];
+  return message.actions.filter((a) => a.status === "pending" && !a.destructive).map((a) => a.id);
+}
+
 function snapshot(): AssistantStoreSnapshot {
   const state = useTaskStore.getState();
   return {
     selectedDate: state.selectedDate,
     tasks: state.tasks,
     backlogTasks: state.backlogTasks,
-    categories: state.categories
+    categories: state.categories,
+    allTasks: state.allTasks
   };
 }
 
@@ -63,6 +73,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
   messages: [],
   status: "idle",
   error: null,
+  steps: [],
   insights: null,
 
   send: async (text) => {
@@ -76,7 +87,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
       createdAt: new Date().toISOString()
     };
     const history = [...get().messages, userMessage];
-    set({ messages: history, status: "thinking", error: null });
+    set({ messages: history, status: "thinking", error: null, steps: [] });
     await get().loadInsights();
 
     try {
@@ -84,7 +95,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
         settings: useSettingsStore.getState().settings,
         snapshot: snapshot(),
         messages: toChatTurns(history),
-        insights: get().insights
+        insights: get().insights,
+        onStep: (label) => set({ steps: [...get().steps, label] })
       });
       const assistantMessage: ChatMessage = {
         id: createId("msg"),
@@ -93,10 +105,10 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
         createdAt: new Date().toISOString(),
         actions: result.actions
       };
-      set({ messages: [...history, assistantMessage], status: "idle" });
+      set({ messages: [...history, assistantMessage], status: "idle", steps: [] });
     } catch (error) {
       const message = error instanceof Error ? error.message : "The assistant ran into a problem";
-      set({ status: "error", error: message });
+      set({ status: "error", error: message, steps: [] });
       useUiStore.getState().addToast({ kind: "error", title: "Assistant error", description: message });
     }
   },
@@ -129,6 +141,13 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
       const message = error instanceof Error ? error.message : "Could not apply this change";
       set({ messages: patchAction(get().messages, messageId, actionId, { status: "failed", error: message }) });
       useUiStore.getState().addToast({ kind: "error", title: "Could not apply", description: message });
+    }
+  },
+
+  applyAll: async (messageId) => {
+    const ids = nextAfterApplyAll(get().messages, messageId);
+    for (const actionId of ids) {
+      await get().applyAction(messageId, actionId);
     }
   },
 
@@ -172,5 +191,5 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     }
   },
 
-  clear: () => set({ messages: [], status: "idle", error: null })
+  clear: () => set({ messages: [], status: "idle", error: null, steps: [] })
 }));

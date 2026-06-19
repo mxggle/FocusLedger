@@ -25,9 +25,11 @@ const taskState = {
   tasks: [],
   backlogTasks: [],
   categories: [],
+  allTasks: [],
   createTask: vi.fn().mockResolvedValue({ ok: true }),
   rescheduleTask: vi.fn(), moveTaskToBacklog: vi.fn(), dropTask: vi.fn(),
-  completeTask: vi.fn(), startTask: vi.fn(), refresh: vi.fn().mockResolvedValue(undefined)
+  completeTask: vi.fn(), startTask: vi.fn(), ensureCategory: vi.fn(),
+  refresh: vi.fn().mockResolvedValue(undefined)
 };
 vi.mock("./taskStore", () => ({ useTaskStore: { getState: () => taskState } }));
 
