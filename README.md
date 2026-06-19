@@ -66,6 +66,13 @@ The real problem isn't making lists. It's not knowing when you started, how long
 - Spot high-focus weeks and drill back into the underlying days
 - Use long-horizon perspective without leaving the daily workflow
 
+### 🧠 AI Assistant (in-app)
+- A chat **planner** that reads your day and proposes concrete changes — **you approve before anything happens** (propose-then-confirm)
+- **History-aware:** learns from your real time records — estimate-vs-actual **calibration**, **slip & blocker** detection, and an automatic **weekly review**
+- Grounds advice in your actual numbers and applies your real estimation ratios when planning the day
+- Numbers are computed deterministically; the model only explains them — so it never makes them up
+- Bring your own AI key (OpenAI / Anthropic / Gemini / compatible) in **Settings → AI**
+
 ### 🤖 AI-Native (MCP)
 - Ships an **MCP server** that exposes your tasks and time records to AI agents
 - Works with **Claude Desktop, Claude Code, Cursor**, and any MCP-compatible tool
@@ -185,7 +192,8 @@ See [`mcp/README.md`](mcp/README.md) for the full Claude Desktop config and inte
 
 The core desktop workflow is complete. The next phase makes Yolo truly **AI-native**.
 
-- [ ] 🧠 **AI time companion** — daily debrief, tomorrow planner, estimate calibration, proactive focus coach
+- [x] 🧠 **AI assistant** — in-app planner that proposes day changes you approve, now **history-aware** (estimate calibration, slip detection, weekly review)
+- [ ] 🔮 **Proactive coaching** — unprompted morning plans, focus-rhythm placement, goal-driven planning
 - [ ] 💬 **AI-native capture** — natural-language quick-add and smart stop-notes
 - [ ] 🔌 **MCP write tools** — let agents create and update tasks on your behalf
 - [ ] 🖥 **Desktop power features** — system tray, global shortcuts, mini floating timer, notifications
@@ -202,6 +210,7 @@ yolo/
 │   ├── components/         # UI components (layout, pages, primitives)
 │   ├── db/                 # Repository layer (all SQL access)
 │   ├── hooks/              # Custom React hooks
+│   ├── services/           # AI assistant + retrospective analytics
 │   ├── stores/             # Zustand state stores
 │   ├── types/              # Shared TypeScript types
 │   └── utils/              # Helper utilities

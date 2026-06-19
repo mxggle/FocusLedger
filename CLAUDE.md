@@ -27,3 +27,17 @@ the day, run one focus, review the truth.
 - Open external links via `src/utils/openExternal.ts` (Tauri opener plugin).
 - Verify with `yarn build` (tsc + vite), `yarn test` (vitest), and
   `cargo check` inside `src-tauri/` for Rust changes.
+
+## AI assistant & retrospective layer
+
+- The in-app assistant lives in `src/services/ai/assistant/` (context builder →
+  system prompt → runner), with state in `src/stores/assistantStore.ts` and UI
+  in `src/components/assistant/`. It is **propose-then-confirm**: it proposes
+  task changes the user approves; it never mutates tasks directly.
+- Retrospective analytics live in `src/services/retrospect/` — pure functions
+  computing estimate-vs-actual **calibration**, **slip/blocker** analysis, and a
+  **weekly review** from time entries + tasks, orchestrated by
+  `buildRetrospectiveInsights()`. `loadHistory.ts` is the only DB-touching file.
+- **Invariant:** all numbers are computed deterministically in TypeScript and
+  only *narrated* by the LLM — never ask the model to do math on raw rows.
+  Insights are additive: with no history, the prompt and behavior are unchanged.
