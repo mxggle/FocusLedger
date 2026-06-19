@@ -1,5 +1,6 @@
 import type { Category, Task } from "../../../types";
 import type { AssistantContext, ContextTask } from "./types";
+import type { RetrospectiveInsights } from "../../retrospect/types";
 
 const BACKLOG_CAP = 30;
 
@@ -22,12 +23,16 @@ function toContextTask(task: Task): ContextTask {
   };
 }
 
-export function buildAssistantContext(snapshot: AssistantStoreSnapshot): AssistantContext {
+export function buildAssistantContext(
+  snapshot: AssistantStoreSnapshot,
+  insights?: RetrospectiveInsights | null
+): AssistantContext {
   return {
     // The day the user is currently viewing (selectedDate), which the assistant treats as "today".
     today: snapshot.selectedDate,
     categories: snapshot.categories.map((category) => ({ id: category.id, name: category.name })),
     tasks: snapshot.tasks.map(toContextTask),
-    backlog: snapshot.backlogTasks.slice(0, BACKLOG_CAP).map(toContextTask)
+    backlog: snapshot.backlogTasks.slice(0, BACKLOG_CAP).map(toContextTask),
+    ...(insights && insights.hasData ? { retro: insights } : {})
   };
 }

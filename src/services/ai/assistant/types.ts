@@ -1,5 +1,6 @@
 import type { CreateTaskInput, TaskPriority, TaskStatus } from "../../../types";
 import type { ChatRole } from "../providers";
+import type { RetrospectiveInsights } from "../../retrospect/types";
 
 export type { ChatRole };
 
@@ -41,6 +42,7 @@ export type AssistantContext = {
   categories: { id: string; name: string }[];
   tasks: ContextTask[]; // today's tasks
   backlog: ContextTask[]; // capped slice of backlog
+  retro?: RetrospectiveInsights; // present only when there is history to report
 };
 
 /** One proposed change, rendered as a confirm card. `params` is validated. */
