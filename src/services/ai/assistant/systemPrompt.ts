@@ -70,6 +70,12 @@ function renderSlips(slips: SlipAnalysis): string[] {
 }
 
 function renderWeekly(weekly: WeeklyReview): string[] {
+  const empty =
+    weekly.thisWeekMinutes === 0 &&
+    weekly.lastWeekMinutes === 0 &&
+    weekly.completedCount === 0 &&
+    weekly.droppedCount === 0;
+  if (empty) return [];
   const lines = [
     `This week vs last week: ${weekly.thisWeekMinutes}m vs ${weekly.lastWeekMinutes}m (${weekly.deltaMinutes >= 0 ? "+" : ""}${weekly.deltaMinutes}m), completed ${weekly.completedCount}, dropped ${weekly.droppedCount}`
   ];

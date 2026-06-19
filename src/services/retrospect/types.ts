@@ -1,5 +1,3 @@
-// src/services/retrospect/types.ts
-
 /** Whether an insight has enough samples to state confidently. */
 export type Confidence = "ok" | "low";
 

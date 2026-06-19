@@ -86,4 +86,21 @@ describe("buildAssistantSystemPrompt — retrospective", () => {
     };
     expect(buildAssistantSystemPrompt({ ...retroBase, retro: low })).toContain("low confidence");
   });
+
+  it("omits the weekly line when there is no logged time", () => {
+    const noTime: RetrospectiveInsights = {
+      ...retroInsights,
+      weekly: {
+        thisWeekMinutes: 0,
+        lastWeekMinutes: 0,
+        deltaMinutes: 0,
+        categoryDeltas: [],
+        completedCount: 0,
+        droppedCount: 0
+      }
+    };
+    const prompt = buildAssistantSystemPrompt({ ...retroBase, retro: noTime });
+    expect(prompt).toContain("History & patterns"); // still rendered (slips present)
+    expect(prompt).not.toContain("This week vs last week");
+  });
 });
