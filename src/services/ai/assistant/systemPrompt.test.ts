@@ -104,3 +104,29 @@ describe("buildAssistantSystemPrompt — retrospective", () => {
     expect(prompt).not.toContain("This week vs last week");
   });
 });
+
+describe("buildAssistantSystemPrompt — agent loop", () => {
+  const ctxTools: AssistantContext = {
+    today: "2026-06-20",
+    categories: [],
+    tasks: [],
+    backlog: [],
+    allTasksCount: 12
+  };
+
+  it("documents the lookup protocol and read tools", () => {
+    const prompt = buildAssistantSystemPrompt(ctxTools);
+    expect(prompt).toContain("lookups");
+    expect(prompt).toContain("search_tasks");
+    expect(prompt).toContain("get_calibration");
+  });
+
+  it("instructs dedup before creating tasks", () => {
+    const prompt = buildAssistantSystemPrompt(ctxTools);
+    expect(prompt.toLowerCase()).toContain("duplicate");
+  });
+
+  it("mentions the searchable task count when tasks exist", () => {
+    expect(buildAssistantSystemPrompt(ctxTools)).toContain("12");
+  });
+});

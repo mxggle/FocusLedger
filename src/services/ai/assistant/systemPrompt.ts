@@ -1,4 +1,5 @@
 import { actionPromptSpecs } from "./actions";
+import { toolCatalog } from "./tools";
 import type { AssistantContext, ContextTask } from "./types";
 import type {
   CalibrationStat,
@@ -30,6 +31,10 @@ function renderContext(ctx: AssistantContext): string {
 
   if (ctx.backlog.length > 0) {
     lines.push(["Backlog (unscheduled):", ...ctx.backlog.map(describeTask)].join("\n"));
+  }
+
+  if (ctx.allTasksCount && ctx.allTasksCount > 0) {
+    lines.push(`You can search all ${ctx.allTasksCount} of the user's tasks with the search_tasks tool.`);
   }
 
   return lines.join("\n");
@@ -94,6 +99,19 @@ function renderRetro(retro: RetrospectiveInsights): string {
   ].join("\n");
 }
 
+const TOOL_PROTOCOL = [
+  "Gathering facts before you answer (optional, up to a few rounds):",
+  "- Before proposing changes you may look things up. To do so, respond with ONLY a JSON object of the form:",
+  '  { "lookups": [ { "tool": "search_tasks", "query": "..." } ] }',
+  "- You will then receive the results as the next message and can look up more or give your final answer.",
+  '- When you are ready, respond with the final { "reply", "actions" } object as usual. Do not mix lookups and a final answer in the same message.',
+  "- Before creating any task, use search_tasks to check it does not already exist; if a close duplicate exists, do not recreate it — mention the existing task id in your reply instead.",
+  "- Before setting estimated_minutes, you may use get_calibration to size the estimate from real history.",
+  "",
+  "Read tools available:",
+  toolCatalog()
+].join("\n");
+
 const RETRO_RULES = [
   "Using history & patterns:",
   "- When the user asks how a day/week went or why things slip, ground your answer in the numbers above — cite them plainly.",
@@ -124,6 +142,8 @@ export function buildAssistantSystemPrompt(ctx: AssistantContext): string {
     "",
     "Available actions:",
     renderActionCatalog(),
+    "",
+    TOOL_PROTOCOL,
     "",
     "Current context:",
     renderContext(ctx)
