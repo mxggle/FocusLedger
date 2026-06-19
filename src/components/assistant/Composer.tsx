@@ -1,17 +1,28 @@
 import { SendHorizonal } from "lucide-react";
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { hasAiKey } from "../../services/ai/aiClient";
 import { useAssistantStore } from "../../stores/assistantStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { IconButton } from "../ui/IconButton";
 
+const MAX_HEIGHT = 220;
+
 export function Composer() {
   const [value, setValue] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const send = useAssistantStore((state) => state.send);
   const status = useAssistantStore((state) => state.status);
   const thinking = status === "thinking";
   const settings = useSettingsStore((s) => s.settings);
   const keyConfigured = hasAiKey(settings);
+
+  // Auto-grow the textarea to fit long-form input, up to a cap.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
+  }, [value]);
 
   function submit() {
     const text = value.trim();
@@ -26,30 +37,46 @@ export function Composer() {
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) {
+    // Cmd/Ctrl+Enter sends; plain Enter inserts a newline for long-form input.
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
       submit();
     }
   }
 
+  const placeholder = thinking
+    ? "Thinking…"
+    : keyConfigured
+      ? "Describe what you want to plan — be as detailed as you like…"
+      : "Add an API key in Settings → AI";
+
   return (
-    <form onSubmit={handleSubmit} className="flex items-end gap-2 border-t border-border p-3">
-      <textarea
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        onKeyDown={handleKeyDown}
-        rows={1}
-        placeholder={thinking ? "Thinking…" : keyConfigured ? "Ask the assistant…" : "Add an API key in Settings → AI"}
-        disabled={thinking || !keyConfigured}
-        className="max-h-32 min-h-[2.5rem] flex-1 resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary disabled:opacity-60"
-      />
-      <IconButton
-        type="submit"
-        icon={SendHorizonal}
-        label="Send"
-        variant="secondary"
-        disabled={thinking || !keyConfigured || value.trim().length === 0}
-      />
+    <form onSubmit={handleSubmit} className="border-t border-border p-3">
+      <div className="flex items-end gap-2 rounded-xl border border-border bg-surface px-2.5 py-2 focus-within:border-primary">
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={handleKeyDown}
+          rows={2}
+          placeholder={placeholder}
+          disabled={thinking || !keyConfigured}
+          className="min-h-[3rem] flex-1 resize-none bg-transparent py-1 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60"
+        />
+        <IconButton
+          type="submit"
+          icon={SendHorizonal}
+          label="Send"
+          variant="secondary"
+          disabled={thinking || !keyConfigured || value.trim().length === 0}
+        />
+      </div>
+      {keyConfigured ? (
+        <p className="mt-1.5 pl-1 text-[11px] text-muted-foreground">
+          <kbd className="rounded border border-border bg-muted px-1 font-sans">⌘↵</kbd> to send ·{" "}
+          <kbd className="rounded border border-border bg-muted px-1 font-sans">↵</kbd> for a new line
+        </p>
+      ) : null}
     </form>
   );
 }

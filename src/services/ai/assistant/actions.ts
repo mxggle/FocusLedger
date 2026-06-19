@@ -33,6 +33,13 @@ function str(raw: Record<string, unknown>, key: string): string {
   return value.trim();
 }
 
+/** Optional free-text field — returns null when absent or blank. */
+function optionalStr(raw: Record<string, unknown>, key: string): string | null {
+  const value = raw[key];
+  if (typeof value !== "string" || value.trim().length === 0) return null;
+  return value.trim();
+}
+
 function knownTaskId(raw: Record<string, unknown>, ctx: AssistantContext): string {
   const id = str(raw, "task_id");
   const exists = [...ctx.tasks, ...ctx.backlog].some((task) => task.id === id);
@@ -84,7 +91,7 @@ const createTask: ActionDescriptor<CreateParams> = {
   promptSpec: {
     name: "create_task",
     when: "the user wants a new task added",
-    params: 'title (required), category (optional, a category name), priority ("low"|"medium"|"high", optional), estimated_minutes (number, optional), due_date ("today"|YYYY-MM-DD, optional — omit to put it in the backlog)'
+    params: 'title (required), description (optional, a sentence or two of detail/acceptance notes), category (optional, a category name), priority ("low"|"medium"|"high", optional), estimated_minutes (number, optional), due_date ("today"|YYYY-MM-DD, optional — omit to put it in the backlog)'
   },
   validate: (raw, ctx) => {
     const priorityRaw = raw.priority;
@@ -94,6 +101,7 @@ const createTask: ActionDescriptor<CreateParams> = {
       ? raw.estimated_minutes : null;
     return {
       title: str(raw, "title"),
+      description: optionalStr(raw, "description"),
       category_id: resolveCategory(raw, ctx),
       priority,
       estimated_minutes: estimate,

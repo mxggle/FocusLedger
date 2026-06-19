@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { ACTION_REGISTRY } from "../services/ai/assistant/actions";
 import { runAssistantTurn } from "../services/ai/assistant/assistantRunner";
-import type { AssistantStoreSnapshot } from "../services/ai/assistant/contextBuilder";
+import { buildAssistantContext, type AssistantStoreSnapshot } from "../services/ai/assistant/contextBuilder";
 import type { ChatMessage, ProposedAction } from "../services/ai/assistant/types";
 import type { ChatTurn } from "../services/ai/providers";
 import { buildRetrospectiveInsights } from "../services/retrospect";
@@ -20,6 +20,7 @@ type AssistantState = {
   insights: RetrospectiveInsights | null;
   send: (text: string) => Promise<void>;
   applyAction: (messageId: string, actionId: string) => Promise<void>;
+  updateActionParams: (messageId: string, actionId: string, patch: Record<string, unknown>) => void;
   dismissAction: (messageId: string, actionId: string) => void;
   clear: () => void;
   loadInsights: () => Promise<void>;
@@ -129,6 +130,23 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
       set({ messages: patchAction(get().messages, messageId, actionId, { status: "failed", error: message }) });
       useUiStore.getState().addToast({ kind: "error", title: "Could not apply", description: message });
     }
+  },
+
+  updateActionParams: (messageId, actionId, patch) => {
+    const message = get().messages.find((entry) => entry.id === messageId);
+    const action = message?.actions?.find((entry) => entry.id === actionId);
+    if (!action || action.status !== "pending") return;
+
+    const nextParams = { ...(action.params as Record<string, unknown>), ...patch };
+    const descriptor = ACTION_REGISTRY[action.type];
+    const ctx = buildAssistantContext(snapshot(), get().insights);
+    let summary = action.summary;
+    try {
+      summary = descriptor.describe(nextParams, ctx);
+    } catch {
+      // Keep the previous summary if the edited params can't be described yet.
+    }
+    set({ messages: patchAction(get().messages, messageId, actionId, { params: nextParams, summary }) });
   },
 
   dismissAction: (messageId, actionId) => {

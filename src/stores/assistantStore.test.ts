@@ -118,6 +118,36 @@ describe("assistantStore.applyAction", () => {
   });
 });
 
+describe("assistantStore.updateActionParams", () => {
+  it("merges edited params and recomputes the summary", async () => {
+    runAssistantTurn.mockResolvedValue({
+      reply: "ok",
+      actions: [{ id: "a1", type: "create_task", params: { title: "X", due_date: null }, summary: "Create X in backlog", destructive: false, status: "pending" }]
+    });
+    await useAssistantStore.getState().send("add X");
+    const msg = useAssistantStore.getState().messages[1];
+
+    useAssistantStore.getState().updateActionParams(msg.id, "a1", { title: "Launch", due_date: "2026-06-20" });
+
+    const action = useAssistantStore.getState().messages[1].actions?.[0];
+    expect(action?.params).toMatchObject({ title: "Launch", due_date: "2026-06-20" });
+    expect(action?.summary).toBe('Create task "Launch" for 2026-06-20');
+  });
+
+  it("ignores edits to a non-pending action", async () => {
+    runAssistantTurn.mockResolvedValue({
+      reply: "ok",
+      actions: [{ id: "a1", type: "create_task", params: { title: "X" }, summary: "Create X", destructive: false, status: "applied" }]
+    });
+    await useAssistantStore.getState().send("add X");
+    const msg = useAssistantStore.getState().messages[1];
+
+    useAssistantStore.getState().updateActionParams(msg.id, "a1", { title: "Changed" });
+
+    expect(useAssistantStore.getState().messages[1].actions?.[0].params).toMatchObject({ title: "X" });
+  });
+});
+
 describe("assistantStore.insights", () => {
   it("loads insights once and forwards them to the runner", async () => {
     useAssistantStore.setState({ messages: [], status: "idle", error: null, insights: null });
