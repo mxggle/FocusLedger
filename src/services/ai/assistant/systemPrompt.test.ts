@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildAssistantSystemPrompt } from "./systemPrompt";
 import type { AssistantContext } from "./types";
+import type { RetrospectiveInsights } from "../../retrospect/types";
 
 const ctx: AssistantContext = {
   today: "2026-06-18",
@@ -27,5 +28,62 @@ describe("buildAssistantSystemPrompt", () => {
   it("notes when there are no tasks", () => {
     const prompt = buildAssistantSystemPrompt({ ...ctx, tasks: [] });
     expect(prompt.toLowerCase()).toContain("no tasks");
+  });
+});
+
+const retroBase: AssistantContext = {
+  today: "2026-06-19",
+  categories: [],
+  tasks: [],
+  backlog: []
+};
+
+const retroInsights: RetrospectiveInsights = {
+  windowDays: 30,
+  hasData: true,
+  calibration: {
+    overall: { scope: "overall", estimatedMinutes: 60, actualMinutes: 90, ratio: 1.5, sampleSize: 6, confidence: "ok" },
+    byCategory: [
+      { scope: "Deep Work", estimatedMinutes: 60, actualMinutes: 90, ratio: 1.5, sampleSize: 6, confidence: "ok" }
+    ]
+  },
+  slips: {
+    items: [{ taskId: "a", title: "Pay invoice", kind: "overdue", ageDays: 9 }],
+    moreCount: 2,
+    blockerThemes: [{ keyword: "design", count: 3 }]
+  },
+  weekly: {
+    thisWeekMinutes: 600,
+    lastWeekMinutes: 480,
+    deltaMinutes: 120,
+    categoryDeltas: [{ category: "Deep Work", thisWeekMinutes: 300, lastWeekMinutes: 180, deltaMinutes: 120 }],
+    completedCount: 7,
+    droppedCount: 1
+  }
+};
+
+describe("buildAssistantSystemPrompt — retrospective", () => {
+  it("omits the history section when there is no retro", () => {
+    expect(buildAssistantSystemPrompt(retroBase)).not.toContain("History & patterns");
+  });
+
+  it("includes calibration facts and the honesty/calibration rules", () => {
+    const prompt = buildAssistantSystemPrompt({ ...retroBase, retro: retroInsights });
+    expect(prompt).toContain("History & patterns");
+    expect(prompt).toContain("Deep Work");
+    expect(prompt).toContain("1.5");
+    expect(prompt).toContain("Pay invoice");
+    expect(prompt.toLowerCase()).toContain("calibrat");
+  });
+
+  it("flags low-confidence calibration so the model hedges", () => {
+    const low: RetrospectiveInsights = {
+      ...retroInsights,
+      calibration: {
+        overall: { scope: "overall", estimatedMinutes: 30, actualMinutes: 30, ratio: 1, sampleSize: 2, confidence: "low" },
+        byCategory: []
+      }
+    };
+    expect(buildAssistantSystemPrompt({ ...retroBase, retro: low })).toContain("low confidence");
   });
 });
