@@ -7,7 +7,7 @@ function describeTask(task: ContextTask): string {
 }
 
 function renderContext(ctx: AssistantContext): string {
-  const lines: string[] = [`Today's date: ${ctx.today}`];
+  const lines: string[] = [`Current date (the day the user is viewing): ${ctx.today}`];
 
   lines.push(
     ctx.categories.length > 0

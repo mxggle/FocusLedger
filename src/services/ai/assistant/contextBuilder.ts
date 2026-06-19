@@ -24,6 +24,7 @@ function toContextTask(task: Task): ContextTask {
 
 export function buildAssistantContext(snapshot: AssistantStoreSnapshot): AssistantContext {
   return {
+    // The day the user is currently viewing (selectedDate), which the assistant treats as "today".
     today: snapshot.selectedDate,
     categories: snapshot.categories.map((category) => ({ id: category.id, name: category.name })),
     tasks: snapshot.tasks.map(toContextTask),
