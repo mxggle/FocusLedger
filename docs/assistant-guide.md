@@ -65,7 +65,23 @@ This is the fastest way to get value.
 
 ---
 
-## 4. Everyday use (not just pasting)
+## 4. Tell it about you ("About me")
+
+In **Settings → AI** there's an **About me** box. Whatever you write there is read by
+the assistant on **every** turn, so it tailors plans, estimates, and tone to your real
+situation. It persists across restarts.
+
+Good things to include:
+- Your role and current projects ("PM relocating to Tokyo; Q3 launch is my focus").
+- Working rhythm ("deep work in the mornings, meetings after 2pm").
+- Goals and constraints ("learning Japanese 30 min/day", "no work on weekends").
+- Vocabulary ("'the report' = the weekly investor update").
+
+The more it knows, the less you have to re-explain. Edit it any time.
+
+---
+
+## 5. Everyday use (not just pasting)
 
 Talk to it like a planning coach. Examples:
 
@@ -84,7 +100,7 @@ Complete a task · Start a focus session on a task.
 
 ---
 
-## 5. How approval works (propose-then-confirm)
+## 6. How approval works (propose-then-confirm)
 
 - **Nothing is applied automatically.** Every change is a card you approve.
 - **Destructive actions** (e.g. dropping a task) ask for an extra confirmation.
@@ -92,7 +108,7 @@ Complete a task · Start a focus session on a task.
 
 ---
 
-## 6. Honest numbers
+## 7. Honest numbers
 
 All metrics the assistant cites — estimate-vs-actual calibration, weekly time,
 slips — are **computed deterministically by the app**, not made up by the model.
@@ -101,7 +117,7 @@ The model only narrates them. If there isn't enough history yet, it will hedge
 
 ---
 
-## 7. Tips for the best results
+## 8. Tips for the best results
 
 - **Give it raw material.** The more context you paste, the better the plan. Don't
   pre-format — that's its job.
@@ -114,10 +130,11 @@ The model only narrates them. If there isn't enough history yet, it will hedge
 
 ---
 
-## 8. Current limits (so you're not surprised)
+## 9. Current limits (so you're not surprised)
 
-- **No cross-session memory yet.** Each conversation starts fresh; it doesn't yet
-  remember past chats or a personal profile. (Planned: Phase 2.)
+- **Persistent profile, but not conversation memory.** Your **About me** is remembered
+  across sessions, but the assistant doesn't yet recall *past chats* — each conversation
+  thread starts fresh. (Planned: Phase 2b — conversation memory + semantic recall.)
 - **No proactive nudges yet.** It won't auto-plan your morning or warn about
   overcommitment on its own. (Planned: Phase 3.)
 - **Pasted text only.** No screenshot/email/Slack import yet.
@@ -127,7 +144,7 @@ The model only narrates them. If there isn't enough history yet, it will hedge
 
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 - **"Assistant needs an API key"** → add one in Settings → AI.
 - **"The AI provider rejected your API key"** → re-check the key in Settings → AI.
