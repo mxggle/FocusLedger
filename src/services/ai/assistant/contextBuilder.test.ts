@@ -74,4 +74,12 @@ describe("buildAssistantContext", () => {
     expect(buildAssistantContext(snapshot).allTasksCount).toBe(2);
     expect(buildAssistantContext(snapshotRetro).allTasksCount).toBe(0);
   });
+
+  it("passes through a non-empty profile (trimmed) and omits a blank one", () => {
+    expect(buildAssistantContext({ ...snapshot, profile: "  I'm a PM in Tokyo. " }).profile).toBe(
+      "I'm a PM in Tokyo."
+    );
+    expect(buildAssistantContext({ ...snapshot, profile: "   " }).profile).toBeUndefined();
+    expect(buildAssistantContext(snapshot).profile).toBeUndefined();
+  });
 });

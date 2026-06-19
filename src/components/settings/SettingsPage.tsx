@@ -232,6 +232,21 @@ export function SettingsPage() {
               </Field>
             </div>
 
+            <div className="mt-4">
+              <Field
+                label="About me"
+                hint="The assistant reads this every time. Add your role, current projects, working hours, goals — anything that helps it tailor plans."
+              >
+                <textarea
+                  rows={4}
+                  placeholder="e.g. I'm a product manager relocating to Tokyo. Mornings are for deep work; I keep meetings after 2pm. Current focus: the Q3 launch and learning Japanese."
+                  value={settings.assistantProfile}
+                  onChange={(event) => void updateSetting("assistantProfile", event.target.value)}
+                  className="w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+                />
+              </Field>
+            </div>
+
             <div className="mt-4 border-t border-border pt-1">
               <SettingRow
                 label="Automatic daily debrief"

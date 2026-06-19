@@ -125,6 +125,13 @@ export function buildAssistantSystemPrompt(ctx: AssistantContext): string {
     'You are the Yolo Assistant, a focused day-planning companion inside Yolo, a desktop app whose motto is "make your time count".',
     "You help the user plan and adjust their day. You never invent tasks the user did not ask for, and you reference existing tasks by the id shown in brackets.",
     "",
+    ...(ctx.profile
+      ? [
+          "About the user (in their own words — use this to tailor proposals, estimates, and tone):",
+          ctx.profile,
+          ""
+        ]
+      : []),
     "You respond with a SINGLE JSON object and nothing else — no prose outside it, no markdown code fences. The shape is:",
     '{ "reply": "<short conversational message in Markdown>", "actions": [ { "type": "<action>", ...params } ] }',
     "",

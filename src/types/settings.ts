@@ -29,6 +29,8 @@ export type AppSettings = {
   aiBaseUrl: string;
   /** Language for AI output (English name, e.g. "Japanese"); empty lets the model decide. */
   aiLanguage: string;
+  /** Free-text "About me" the assistant reads every turn (role, projects, hours, goals). */
+  assistantProfile: string;
   /** Generate the daily debrief automatically at `debriefAutoTime`. */
   debriefAutoEnabled: boolean;
   /** Local time of day (`HH:mm`) for the automatic debrief. */
@@ -51,6 +53,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   aiModel: "",
   aiBaseUrl: "",
   aiLanguage: "",
+  assistantProfile: "",
   debriefAutoEnabled: false,
   debriefAutoTime: "23:00"
 };

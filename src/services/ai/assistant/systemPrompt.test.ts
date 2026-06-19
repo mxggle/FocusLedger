@@ -130,3 +130,17 @@ describe("buildAssistantSystemPrompt — agent loop", () => {
     expect(buildAssistantSystemPrompt(ctxTools)).toContain("12");
   });
 });
+
+describe("buildAssistantSystemPrompt — user profile", () => {
+  const base: AssistantContext = { today: "2026-06-20", categories: [], tasks: [], backlog: [] };
+
+  it("renders the About-the-user section when a profile is present", () => {
+    const prompt = buildAssistantSystemPrompt({ ...base, profile: "I'm a PM relocating to Tokyo." });
+    expect(prompt).toContain("About the user");
+    expect(prompt).toContain("relocating to Tokyo");
+  });
+
+  it("omits the section when there is no profile", () => {
+    expect(buildAssistantSystemPrompt(base)).not.toContain("About the user");
+  });
+});

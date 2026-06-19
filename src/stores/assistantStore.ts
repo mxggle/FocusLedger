@@ -43,7 +43,8 @@ function snapshot(): AssistantStoreSnapshot {
     tasks: state.tasks,
     backlogTasks: state.backlogTasks,
     categories: state.categories,
-    allTasks: state.allTasks
+    allTasks: state.allTasks,
+    profile: useSettingsStore.getState().settings.assistantProfile
   };
 }
 

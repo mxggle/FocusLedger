@@ -44,6 +44,7 @@ export type AssistantContext = {
   tasks: ContextTask[]; // today's tasks
   backlog: ContextTask[]; // capped slice of backlog
   allTasksCount?: number; // total tasks searchable via search_tasks
+  profile?: string; // the user's own "About me" description, when set
   retro?: RetrospectiveInsights; // present only when there is history to report
 };
 
