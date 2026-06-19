@@ -53,15 +53,22 @@ function titleOf(id: string, ctx: AssistantContext): string {
   return [...ctx.tasks, ...ctx.backlog].find((task) => task.id === id)?.title ?? id;
 }
 
-/** Resolve an optional category reference (id OR name) to a real id or null. */
-function resolveCategory(raw: Record<string, unknown>, ctx: AssistantContext): string | null {
+/** Resolve a category reference (id OR name) to an existing id, or mark it as a
+ *  new category to be created on apply. */
+function resolveCategoryOrNew(
+  raw: Record<string, unknown>,
+  ctx: AssistantContext
+): { category_id: string | null; new_category_name: string | null } {
   const value = raw.category;
-  if (typeof value !== "string" || value.trim().length === 0) return null;
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return { category_id: null, new_category_name: null };
+  }
   const needle = value.trim().toLowerCase();
   const match = ctx.categories.find(
     (category) => category.id.toLowerCase() === needle || category.name.toLowerCase() === needle
   );
-  return match ? match.id : null;
+  if (match) return { category_id: match.id, new_category_name: null };
+  return { category_id: null, new_category_name: value.trim() };
 }
 
 function resolveDueDate(raw: Record<string, unknown>, ctx: AssistantContext): string | null {
@@ -81,7 +88,7 @@ function requiredDate(raw: Record<string, unknown>, ctx: AssistantContext): stri
 
 // ── action descriptors ───────────────────────────────────────────────────────
 
-type CreateParams = CreateTaskInput;
+type CreateParams = CreateTaskInput & { new_category_name: string | null };
 type TaskIdParams = { task_id: string; title: string };
 type RescheduleParams = { task_id: string; title: string; due_date: string };
 
@@ -91,7 +98,7 @@ const createTask: ActionDescriptor<CreateParams> = {
   promptSpec: {
     name: "create_task",
     when: "the user wants a new task added",
-    params: 'title (required), description (optional, a sentence or two of detail/acceptance notes), category (optional, a category name), priority ("low"|"medium"|"high", optional), estimated_minutes (number, optional), due_date ("today"|YYYY-MM-DD, optional — omit to put it in the backlog)'
+    params: 'title (required), description (optional, a sentence or two of detail/acceptance notes), category (optional — an existing category name OR a new project name; a new name will be created on approval), priority ("low"|"medium"|"high", optional), estimated_minutes (number, optional), due_date ("today"|YYYY-MM-DD, optional — omit to put it in the backlog)'
   },
   validate: (raw, ctx) => {
     const priorityRaw = raw.priority;
@@ -99,18 +106,31 @@ const createTask: ActionDescriptor<CreateParams> = {
       priorityRaw === "low" || priorityRaw === "medium" || priorityRaw === "high" ? priorityRaw : undefined;
     const estimate = typeof raw.estimated_minutes === "number" && raw.estimated_minutes > 0
       ? raw.estimated_minutes : null;
+    const { category_id, new_category_name } = resolveCategoryOrNew(raw, ctx);
     return {
       title: str(raw, "title"),
       description: optionalStr(raw, "description"),
-      category_id: resolveCategory(raw, ctx),
+      category_id,
+      new_category_name,
       priority,
       estimated_minutes: estimate,
       due_date: resolveDueDate(raw, ctx)
     };
   },
-  describe: (params) =>
-    `Create task "${params.title}"${params.due_date ? ` for ${params.due_date}` : " in backlog"}`,
-  execute: (params, store) => store.createTask(params)
+  describe: (params) => {
+    const where = params.due_date ? `for ${params.due_date}` : "in backlog";
+    const project = params.new_category_name ? ` in new project "${params.new_category_name}"` : "";
+    return `Create task "${params.title}" ${where}${project}`;
+  },
+  execute: async (params, store) => {
+    let categoryId = params.category_id ?? null;
+    if (params.new_category_name) {
+      categoryId = await store.ensureCategory(params.new_category_name);
+    }
+    const { new_category_name, ...rest } = params;
+    void new_category_name;
+    return store.createTask({ ...rest, category_id: categoryId });
+  }
 };
 
 const rescheduleTask: ActionDescriptor<RescheduleParams> = {

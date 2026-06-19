@@ -24,6 +24,7 @@ export interface AssistantTaskStore {
   dropTask(taskId: string): Promise<ActionResult>;
   completeTask(taskId: string, note?: string): Promise<ActionResult>;
   startTask(taskId: string): Promise<"started" | "failed">;
+  ensureCategory(name: string): Promise<string>; // returns category id, creating if absent
 }
 
 /** Compact task shape handed to the model. Intentionally camelCase (mapped from

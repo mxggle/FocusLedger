@@ -47,7 +47,8 @@ describe("registry execute", () => {
     const store: AssistantTaskStore = {
       createTask: vi.fn().mockResolvedValue({ ok: true }),
       rescheduleTask: vi.fn(), moveTaskToBacklog: vi.fn(),
-      dropTask: vi.fn(), completeTask: vi.fn(), startTask: vi.fn()
+      dropTask: vi.fn(), completeTask: vi.fn(), startTask: vi.fn(),
+      ensureCategory: vi.fn()
     };
     const action = validateAction({ type: "create_task", title: "New task" }, ctx)!;
     const result = await ACTION_REGISTRY[action.type].execute(action.params, store);
@@ -59,10 +60,42 @@ describe("registry execute", () => {
     const store: AssistantTaskStore = {
       createTask: vi.fn(), rescheduleTask: vi.fn(), moveTaskToBacklog: vi.fn(),
       dropTask: vi.fn(), completeTask: vi.fn(),
-      startTask: vi.fn().mockResolvedValue("failed")
+      startTask: vi.fn().mockResolvedValue("failed"),
+      ensureCategory: vi.fn()
     };
     const action = validateAction({ type: "start_task", task_id: "t1" }, ctx)!;
     const result = await ACTION_REGISTRY[action.type].execute(action.params, store);
     expect(result).toEqual({ ok: false, message: expect.any(String) });
+  });
+});
+
+describe("create_task category handling", () => {
+  it("resolves an existing category by name to its id, no new_category_name", () => {
+    const action = validateAction({ type: "create_task", title: "A", category: "Deep Work" }, ctx);
+    expect(action).not.toBeNull();
+    const params = action!.params as Record<string, unknown>;
+    expect(params.category_id).toBe("c1");
+    expect(params.new_category_name).toBeNull();
+  });
+
+  it("records an unknown category as new_category_name and labels it new", () => {
+    const action = validateAction({ type: "create_task", title: "A", category: "Apartment Move" }, ctx);
+    const params = action!.params as Record<string, unknown>;
+    expect(params.category_id).toBeNull();
+    expect(params.new_category_name).toBe("Apartment Move");
+    expect(action!.summary.toLowerCase()).toContain("new project");
+  });
+
+  it("execute ensures the new category then creates the task", async () => {
+    const store = {
+      ensureCategory: vi.fn().mockResolvedValue("c-new"),
+      createTask: vi.fn().mockResolvedValue({ ok: true })
+    };
+    const action = validateAction({ type: "create_task", title: "A", category: "Apartment Move" }, ctx)!;
+    await ACTION_REGISTRY.create_task.execute(action.params, store as never);
+    expect(store.ensureCategory).toHaveBeenCalledWith("Apartment Move");
+    const createArg = store.createTask.mock.calls[0][0];
+    expect(createArg.category_id).toBe("c-new");
+    expect(createArg.new_category_name).toBeUndefined();
   });
 });
