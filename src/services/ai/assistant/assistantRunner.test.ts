@@ -8,7 +8,8 @@ const snapshot: AssistantStoreSnapshot = {
   selectedDate: "2026-06-18",
   tasks: [],
   backlogTasks: [],
-  categories: [{ id: "c1", name: "Deep Work" } as never]
+  categories: [{ id: "c1", name: "Deep Work" } as never],
+  allTasks: []
 };
 
 const settings = { aiProvider: "anthropic" as const, aiApiKey: "k", aiModel: "", aiBaseUrl: "" };
@@ -60,7 +61,7 @@ describe("runAssistantTurn", () => {
     await runAssistantTurn(
       {
         settings: {} as never,
-        snapshot: { selectedDate: "2026-06-19", tasks: [], backlogTasks: [], categories: [] },
+        snapshot: { selectedDate: "2026-06-19", tasks: [], backlogTasks: [], categories: [], allTasks: [] },
         messages: [{ role: "user", content: "how was my week?" }],
         insights: insightsFixture
       },
