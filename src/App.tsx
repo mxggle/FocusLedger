@@ -1,6 +1,7 @@
 import { AlertCircle, BarChart3, CalendarDays, CheckSquare, Hourglass, Inbox, Info, Settings, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AboutPage } from "./components/about/AboutPage";
+import { AssistantPanel } from "./components/assistant/AssistantPanel";
 import { BacklogPage } from "./components/backlog/BacklogPage";
 import { HistoryPage } from "./components/history/HistoryPage";
 import { AppShell } from "./components/layout/AppShell";
@@ -15,6 +16,7 @@ import { ConfirmDialog } from "./components/ui/ConfirmDialog";
 import { SkeletonList } from "./components/ui/Skeleton";
 import { ToastViewport } from "./components/ui/ToastViewport";
 import { TooltipProvider } from "./components/ui/Tooltip";
+import { useAssistantShortcut } from "./hooks/useAssistantShortcut";
 import { useDayRollover } from "./hooks/useDayRollover";
 import { useDebriefSchedule } from "./hooks/useDebriefSchedule";
 import { useNotificationPermissionPrompt } from "./hooks/useNotificationPermission";
@@ -68,6 +70,7 @@ export default function App() {
   useTaskReminders({ onOpenToday: openToday });
   useDayRollover();
   useDebriefSchedule();
+  useAssistantShortcut();
 
   useEffect(() => {
     void initialize();
@@ -142,6 +145,7 @@ export default function App() {
       <QuickAddDialog />
       <ConfirmDialog />
       <ToastViewport />
+      <AssistantPanel />
     </TooltipProvider>
   );
 }
