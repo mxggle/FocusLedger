@@ -9,9 +9,9 @@ import { MessageList } from "./MessageList";
 
 export function AssistantPanel() {
   const open = useUiStore((state) => state.assistantOpen);
-  const setOpen = useUiStore((state) => (state.assistantOpen ? state.closeAssistant : state.openAssistant));
-  const toggle = useUiStore((state) => state.toggleAssistant);
+  const openAssistant = useUiStore((state) => state.openAssistant);
   const close = useUiStore((state) => state.closeAssistant);
+  const toggle = useUiStore((state) => state.toggleAssistant);
   const clear = useAssistantStore((state) => state.clear);
   const hasMessages = useAssistantStore((state) => state.messages.length > 0);
 
@@ -29,7 +29,7 @@ export function AssistantPanel() {
         </button>
       ) : null}
 
-      <Dialog.Root open={open} onOpenChange={(next) => (next ? setOpen() : close())}>
+      <Dialog.Root open={open} onOpenChange={(next) => (next ? openAssistant() : close())}>
         <AnimatePresence>
           {open ? (
             <Dialog.Portal forceMount>
