@@ -1,11 +1,13 @@
-import { SendHorizonal } from "lucide-react";
+import { SendHorizonal, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { hasAiKey } from "../../services/ai/aiClient";
 import { useAssistantStore } from "../../stores/assistantStore";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { isMac } from "../../utils/platform";
 import { IconButton } from "../ui/IconButton";
 
 const MAX_HEIGHT = 220;
+const SEND_KEY = isMac ? "⌘↵" : "Ctrl+↵";
 
 export function Composer() {
   const [value, setValue] = useState("");
@@ -85,16 +87,16 @@ export function Composer() {
       {keyConfigured ? (
         <div className="mt-1.5 flex items-center justify-between gap-2 pl-1">
           <p className="text-[11px] text-muted-foreground">
-            <kbd className="rounded border border-border bg-muted px-1 font-sans">⌘↵</kbd> to send ·{" "}
+            <kbd className="rounded border border-border bg-muted px-1 font-sans">{SEND_KEY}</kbd> to send ·{" "}
             <kbd className="rounded border border-border bg-muted px-1 font-sans">↵</kbd> for a new line
           </p>
           {isLongDump && !thinking ? (
             <button
               type="button"
               onClick={planThis}
-              className="shrink-0 rounded-md border border-primary/40 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-primary/40 px-2 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/10"
             >
-              ✨ Plan this
+              <Sparkles className="h-3 w-3" /> Plan this
             </button>
           ) : null}
         </div>

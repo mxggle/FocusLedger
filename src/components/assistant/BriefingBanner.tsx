@@ -7,7 +7,7 @@ import { useDayBriefing } from "./useDayBriefing";
 
 const TONE_STYLES: Record<BriefingTone, string> = {
   info: "border-border bg-surface text-foreground",
-  warn: "border-amber-400/40 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+  warn: "border-warning/40 bg-warning-soft text-warning-soft-foreground",
   good: "border-border bg-surface text-muted-foreground"
 };
 

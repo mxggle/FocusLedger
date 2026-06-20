@@ -5,6 +5,7 @@ import { useAssistantStore } from "../../stores/assistantStore";
 import type { ProposedAction } from "../../services/ai/assistant/types";
 import { Button } from "../ui/Button";
 import { Input, Select } from "../ui/Field";
+import { ActionStatusBadge } from "./ActionStatusBadge";
 
 type CreateTaskCardProps = {
   messageId: string;
@@ -37,10 +38,15 @@ export function CreateTaskCard({ messageId, action, onApply, onDismiss }: Create
 
   if (!editable) {
     return (
-      <div className="flex items-center gap-2.5 rounded-xl border border-border bg-surface px-3 py-2 text-sm opacity-70">
+      <div
+        className={
+          "flex items-center gap-2.5 rounded-xl border border-border bg-surface px-3 py-2 text-sm " +
+          (action.status === "dismissed" ? "opacity-60" : "")
+        }
+      >
         <Plus className="h-4 w-4 shrink-0 text-primary" />
         <p className="min-w-0 flex-1 truncate text-foreground">{params.title}</p>
-        <span className="shrink-0 text-xs capitalize text-muted-foreground">{action.status}</span>
+        <ActionStatusBadge status={action.status} />
       </div>
     );
   }

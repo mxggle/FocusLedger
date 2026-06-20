@@ -56,13 +56,15 @@ export type AssistantContext = {
 };
 
 /** One proposed change, rendered as a confirm card. `params` is validated. */
+export type ActionStatus = "pending" | "applied" | "dismissed" | "failed";
+
 export type ProposedAction = {
   id: string;
   type: AssistantActionType;
   params: unknown; // narrowed per-action; opaque at the store boundary
   summary: string; // human label from describe()
   destructive: boolean;
-  status: "pending" | "applied" | "dismissed" | "failed";
+  status: ActionStatus;
   error?: string;
 };
 

@@ -4,6 +4,7 @@ import type { AssistantActionType, ProposedAction } from "../../services/ai/assi
 import { useAssistantStore } from "../../stores/assistantStore";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Field";
+import { ActionStatusBadge } from "./ActionStatusBadge";
 import { CreateTaskCard } from "./CreateTaskCard";
 
 const ICONS: Record<Exclude<AssistantActionType, "create_task">, ComponentType<{ className?: string }>> = {
@@ -36,7 +37,7 @@ export function ActionCard({ messageId, action, onApply, onDismiss }: ActionCard
     <div
       className={
         "flex flex-col gap-2 rounded-xl border border-border bg-surface px-3 py-2.5 text-sm shadow-xs " +
-        (pending ? "" : "opacity-70")
+        (action.status === "dismissed" ? "opacity-60" : "")
       }
     >
       <div className="flex items-center gap-2.5">
@@ -59,7 +60,7 @@ export function ActionCard({ messageId, action, onApply, onDismiss }: ActionCard
             </Button>
           </div>
         ) : (
-          <span className="shrink-0 text-xs capitalize text-muted-foreground">{action.status}</span>
+          <ActionStatusBadge status={action.status} />
         )}
       </div>
 
