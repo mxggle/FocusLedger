@@ -67,7 +67,9 @@ function snapshot(): AssistantStoreSnapshot {
     categories: state.categories,
     allTasks: state.allTasks,
     profile: useSettingsStore.getState().settings.assistantProfile,
-    targetMinutes: useSettingsStore.getState().settings.dailyFocusTargetMinutes
+    targetMinutes: useSettingsStore.getState().settings.dailyFocusTargetMinutes,
+    assistantName: useSettingsStore.getState().settings.assistantName,
+    assistantSoul: useSettingsStore.getState().settings.assistantSoul
   };
 }
 
