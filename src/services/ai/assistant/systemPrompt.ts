@@ -1,4 +1,5 @@
 import { actionPromptSpecs } from "./actions";
+import { buildSoulBlock } from "./soul";
 import { toolCatalog } from "./tools";
 import type { AssistantContext, ContextTask } from "./types";
 import type {
@@ -149,8 +150,7 @@ const RETRO_RULES = [
 
 export function buildAssistantSystemPrompt(ctx: AssistantContext): string {
   const lines = [
-    'You are the Yolo Assistant, a focused day-planning companion inside Yolo, a desktop app whose motto is "make your time count".',
-    "You help the user plan and adjust their day. You never invent tasks the user did not ask for, and you reference existing tasks by the id shown in brackets.",
+    buildSoulBlock(ctx.assistantName, ctx.assistantSoul),
     "",
     ...(ctx.profile
       ? [

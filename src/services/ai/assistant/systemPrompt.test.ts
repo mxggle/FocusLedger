@@ -3,14 +3,26 @@ import { buildAssistantSystemPrompt } from "./systemPrompt";
 import type { AssistantContext } from "./types";
 import type { RetrospectiveInsights } from "../../retrospect/types";
 
-const ctx: AssistantContext = {
+function makeCtx(overrides: Partial<AssistantContext> = {}): AssistantContext {
+  return {
+    today: "2026-06-20",
+    categories: [],
+    tasks: [],
+    backlog: [],
+    assistantName: "Yolo Assistant",
+    assistantSoul: "",
+    allTaskRefs: [],
+    ...overrides
+  };
+}
+
+const ctx = makeCtx({
   today: "2026-06-18",
   categories: [{ id: "c1", name: "Deep Work" }],
   tasks: [
     { id: "t1", title: "Write report", status: "todo", priority: "high", estimatedMinutes: 60, categoryId: "c1" }
-  ],
-  backlog: []
-};
+  ]
+});
 
 describe("buildAssistantSystemPrompt", () => {
   it("includes persona, JSON contract, every action name, and the context", () => {
@@ -29,14 +41,21 @@ describe("buildAssistantSystemPrompt", () => {
     const prompt = buildAssistantSystemPrompt({ ...ctx, tasks: [] });
     expect(prompt.toLowerCase()).toContain("no tasks");
   });
+
+  it("renders the Soul as slot #1 and drops the hardcoded day-planning identity", () => {
+    const prompt = buildAssistantSystemPrompt(makeCtx({ assistantName: "Hermes", assistantSoul: "" }));
+    expect(prompt).toContain("operating partner"); // a phrase from DEFAULT_SOUL
+    expect(prompt).toContain("Hermes");
+    expect(prompt).not.toContain("focused day-planning companion");
+  });
+
+  it("uses a custom soul verbatim when provided", () => {
+    const prompt = buildAssistantSystemPrompt(makeCtx({ assistantSoul: "## Identity\nI am a pirate." }));
+    expect(prompt).toContain("I am a pirate.");
+  });
 });
 
-const retroBase: AssistantContext = {
-  today: "2026-06-19",
-  categories: [],
-  tasks: [],
-  backlog: []
-};
+const retroBase = makeCtx({ today: "2026-06-19" });
 
 const retroInsights: RetrospectiveInsights = {
   windowDays: 30,
@@ -106,13 +125,7 @@ describe("buildAssistantSystemPrompt — retrospective", () => {
 });
 
 describe("buildAssistantSystemPrompt — agent loop", () => {
-  const ctxTools: AssistantContext = {
-    today: "2026-06-20",
-    categories: [],
-    tasks: [],
-    backlog: [],
-    allTasksCount: 12
-  };
+  const ctxTools = makeCtx({ allTasksCount: 12 });
 
   it("documents the lookup protocol and read tools", () => {
     const prompt = buildAssistantSystemPrompt(ctxTools);
@@ -138,7 +151,7 @@ describe("buildAssistantSystemPrompt — agent loop", () => {
 });
 
 describe("buildAssistantSystemPrompt — user profile", () => {
-  const base: AssistantContext = { today: "2026-06-20", categories: [], tasks: [], backlog: [] };
+  const base = makeCtx();
 
   it("renders the About-the-user section when a profile is present", () => {
     const prompt = buildAssistantSystemPrompt({ ...base, profile: "I'm a PM relocating to Tokyo." });
@@ -152,11 +165,7 @@ describe("buildAssistantSystemPrompt — user profile", () => {
 });
 
 describe("buildAssistantSystemPrompt — day briefing", () => {
-  const withBriefing: AssistantContext = {
-    today: "2026-06-20",
-    categories: [],
-    tasks: [],
-    backlog: [],
+  const withBriefing = makeCtx({
     briefing: {
       scheduledMinutes: 300,
       targetMinutes: 240,
@@ -166,7 +175,7 @@ describe("buildAssistantSystemPrompt — day briefing", () => {
       backlogCount: 7,
       status: "overcommitted"
     }
-  };
+  });
 
   it("renders today's load and the proactive rules when a briefing is present", () => {
     const prompt = buildAssistantSystemPrompt(withBriefing);
@@ -177,7 +186,7 @@ describe("buildAssistantSystemPrompt — day briefing", () => {
   });
 
   it("omits the briefing section when there is no briefing", () => {
-    const prompt = buildAssistantSystemPrompt({ today: "2026-06-20", categories: [], tasks: [], backlog: [] });
+    const prompt = buildAssistantSystemPrompt(makeCtx());
     expect(prompt).not.toContain("Today at a glance");
   });
 });
