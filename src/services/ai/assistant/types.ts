@@ -1,4 +1,4 @@
-import type { CreateTaskInput, TaskPriority, TaskStatus } from "../../../types";
+import type { CreateTaskInput, TaskPriority, TaskStatus, UpdateTaskInput } from "../../../types";
 import type { ChatRole } from "../providers";
 import type { RetrospectiveInsights } from "../../retrospect/types";
 import type { DayBriefing } from "./dayBriefing";
@@ -8,6 +8,7 @@ export type { ChatRole };
 /** The six v1 capabilities. Extend here + add a registry entry in actions.ts. */
 export type AssistantActionType =
   | "create_task"
+  | "update_task"
   | "reschedule_task"
   | "move_to_backlog"
   | "drop_task"
@@ -20,6 +21,7 @@ export type ActionResult = { ok: true } | { ok: false; message: string };
  *  structurally, and tests can pass a mock. */
 export interface AssistantTaskStore {
   createTask(input: CreateTaskInput): Promise<ActionResult>;
+  updateTask(taskId: string, input: UpdateTaskInput): Promise<ActionResult>;
   rescheduleTask(taskId: string, dueDate: string): Promise<ActionResult>;
   moveTaskToBacklog(taskId: string): Promise<ActionResult>;
   dropTask(taskId: string): Promise<ActionResult>;

@@ -16,6 +16,32 @@ const ctx: AssistantContext = {
   allTaskRefs: []
 };
 
+function makeCtx(overrides: Partial<AssistantContext> = {}): AssistantContext {
+  return {
+    today: "2026-06-18",
+    categories: [],
+    tasks: [],
+    backlog: [],
+    assistantName: "",
+    assistantSoul: "",
+    allTaskRefs: [],
+    ...overrides
+  };
+}
+
+function makeFakeStore(): AssistantTaskStore {
+  return {
+    createTask: vi.fn().mockResolvedValue({ ok: true }),
+    updateTask: vi.fn().mockResolvedValue({ ok: true }),
+    rescheduleTask: vi.fn().mockResolvedValue({ ok: true }),
+    moveTaskToBacklog: vi.fn().mockResolvedValue({ ok: true }),
+    dropTask: vi.fn().mockResolvedValue({ ok: true }),
+    completeTask: vi.fn().mockResolvedValue({ ok: true }),
+    startTask: vi.fn().mockResolvedValue("started"),
+    ensureCategory: vi.fn().mockResolvedValue("c-new")
+  };
+}
+
 describe("validateAction", () => {
   it("rejects unknown action types", () => {
     expect(validateAction({ type: "explode", title: "x" }, ctx)).toBeNull();
@@ -49,7 +75,7 @@ describe("registry execute", () => {
   it("create_task calls store.createTask with validated input", async () => {
     const store: AssistantTaskStore = {
       createTask: vi.fn().mockResolvedValue({ ok: true }),
-      rescheduleTask: vi.fn(), moveTaskToBacklog: vi.fn(),
+      updateTask: vi.fn(), rescheduleTask: vi.fn(), moveTaskToBacklog: vi.fn(),
       dropTask: vi.fn(), completeTask: vi.fn(), startTask: vi.fn(),
       ensureCategory: vi.fn()
     };
@@ -61,7 +87,7 @@ describe("registry execute", () => {
 
   it("start_task normalizes the string result to ActionResult", async () => {
     const store: AssistantTaskStore = {
-      createTask: vi.fn(), rescheduleTask: vi.fn(), moveTaskToBacklog: vi.fn(),
+      createTask: vi.fn(), updateTask: vi.fn(), rescheduleTask: vi.fn(), moveTaskToBacklog: vi.fn(),
       dropTask: vi.fn(), completeTask: vi.fn(),
       startTask: vi.fn().mockResolvedValue("failed"),
       ensureCategory: vi.fn()
@@ -100,5 +126,43 @@ describe("create_task category handling", () => {
     const createArg = store.createTask.mock.calls[0][0];
     expect(createArg.category_id).toBe("c-new");
     expect(createArg.new_category_name).toBeUndefined();
+  });
+});
+
+describe("update_task", () => {
+  const ctx = makeCtx({
+    tasks: [{ id: "t1", title: "Anki feature", status: "todo", priority: "low",
+      estimatedMinutes: null, categoryId: null }],
+    categories: [{ id: "c-jp", name: "Japanese" }],
+    allTaskRefs: [{ id: "t1", title: "Anki feature" }]
+  });
+
+  it("validates a partial update and describes the diff", () => {
+    const action = validateAction(
+      { type: "update_task", task_id: "t1", category: "Japanese", priority: "high" }, ctx
+    );
+    expect(action).not.toBeNull();
+    expect(action!.summary).toContain("Anki feature");
+    expect(action!.summary).toContain("Japanese");
+    expect(action!.summary).toContain("high");
+  });
+
+  it("rejects an update with no changed fields", () => {
+    expect(validateAction({ type: "update_task", task_id: "t1" }, ctx)).toBeNull();
+  });
+
+  it("rejects an unknown task id", () => {
+    expect(validateAction({ type: "update_task", task_id: "nope", title: "x" }, ctx)).toBeNull();
+  });
+
+  it("marks a brand-new category for creation on apply", async () => {
+    const action = validateAction(
+      { type: "update_task", task_id: "t1", category: "Reading" }, ctx
+    );
+    expect(action).not.toBeNull();
+    const store = makeFakeStore();
+    await ACTION_REGISTRY.update_task.execute(action!.params, store);
+    expect(store.ensureCategory).toHaveBeenCalledWith("Reading");
+    expect(store.updateTask).toHaveBeenCalled();
   });
 });

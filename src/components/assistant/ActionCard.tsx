@@ -1,4 +1,4 @@
-import { Check, Play, CalendarClock, Inbox, Trash2, X } from "lucide-react";
+import { Check, Pencil, Play, CalendarClock, Inbox, Trash2, X } from "lucide-react";
 import type { ComponentType } from "react";
 import type { AssistantActionType, ProposedAction } from "../../services/ai/assistant/types";
 import { useAssistantStore } from "../../stores/assistantStore";
@@ -7,6 +7,7 @@ import { Input } from "../ui/Field";
 import { CreateTaskCard } from "./CreateTaskCard";
 
 const ICONS: Record<Exclude<AssistantActionType, "create_task">, ComponentType<{ className?: string }>> = {
+  update_task: Pencil,
   reschedule_task: CalendarClock,
   move_to_backlog: Inbox,
   drop_task: Trash2,

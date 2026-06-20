@@ -1,4 +1,4 @@
-import type { CreateTaskInput } from "../../../types";
+import type { CreateTaskInput, UpdateTaskInput } from "../../../types";
 import { createId } from "../../../utils/id";
 import type {
   ActionResult,
@@ -40,17 +40,24 @@ function optionalStr(raw: Record<string, unknown>, key: string): string | null {
   return value.trim();
 }
 
+function allKnownTasks(ctx: AssistantContext): { id: string; title: string }[] {
+  return [...ctx.tasks, ...ctx.backlog, ...ctx.allTaskRefs];
+}
+
 function knownTaskId(raw: Record<string, unknown>, ctx: AssistantContext): string {
   const id = str(raw, "task_id");
-  const exists = [...ctx.tasks, ...ctx.backlog].some((task) => task.id === id);
-  if (!exists) {
+  if (!allKnownTasks(ctx).some((task) => task.id === id)) {
     throw new Error(`task_id "${id}" is not a known task`);
   }
   return id;
 }
 
 function titleOf(id: string, ctx: AssistantContext): string {
-  return [...ctx.tasks, ...ctx.backlog].find((task) => task.id === id)?.title ?? id;
+  return allKnownTasks(ctx).find((task) => task.id === id)?.title ?? id;
+}
+
+function categoryName(id: string, ctx: AssistantContext): string {
+  return ctx.categories.find((category) => category.id === id)?.name ?? id;
 }
 
 /** Resolve a category reference (id OR name) to an existing id, or mark it as a
@@ -129,6 +136,79 @@ const createTask: ActionDescriptor<CreateParams> = {
       return store.createTask({ ...rest, category_id: categoryId });
     }
     return store.createTask(rest);
+  }
+};
+
+type UpdateParams = {
+  task_id: string;
+  title: string; // current title, for the describe() label
+  changes: UpdateTaskInput;
+  new_category_name: string | null;
+  summaryParts: string[];
+};
+
+const updateTask: ActionDescriptor<UpdateParams> = {
+  type: "update_task",
+  destructive: false,
+  promptSpec: {
+    name: "update_task",
+    when: "the user wants to change one or more fields of an EXISTING task (title, description, category, priority, estimate) — use this to categorize or re-prioritize tasks that already exist",
+    params:
+      'task_id (required), and at least one of: title, description (a sentence; pass "" to clear), category (existing name/id OR a new project name), priority ("low"|"medium"|"high"), estimated_minutes (number)'
+  },
+  validate: (raw, ctx) => {
+    const id = knownTaskId(raw, ctx);
+    const changes: UpdateTaskInput = {};
+    const parts: string[] = [];
+
+    const title = optionalStr(raw, "title");
+    if (title) {
+      changes.title = title;
+      parts.push(`title → "${title}"`);
+    }
+
+    if ("description" in raw) {
+      const desc = optionalStr(raw, "description");
+      changes.description = desc; // null clears it
+      parts.push(desc ? "description updated" : "description cleared");
+    }
+
+    const priorityRaw = raw.priority;
+    if (priorityRaw === "low" || priorityRaw === "medium" || priorityRaw === "high") {
+      changes.priority = priorityRaw;
+      parts.push(`priority → ${priorityRaw}`);
+    }
+
+    if (typeof raw.estimated_minutes === "number" && raw.estimated_minutes > 0) {
+      changes.estimated_minutes = raw.estimated_minutes;
+      parts.push(`estimate → ${raw.estimated_minutes}m`);
+    }
+
+    let new_category_name: string | null = null;
+    if (typeof raw.category === "string" && raw.category.trim().length > 0) {
+      const resolved = resolveCategoryOrNew(raw, ctx);
+      if (resolved.category_id) {
+        changes.category_id = resolved.category_id;
+        parts.push(`category → ${categoryName(resolved.category_id, ctx)}`);
+      } else if (resolved.new_category_name) {
+        new_category_name = resolved.new_category_name;
+        parts.push(`category → new "${resolved.new_category_name}"`);
+      }
+    }
+
+    if (parts.length === 0) {
+      throw new Error("update_task needs at least one field to change");
+    }
+    return { task_id: id, title: titleOf(id, ctx), changes, new_category_name, summaryParts: parts };
+  },
+  describe: (params) => `Update "${params.title}": ${params.summaryParts.join(", ")}`,
+  execute: async (params, store) => {
+    let changes = params.changes;
+    if (params.new_category_name) {
+      const categoryId = await store.ensureCategory(params.new_category_name);
+      changes = { ...changes, category_id: categoryId };
+    }
+    return store.updateTask(params.task_id, changes);
   }
 };
 
@@ -220,6 +300,7 @@ const startTask: ActionDescriptor<TaskIdParams> = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const ACTION_REGISTRY: Record<AssistantActionType, ActionDescriptor<any>> = {
   create_task: createTask,
+  update_task: updateTask,
   reschedule_task: rescheduleTask,
   move_to_backlog: moveToBacklog,
   drop_task: dropTask,
