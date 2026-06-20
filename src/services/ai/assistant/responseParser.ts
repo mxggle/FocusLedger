@@ -66,7 +66,9 @@ export function parseLoopStep(raw: string): LoopStep {
             tool: String(entry.tool),
             query: typeof entry.query === "string" ? entry.query : undefined,
             category: typeof entry.category === "string" ? entry.category : undefined,
-            date: typeof entry.date === "string" ? entry.date : undefined
+            date: typeof entry.date === "string" ? entry.date : undefined,
+            status: typeof entry.status === "string" ? entry.status : undefined,
+            undated: typeof entry.undated === "boolean" ? entry.undated : undefined
           }));
         if (cleaned.length > 0) return { kind: "lookups", lookups: cleaned };
       }

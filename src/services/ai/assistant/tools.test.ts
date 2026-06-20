@@ -46,7 +46,8 @@ const deps: ToolDeps = {
   history: [
     { date: "2026-06-12", taskTitle: "Write quarterly report", category: "Deep Work", note: "Drafted intro", blocker: "waiting on finance data", nextAction: null },
     { date: "2026-06-10", taskTitle: "Book dentist", category: "Life", note: "called, no answer", blocker: null, nextAction: "try again Monday" }
-  ]
+  ],
+  categories: []
 };
 
 describe("executeLookup", () => {
@@ -104,5 +105,43 @@ describe("executeLookup", () => {
   it("recall reports an empty history gracefully", () => {
     const out = executeLookup({ tool: "recall", query: "anything" }, { ...deps, history: [] });
     expect(out.toLowerCase()).toContain("no logged");
+  });
+});
+
+describe("list_tasks", () => {
+  const tasks = [
+    { id: "t1", title: "Write spec", status: "todo", priority: "high",
+      estimated_minutes: null, category_id: "c1", due_date: null,
+      description: null, template_id: null, planned_start_time: null, planned_end_time: null,
+      sort_order: null, created_at: "", updated_at: "", completed_at: null, dropped_at: null },
+    { id: "t2", title: "Email Bob", status: "done", priority: "low",
+      estimated_minutes: null, category_id: null, due_date: "2026-06-21",
+      description: null, template_id: null, planned_start_time: null, planned_end_time: null,
+      sort_order: null, created_at: "", updated_at: "", completed_at: null, dropped_at: null }
+  ];
+  const deps = { allTasks: tasks, insights: null, history: [], categories: [{ id: "c1", name: "Work" }] };
+
+  it("lists all tasks when unfiltered", () => {
+    const out = executeLookup({ tool: "list_tasks" }, deps as never);
+    expect(out).toContain("t1");
+    expect(out).toContain("t2");
+  });
+
+  it("filters by status", () => {
+    const out = executeLookup({ tool: "list_tasks", status: "done" }, deps as never);
+    expect(out).toContain("t2");
+    expect(out).not.toContain("t1");
+  });
+
+  it("filters uncategorized with category=none", () => {
+    const out = executeLookup({ tool: "list_tasks", category: "none" }, deps as never);
+    expect(out).toContain("t2");
+    expect(out).not.toContain("t1");
+  });
+
+  it("resolves a category by name", () => {
+    const out = executeLookup({ tool: "list_tasks", category: "Work" }, deps as never);
+    expect(out).toContain("t1");
+    expect(out).not.toContain("t2");
   });
 });

@@ -48,7 +48,8 @@ export async function runAgentLoop(
   const toolDeps: ToolDeps = {
     allTasks: input.snapshot.allTasks,
     insights: input.insights ?? null,
-    history: input.history ?? []
+    history: input.history ?? [],
+    categories: input.snapshot.categories.map((category) => ({ id: category.id, name: category.name }))
   };
 
   const messages: ChatTurn[] = [...input.messages];

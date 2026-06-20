@@ -8,6 +8,8 @@ export type LookupRequest = {
   query?: string;
   category?: string;
   date?: string;
+  status?: string;
+  undated?: boolean;
 };
 
 /** Everything the deterministic tools may read. Injected so tools stay pure. */
@@ -15,6 +17,7 @@ export type ToolDeps = {
   allTasks: Task[];
   insights: RetrospectiveInsights | null;
   history: RecallEntry[];
+  categories: { id: string; name: string }[];
 };
 
 type AssistantTool = {
@@ -92,6 +95,46 @@ function recall(req: LookupRequest, deps: ToolDeps): string {
   return [`recall("${req.query}") found ${scored.length}:`, ...scored.map(({ entry }) => recallSnippet(entry))].join("\n");
 }
 
+const MAX_LIST_RESULTS = 40;
+
+function catLabelFor(categoryId: string | null, deps: ToolDeps): string {
+  if (!categoryId) return "uncategorized";
+  return deps.categories.find((category) => category.id === categoryId)?.name ?? categoryId;
+}
+
+function listTasks(req: LookupRequest, deps: ToolDeps): string {
+  let tasks = deps.allTasks;
+
+  const status = (req.status ?? "").trim().toLowerCase();
+  if (status) tasks = tasks.filter((task) => task.status.toLowerCase() === status);
+
+  const cat = (req.category ?? "").trim().toLowerCase();
+  if (cat === "none") {
+    tasks = tasks.filter((task) => !task.category_id);
+  } else if (cat) {
+    const match = deps.categories.find(
+      (category) => category.id.toLowerCase() === cat || category.name.toLowerCase() === cat
+    );
+    const wantId = (match?.id ?? cat).toLowerCase();
+    tasks = tasks.filter((task) => (task.category_id ?? "").toLowerCase() === wantId);
+  }
+
+  if (req.undated === true) tasks = tasks.filter((task) => !task.due_date);
+
+  if (tasks.length === 0) return "list_tasks: no tasks match those filters.";
+
+  const shown = tasks.slice(0, MAX_LIST_RESULTS);
+  const lines = shown.map(
+    (task) =>
+      `- [${task.id}] "${task.title}" (${task.status}, ${catLabelFor(task.category_id, deps)}${task.due_date ? `, due ${task.due_date}` : ""})`
+  );
+  const more =
+    tasks.length > shown.length
+      ? [`…and ${tasks.length - shown.length} more — narrow with status/category/undated.`]
+      : [];
+  return [`list_tasks found ${tasks.length}:`, ...lines, ...more].join("\n");
+}
+
 const TOOL_REGISTRY: Record<string, AssistantTool> = {
   search_tasks: {
     name: "search_tasks",
@@ -110,6 +153,12 @@ const TOOL_REGISTRY: Record<string, AssistantTool> = {
     when: "the user asks about past work, what happened, lessons learned, or recurring blockers",
     params: "query (required, keywords)",
     execute: recall
+  },
+  list_tasks: {
+    name: "list_tasks",
+    when: "you need to enumerate a set of tasks to operate on in bulk (search_tasks needs a query and can't list everything)",
+    params: 'status (optional, "todo"|"doing"|"paused"|"done"|"dropped"), category (optional, a name/id, or "none" for uncategorized), undated (optional boolean — backlog only)',
+    execute: listTasks
   }
 };
 
