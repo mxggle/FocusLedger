@@ -4,6 +4,7 @@ import { Eraser, Sparkles, X } from "lucide-react";
 import { useAssistantStore } from "../../stores/assistantStore";
 import { useUiStore } from "../../stores/uiStore";
 import { IconButton } from "../ui/IconButton";
+import { BriefingBanner } from "./BriefingBanner";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
 
@@ -64,6 +65,7 @@ export function AssistantPanel() {
                       </Dialog.Close>
                     </div>
                   </div>
+                  <BriefingBanner />
                   <MessageList />
                   <Composer />
                 </motion.div>
