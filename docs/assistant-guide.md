@@ -132,9 +132,11 @@ The model only narrates them. If there isn't enough history yet, it will hedge
 
 ## 9. Current limits (so you're not surprised)
 
-- **Persistent profile, but not conversation memory.** Your **About me** is remembered
-  across sessions, but the assistant doesn't yet recall *past chats* — each conversation
-  thread starts fresh. (Planned: Phase 2b — conversation memory + semantic recall.)
+- **Conversation is saved, but not yet *searched*.** Your **About me** and your **chat
+  history** are remembered across restarts (the panel reopens where you left off).
+  Proposals from a previous session show as already-handled, so nothing gets applied out
+  of context. What's still missing: the assistant doesn't yet *semantically search* your
+  full task/time history to pull in relevant past work. (Planned: Phase 2b-2 — recall.)
 - **No proactive nudges yet.** It won't auto-plan your morning or warn about
   overcommitment on its own. (Planned: Phase 3.)
 - **Pasted text only.** No screenshot/email/Slack import yet.
