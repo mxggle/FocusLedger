@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { assistantMessageRepository } from "../db/assistantMessageRepository";
 import { ACTION_REGISTRY } from "../services/ai/assistant/actions";
+import { autoApplyActions } from "../services/ai/assistant/autoApply";
 import { runAssistantTurn } from "../services/ai/assistant/assistantRunner";
 import { loadRecallEntries, type RecallEntry } from "../services/ai/assistant/recallHistory";
 import { buildAssistantContext, type AssistantStoreSnapshot } from "../services/ai/assistant/contextBuilder";
@@ -141,12 +142,18 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
         history: get().history ?? [],
         onStep: (label) => set({ steps: [...get().steps, label] })
       });
+      // Act on reversible changes immediately — an agent does the safe thing
+      // itself and only asks before what it can't take back. Destructive
+      // actions stay pending and render as a confirmation.
+      const executed = await autoApplyActions(result.actions, useTaskStore.getState());
+      if (executed.appliedCount > 0) await useTaskStore.getState().refresh();
+
       const assistantMessage: ChatMessage = {
         id: createId("msg"),
         role: "assistant",
         content: result.reply,
         createdAt: new Date().toISOString(),
-        actions: result.actions
+        actions: executed.actions
       };
       set({ messages: [...history, assistantMessage], status: "idle", steps: [] });
       void assistantMessageRepository.append(assistantMessage).catch(() => {});

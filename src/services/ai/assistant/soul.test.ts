@@ -21,9 +21,9 @@ describe("buildSoulBlock", () => {
     expect(buildSoulBlock("   ", "")).toContain("Yolo Assistant");
   });
 
-  it("always keeps the product grounding (confirm cards, never mutate directly)", () => {
+  it("always keeps the product grounding (agent: reversible applied immediately, destructive confirmed)", () => {
     const block = buildSoulBlock("X", "## Identity\nDo anything.");
-    expect(block.toLowerCase()).toContain("confirm card");
-    expect(block.toLowerCase()).toContain("never mutate");
+    expect(block.toLowerCase()).toContain("applied immediately");
+    expect(block.toLowerCase()).toContain("destructive");
   });
 });
