@@ -95,8 +95,15 @@ It proposes the matching changes as cards. Questions and advice come back as pla
 replies with no cards.
 
 ### Proactive day sense
-The assistant knows today's real load — how much you've scheduled versus your **daily focus
-target** (Settings → AI), plus what's open, done, and waiting in the backlog. So it can:
+Open the assistant and a **briefing bar** at the top tells you today's shape at a glance —
+e.g. _"Overcommitted — 5h scheduled vs your 4h target"_ or _"Nothing scheduled today — 6 in
+your backlog"_ — with one button (**Plan my day** / **Trim my day** / **Fill from backlog**).
+It's computed instantly from your tasks (no AI call to show it); the button hands off to the
+assistant.
+
+The assistant also knows this load mid-conversation — how much you've scheduled versus your
+**daily focus target** (Settings → AI), plus what's open, done, and waiting in the backlog.
+So it can:
 - **Warn when you're overcommitted** ("you've packed 6h into a 4h target — defer the
   lowest-priority task?").
 - **Offer to fill a light or empty day** from the backlog.
@@ -156,9 +163,10 @@ The model only narrates them. If there isn't enough history yet, it will hedge
   logged notes/blockers (see "Recall" below), but it matches on **keywords**, not meaning —
   so phrase your question with words you'd have used in the notes. (A future upgrade could
   add semantic/embedding search.)
-- **Proactive *within* a chat, not on a schedule.** It flags overcommitment and offers to
-  plan when you talk to it, but it doesn't yet *pop up on its own* each morning or run an
-  automatic end-of-day review. (Planned: Phase 3b — scheduled briefings + debrief loop.)
+- **Briefing is in-app, not scheduled.** The briefing bar shows whenever you open the
+  assistant, but nothing yet *pushes* a morning notification or runs an automatic end-of-day
+  review on a timer. (A future upgrade could tie this into the existing daily-debrief
+  schedule.)
 - **Pasted text only.** No screenshot/email/Slack import yet.
 - **No live token streaming.** You see a step trace, then the full reply.
 - **Dedup skips, it doesn't merge.** On a near-duplicate it declines to recreate and
