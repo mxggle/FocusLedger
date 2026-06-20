@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { runAgentLoop } from "./agentLoop";
+import { runAgentLoop, type RunAgentLoopInput } from "./agentLoop";
 import type { AssistantStoreSnapshot } from "./contextBuilder";
+import type { Category, Task } from "../../../types";
 
 const snapshot: AssistantStoreSnapshot = {
   selectedDate: "2026-06-20",
@@ -9,6 +10,48 @@ const snapshot: AssistantStoreSnapshot = {
   categories: [],
   allTasks: []
 };
+
+function task(partial: Partial<Task> & { id: string; title: string }): Task {
+  return {
+    id: partial.id,
+    title: partial.title,
+    description: partial.description ?? null,
+    category_id: partial.category_id ?? null,
+    status: partial.status ?? "todo",
+    priority: partial.priority ?? "medium",
+    estimated_minutes: partial.estimated_minutes ?? null,
+    due_date: partial.due_date ?? null,
+    template_id: null,
+    planned_start_time: null,
+    planned_end_time: null,
+    sort_order: null,
+    created_at: "2026-06-01T00:00:00Z",
+    updated_at: "2026-06-01T00:00:00Z",
+    completed_at: null,
+    dropped_at: null
+  };
+}
+
+function makeLoopInput(): RunAgentLoopInput {
+  const category: Category = { id: "c1", name: "Work" } as Category;
+  const allTasks = [
+    task({ id: "t1", title: "First task", category_id: null }),
+    task({ id: "t2", title: "Second task", category_id: null })
+  ];
+  return {
+    settings: {} as never,
+    snapshot: {
+      selectedDate: "2026-06-20",
+      tasks: [],
+      backlogTasks: allTasks,
+      categories: [category],
+      allTasks,
+      assistantName: "",
+      assistantSoul: ""
+    },
+    messages: [{ role: "user", content: "categorize everything" }]
+  };
+}
 
 describe("runAgentLoop", () => {
   it("executes a lookup, feeds results back, then finalizes", async () => {
@@ -45,6 +88,25 @@ describe("runAgentLoop", () => {
     expect(result.reply).toBe("hi");
   });
 
+  it("supports a bulk path: list_tasks lookup then multiple update_task actions", async () => {
+    const responses = [
+      JSON.stringify({ lookups: [{ tool: "list_tasks", category: "none" }] }),
+      JSON.stringify({
+        reply: "Categorized your two tasks.",
+        actions: [
+          { type: "update_task", task_id: "t1", category: "Work" },
+          { type: "update_task", task_id: "t2", category: "Work" }
+        ]
+      })
+    ];
+    let i = 0;
+    const result = await runAgentLoop(makeLoopInput(), {
+      generateChat: async () => responses[i++]
+    });
+    expect(result.actions).toHaveLength(2);
+    expect(result.actions.every((a) => a.type === "update_task")).toBe(true);
+  });
+
   it("stops after the step budget and finalizes the last response", async () => {
     const generateChat = vi
       .fn()
@@ -53,7 +115,7 @@ describe("runAgentLoop", () => {
       { settings: {} as never, snapshot, messages: [{ role: "user", content: "loop" }] },
       { generateChat }
     );
-    expect(generateChat.mock.calls.length).toBeLessThanOrEqual(5);
+    expect(generateChat.mock.calls.length).toBeLessThanOrEqual(7);
     expect(result).toHaveProperty("reply");
   });
 });

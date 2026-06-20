@@ -11,12 +11,13 @@ import type { RetrospectiveInsights } from "../../retrospect/types";
 /** Low temperature keeps proposals consistent for the same day state. */
 const ASSISTANT_TEMPERATURE = 0.3;
 /** Maximum lookup rounds before we force a final answer. */
-const MAX_STEPS = 4;
+const MAX_STEPS = 6;
 
 const STEP_LABELS: Record<string, string> = {
   search_tasks: "Scanning your existing tasks…",
   get_calibration: "Checking how long similar work takes…",
-  recall: "Recalling what you did before…"
+  recall: "Recalling what you did before…",
+  list_tasks: "Listing your tasks…"
 };
 
 export type RunAgentLoopInput = {

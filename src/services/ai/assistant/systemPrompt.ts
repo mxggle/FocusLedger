@@ -109,6 +109,7 @@ const TOOL_PROTOCOL = [
   "- Before creating any task, use search_tasks to check it does not already exist; if a close duplicate exists, do not recreate it — mention the existing task id in your reply instead.",
   "- Before setting estimated_minutes, you may use get_calibration to size the estimate from real history.",
   "- When the user asks about past work, what happened, lessons learned, or recurring blockers, use recall to pull relevant notes from their logged history before answering.",
+  "- To act on many tasks at once (e.g. \"categorize everything\", \"re-prioritize my backlog\"), use list_tasks to fetch the set, then propose one update_task per task. If more than ~20 tasks would change, propose the first batch and ask before continuing.",
   "",
   "Read tools available:",
   toolCatalog()
