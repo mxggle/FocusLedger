@@ -4,6 +4,7 @@ import { useNotificationPermission } from "../../hooks/useNotificationPermission
 import { showStyledNotification } from "../../notify/notifyCenter";
 import { AI_LANGUAGES } from "../../services/ai/languages";
 import { DEFAULT_MODELS, PROVIDER_LABELS } from "../../services/ai/providers";
+import { DEFAULT_SOUL } from "../../services/ai/assistant/soul";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
@@ -234,8 +235,40 @@ export function SettingsPage() {
 
             <div className="mt-4">
               <Field
+                label="Assistant name"
+                hint="What your assistant is called."
+              >
+                <Input
+                  type="text"
+                  placeholder="Yolo Assistant"
+                  value={settings.assistantName}
+                  onChange={(event) => void updateSetting("assistantName", event.target.value)}
+                />
+              </Field>
+              <div className="mt-4">
+                <Field
+                  label="Soul"
+                  hint="Defines who your assistant is and how it behaves — its identity, voice, and boundaries. Leave blank to use the default."
+                >
+                  <textarea
+                    rows={10}
+                    placeholder={DEFAULT_SOUL}
+                    value={settings.assistantSoul}
+                    onChange={(event) => void updateSetting("assistantSoul", event.target.value)}
+                    className="w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs leading-relaxed text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+                  />
+                </Field>
+                <button
+                  type="button"
+                  onClick={() => void updateSetting("assistantSoul", DEFAULT_SOUL)}
+                  className="mt-2 text-xs font-medium text-primary hover:underline"
+                >
+                  Reset to default soul
+                </button>
+              </div>
+              <Field
                 label="About me"
-                hint="The assistant reads this every time. Add your role, current projects, working hours, goals — anything that helps it tailor plans."
+                hint="About you — the assistant reads this to tailor its work to your role, projects, hours, and goals."
               >
                 <textarea
                   rows={4}
