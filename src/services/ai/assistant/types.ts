@@ -45,6 +45,9 @@ export type AssistantContext = {
   tasks: ContextTask[]; // today's tasks
   backlog: ContextTask[]; // capped slice of backlog
   allTasksCount?: number; // total tasks searchable via search_tasks
+  assistantName: string; // the assistant's configured name
+  assistantSoul: string; // raw SOUL markdown ("" → default soul applied downstream)
+  allTaskRefs: { id: string; title: string }[]; // id+title for EVERY task, for id validation
   profile?: string; // the user's own "About me" description, when set
   briefing?: DayBriefing; // deterministic snapshot of today's load
   retro?: RetrospectiveInsights; // present only when there is history to report

@@ -93,4 +93,24 @@ describe("buildAssistantContext", () => {
     expect(buildAssistantContext({ ...snapshot, profile: "   " }).profile).toBeUndefined();
     expect(buildAssistantContext(snapshot).profile).toBeUndefined();
   });
+
+  it("threads assistantName, assistantSoul, and an all-task index", () => {
+    const ctx = buildAssistantContext({
+      selectedDate: "2026-06-20",
+      tasks: [],
+      backlogTasks: [],
+      categories: [],
+      allTasks: [
+        { id: "t1", title: "Far-future task", status: "todo", priority: "low",
+          estimated_minutes: null, category_id: null, description: null, due_date: "2026-09-01",
+          template_id: null, planned_start_time: null, planned_end_time: null, sort_order: null,
+          created_at: "", updated_at: "", completed_at: null, dropped_at: null }
+      ],
+      assistantName: "Hermes",
+      assistantSoul: "## Identity\nI am Hermes."
+    });
+    expect(ctx.assistantName).toBe("Hermes");
+    expect(ctx.assistantSoul).toContain("I am Hermes.");
+    expect(ctx.allTaskRefs).toEqual([{ id: "t1", title: "Far-future task" }]);
+  });
 });

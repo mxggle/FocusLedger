@@ -14,6 +14,8 @@ export type AssistantStoreSnapshot = {
   allTasks: Task[];
   profile?: string;
   targetMinutes?: number;
+  assistantName?: string;
+  assistantSoul?: string;
 };
 
 function toContextTask(task: Task): ContextTask {
@@ -39,6 +41,9 @@ export function buildAssistantContext(
     tasks,
     backlog: snapshot.backlogTasks.slice(0, BACKLOG_CAP).map(toContextTask),
     allTasksCount: snapshot.allTasks.length,
+    assistantName: snapshot.assistantName ?? "",
+    assistantSoul: snapshot.assistantSoul ?? "",
+    allTaskRefs: snapshot.allTasks.map((task) => ({ id: task.id, title: task.title })),
     briefing: computeDayBriefing(tasks, snapshot.backlogTasks.length, snapshot.targetMinutes ?? 0),
     ...(snapshot.profile && snapshot.profile.trim().length > 0
       ? { profile: snapshot.profile.trim() }

@@ -8,7 +8,10 @@ const ctx: AssistantContext = {
   tasks: [
     { id: "t1", title: "Write report", status: "todo", priority: "high", estimatedMinutes: 60, categoryId: "c1" }
   ],
-  backlog: []
+  backlog: [],
+  assistantName: "",
+  assistantSoul: "",
+  allTaskRefs: []
 };
 
 describe("parseAssistantResponse", () => {

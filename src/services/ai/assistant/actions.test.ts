@@ -10,7 +10,10 @@ const ctx: AssistantContext = {
   ],
   backlog: [
     { id: "b1", title: "Backlog item", status: "todo", priority: "low", estimatedMinutes: null, categoryId: null }
-  ]
+  ],
+  assistantName: "",
+  assistantSoul: "",
+  allTaskRefs: []
 };
 
 describe("validateAction", () => {
