@@ -79,9 +79,40 @@ Good things to include:
 
 The more it knows, the less you have to re-explain. Edit it any time.
 
+> **About me vs Soul.** *About me* is about **you** — your role, projects, and goals.
+> The **Soul** (next section) is about **the assistant** — who it is and how it behaves.
+
 ---
 
-## 5. Everyday use (not just pasting)
+## 5. Give it a Soul (identity, voice, boundaries)
+
+In **Settings → AI** there's an **Assistant name** field and a **Soul** editor. Together
+they define *who your assistant is* — separate from *About me*, which is about you.
+
+- **Assistant name** — what it's called (default: "Yolo Assistant"). The name is woven
+  into how it introduces and refers to itself.
+- **Soul** — a short markdown identity block. It becomes **slot #1 of the system prompt**,
+  the first thing the model reads, and it **replaces** the old hardcoded "day-planning
+  companion" identity. So the assistant is no longer locked to one workflow — it can be
+  whatever operator you want it to be.
+
+**Leave the Soul blank and a shipped default (`DEFAULT_SOUL`) is used** — a capable,
+broadly-skilled operating partner. Click **Reset to default soul** to drop that default
+into the editor so you can tweak it.
+
+A good Soul covers four short sections:
+- **Identity** — who it is and what it's for.
+- **Style** — how it talks (e.g. "warm, direct, brief").
+- **Avoid** — what it must never do (e.g. "never nag", "never invent numbers").
+- **Defaults** — how to handle broad or under-specified requests.
+
+The Soul changes the assistant's *voice and judgment* — it never gives it new powers.
+Every product guardrail still holds: it proposes, you approve, and it can't invent tasks
+or numbers (see §7 and §8).
+
+---
+
+## 6. Everyday use (not just pasting)
 
 Talk to it like a planning coach. Examples:
 
@@ -121,13 +152,30 @@ search them. Ask things like:
 It pulls the relevant dated notes from your history and grounds its answer in them.
 (Keyword match — use words you'd have written in the notes.)
 
+### Editing existing tasks
+Beyond creating tasks, the assistant can **edit ones you already have**. Ask it to
+change a task's **title**, **description**, **category**, **priority**, or **estimate**
+("rename the report task", "make the launch task high priority", "put the Anki task in
+the Japanese project") and it proposes an **edit card** showing exactly what changes. If
+you name a project that doesn't exist yet, approving the card creates it. As always, it's
+propose-then-confirm — nothing changes until you approve.
+
+### Bulk operations
+For "do this to all of them" requests — **"categorize everything"**,
+**"re-prioritize my backlog"** — the assistant first **lists the relevant set**, then
+proposes **one edit card per task**. Use **Apply all** in the group header to approve the
+whole batch in one click. To keep big sweeps reviewable, if more than ~20 tasks would
+change it proposes the **first batch and asks before continuing**, rather than dumping
+hundreds of cards at once.
+
 ### Actions it can propose
-Create a task · Reschedule a task · Move a task to the backlog · Drop a task ·
-Complete a task · Start a focus session on a task.
+Create a task · **Edit a task** (title/description/category/priority/estimate) ·
+Reschedule a task · Move a task to the backlog · Drop a task · Complete a task ·
+Start a focus session on a task.
 
 ---
 
-## 6. How approval works (propose-then-confirm)
+## 7. How approval works (propose-then-confirm)
 
 - **Nothing is applied automatically.** Every change is a card you approve.
 - **Destructive actions** (e.g. dropping a task) ask for an extra confirmation.
@@ -135,7 +183,7 @@ Complete a task · Start a focus session on a task.
 
 ---
 
-## 7. Honest numbers
+## 8. Honest numbers
 
 All metrics the assistant cites — estimate-vs-actual calibration, weekly time,
 slips — are **computed deterministically by the app**, not made up by the model.
@@ -144,7 +192,7 @@ The model only narrates them. If there isn't enough history yet, it will hedge
 
 ---
 
-## 8. Tips for the best results
+## 9. Tips for the best results
 
 - **Give it raw material.** The more context you paste, the better the plan. Don't
   pre-format — that's its job.
@@ -157,7 +205,7 @@ The model only narrates them. If there isn't enough history yet, it will hedge
 
 ---
 
-## 9. Current limits (so you're not surprised)
+## 10. Current limits (so you're not surprised)
 
 - **Recall is keyword-based, not semantic.** The assistant can pull up past work from your
   logged notes/blockers (see "Recall" below), but it matches on **keywords**, not meaning —
@@ -174,7 +222,7 @@ The model only narrates them. If there isn't enough history yet, it will hedge
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 - **"Assistant needs an API key"** → add one in Settings → AI.
 - **"The AI provider rejected your API key"** → re-check the key in Settings → AI.
