@@ -1,7 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ChatMessage } from "../services/ai/assistant/types";
 
 const { runAssistantTurn } = vi.hoisted(() => ({ runAssistantTurn: vi.fn() }));
 vi.mock("../services/ai/assistant/assistantRunner", () => ({ runAssistantTurn }));
+
+const { messageRepo } = vi.hoisted(() => ({
+  messageRepo: {
+    append: vi.fn((_message: ChatMessage): Promise<void> => Promise.resolve()),
+    getRecent: vi.fn((_limit: number): Promise<ChatMessage[]> => Promise.resolve([])),
+    clear: vi.fn((): Promise<void> => Promise.resolve())
+  }
+}));
+vi.mock("../db/assistantMessageRepository", () => ({ assistantMessageRepository: messageRepo }));
 
 vi.mock("../services/retrospect", () => ({
   buildRetrospectiveInsights: vi.fn(async () => ({
@@ -178,5 +188,44 @@ describe("assistantStore.insights", () => {
 
     expect(useAssistantStore.getState().messages).toEqual([]);
     expect(useAssistantStore.getState().insights).toBe(cached);
+  });
+});
+
+describe("assistantStore persistence", () => {
+  it("persists the user and assistant messages on send", async () => {
+    runAssistantTurn.mockResolvedValue({ reply: "ok", actions: [] });
+    useAssistantStore.setState({ messages: [], status: "idle", error: null });
+    await useAssistantStore.getState().send("remember this");
+    // one append for the user message, one for the assistant message
+    expect(messageRepo.append).toHaveBeenCalledTimes(2);
+    expect(messageRepo.append.mock.calls[0][0]).toMatchObject({ role: "user", content: "remember this" });
+    expect(messageRepo.append.mock.calls[1][0]).toMatchObject({ role: "assistant", content: "ok" });
+  });
+
+  it("hydrate loads recent messages and downgrades stale pending actions", async () => {
+    useAssistantStore.setState({ messages: [], status: "idle", error: null });
+    const rows: ChatMessage[] = [
+      { id: "u1", role: "user", content: "earlier", createdAt: "2026-06-19T10:00:00Z" },
+      {
+        id: "m1",
+        role: "assistant",
+        content: "older plan",
+        createdAt: "2026-06-19T10:00:01Z",
+        actions: [{ id: "a1", type: "create_task", params: {}, summary: "S", destructive: false, status: "pending" }]
+      }
+    ];
+    messageRepo.getRecent.mockResolvedValueOnce(rows);
+
+    await useAssistantStore.getState().hydrate();
+
+    const messages = useAssistantStore.getState().messages;
+    expect(messages).toHaveLength(2);
+    expect(messages[1].actions?.[0].status).toBe("dismissed");
+  });
+
+  it("clear wipes the persisted history", () => {
+    useAssistantStore.setState({ messages: [], status: "idle", error: null });
+    useAssistantStore.getState().clear();
+    expect(messageRepo.clear).toHaveBeenCalled();
   });
 });

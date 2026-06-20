@@ -25,6 +25,7 @@ import { useTaskReminders } from "./hooks/useTaskReminders";
 import { useTrayMenu } from "./hooks/useTrayMenu";
 import { useTrayStatus } from "./hooks/useTrayStatus";
 import { ensureNotifyCenter } from "./notify/notifyCenter";
+import { useAssistantStore } from "./stores/assistantStore";
 import { useSettingsStore } from "./stores/settingsStore";
 import { useTaskStore } from "./stores/taskStore";
 import { useUiStore } from "./stores/uiStore";
@@ -74,6 +75,7 @@ export default function App() {
 
   useEffect(() => {
     void initialize();
+    void useAssistantStore.getState().hydrate();
   }, [initialize]);
 
   // Wire the fullscreen notification action listeners once, so their buttons

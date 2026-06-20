@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextAfterApplyAll } from "./assistantStore";
+import { nextAfterApplyAll, restoreHistoryActions } from "./assistantStore";
 import type { ChatMessage } from "../services/ai/assistant/types";
 
 const message: ChatMessage = {
@@ -21,5 +21,20 @@ describe("nextAfterApplyAll", () => {
 
   it("returns an empty array for an unknown message", () => {
     expect(nextAfterApplyAll([message], "nope")).toEqual([]);
+  });
+});
+
+describe("restoreHistoryActions", () => {
+  it("downgrades pending actions to dismissed and leaves terminal ones intact", () => {
+    const restored = restoreHistoryActions([message]);
+    const actions = restored[0].actions!;
+    expect(actions.find((a) => a.id === "a1")?.status).toBe("dismissed"); // was pending
+    expect(actions.find((a) => a.id === "a2")?.status).toBe("applied"); // unchanged
+    expect(actions.find((a) => a.id === "a3")?.status).toBe("dismissed"); // was pending
+  });
+
+  it("leaves messages without actions untouched", () => {
+    const plain: ChatMessage = { id: "u1", role: "user", content: "hi", createdAt: "2026-06-20T00:00:00Z" };
+    expect(restoreHistoryActions([plain])[0]).toBe(plain);
   });
 });

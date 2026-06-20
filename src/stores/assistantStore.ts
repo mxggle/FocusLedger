@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { assistantMessageRepository } from "../db/assistantMessageRepository";
 import { ACTION_REGISTRY } from "../services/ai/assistant/actions";
 import { runAssistantTurn } from "../services/ai/assistant/assistantRunner";
 import { buildAssistantContext, type AssistantStoreSnapshot } from "../services/ai/assistant/contextBuilder";
@@ -13,12 +14,30 @@ import { useUiStore } from "./uiStore";
 
 export type AssistantStatus = "idle" | "thinking" | "error";
 
+/** How many past messages to restore on launch. Bounds the prompt size too. */
+const HISTORY_LIMIT = 40;
+
+/** Proposals restored from a previous session are stale — they reference a day
+ *  state that may have changed — so they render as already-handled, not actionable. */
+export function restoreHistoryActions(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map((message) => {
+    if (!message.actions) return message;
+    return {
+      ...message,
+      actions: message.actions.map((action) =>
+        action.status === "pending" ? { ...action, status: "dismissed" as const } : action
+      )
+    };
+  });
+}
+
 type AssistantState = {
   messages: ChatMessage[];
   status: AssistantStatus;
   error: string | null;
   steps: string[];
   insights: RetrospectiveInsights | null;
+  hydrate: () => Promise<void>;
   send: (text: string) => Promise<void>;
   applyAction: (messageId: string, actionId: string) => Promise<void>;
   applyAll: (messageId: string) => Promise<void>;
@@ -77,6 +96,19 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
   steps: [],
   insights: null,
 
+  hydrate: async () => {
+    if (get().messages.length > 0) return; // already loaded this session
+    try {
+      const restored = restoreHistoryActions(await assistantMessageRepository.getRecent(HISTORY_LIMIT));
+      // Don't clobber a conversation the user started while we were loading.
+      if (get().messages.length === 0 && restored.length > 0) {
+        set({ messages: restored });
+      }
+    } catch {
+      // Best-effort: a fresh conversation is fine if history can't be loaded.
+    }
+  },
+
   send: async (text) => {
     const trimmed = text.trim();
     if (trimmed.length === 0 || get().status === "thinking") return;
@@ -89,6 +121,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     };
     const history = [...get().messages, userMessage];
     set({ messages: history, status: "thinking", error: null, steps: [] });
+    void assistantMessageRepository.append(userMessage).catch(() => {});
     await get().loadInsights();
 
     try {
@@ -107,6 +140,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
         actions: result.actions
       };
       set({ messages: [...history, assistantMessage], status: "idle", steps: [] });
+      void assistantMessageRepository.append(assistantMessage).catch(() => {});
     } catch (error) {
       const message = error instanceof Error ? error.message : "The assistant ran into a problem";
       set({ status: "error", error: message, steps: [] });
@@ -192,5 +226,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     }
   },
 
-  clear: () => set({ messages: [], status: "idle", error: null, steps: [] })
+  clear: () => {
+    set({ messages: [], status: "idle", error: null, steps: [] });
+    void assistantMessageRepository.clear().catch(() => {});
+  }
 }));

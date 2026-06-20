@@ -88,6 +88,14 @@ const SCHEMA_STATEMENTS = [
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS assistant_messages (
+    id TEXT PRIMARY KEY,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    actions TEXT,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_assistant_messages_created ON assistant_messages(created_at)`,
   `CREATE INDEX IF NOT EXISTS idx_tasks_due_status ON tasks(due_date, status)`,
   `CREATE INDEX IF NOT EXISTS idx_task_templates_enabled ON task_templates(enabled)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_template_occurrences_date
