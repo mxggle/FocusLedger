@@ -42,7 +42,11 @@ const deps: ToolDeps = {
     task({ id: "t1", title: "Write quarterly report", description: "finance summary" }),
     task({ id: "t2", title: "Book dentist", status: "done" })
   ],
-  insights
+  insights,
+  history: [
+    { date: "2026-06-12", taskTitle: "Write quarterly report", category: "Deep Work", note: "Drafted intro", blocker: "waiting on finance data", nextAction: null },
+    { date: "2026-06-10", taskTitle: "Book dentist", category: "Life", note: "called, no answer", blocker: null, nextAction: "try again Monday" }
+  ]
 };
 
 describe("executeLookup", () => {
@@ -78,5 +82,27 @@ describe("executeLookup", () => {
     const cat = toolCatalog();
     expect(cat).toContain("search_tasks");
     expect(cat).toContain("get_calibration");
+    expect(cat).toContain("recall");
+  });
+
+  it("recall matches a blocker and returns a dated snippet", () => {
+    const out = executeLookup({ tool: "recall", query: "finance data" }, deps);
+    expect(out).toContain("2026-06-12");
+    expect(out).toContain("Write quarterly report");
+    expect(out).toContain("waiting on finance data");
+  });
+
+  it("recall matches on the next action text too", () => {
+    const out = executeLookup({ tool: "recall", query: "Monday" }, deps);
+    expect(out).toContain("Book dentist");
+  });
+
+  it("recall reports no matches without throwing", () => {
+    expect(executeLookup({ tool: "recall", query: "zzznope" }, deps).toLowerCase()).toContain("no ");
+  });
+
+  it("recall reports an empty history gracefully", () => {
+    const out = executeLookup({ tool: "recall", query: "anything" }, { ...deps, history: [] });
+    expect(out.toLowerCase()).toContain("no logged");
   });
 });

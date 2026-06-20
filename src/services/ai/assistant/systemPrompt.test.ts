@@ -126,6 +126,12 @@ describe("buildAssistantSystemPrompt — agent loop", () => {
     expect(prompt.toLowerCase()).toContain("duplicate");
   });
 
+  it("documents recall for questions about past work", () => {
+    const prompt = buildAssistantSystemPrompt(ctxTools);
+    expect(prompt).toContain("recall");
+    expect(prompt.toLowerCase()).toContain("lessons learned");
+  });
+
   it("mentions the searchable task count when tasks exist", () => {
     expect(buildAssistantSystemPrompt(ctxTools)).toContain("12");
   });

@@ -1,5 +1,6 @@
 import type { Task } from "../../../types";
 import type { CalibrationStat, RetrospectiveInsights } from "../../retrospect/types";
+import type { RecallEntry } from "./recallHistory";
 
 /** A read-only request the model emits during the agent loop. */
 export type LookupRequest = {
@@ -13,6 +14,7 @@ export type LookupRequest = {
 export type ToolDeps = {
   allTasks: Task[];
   insights: RetrospectiveInsights | null;
+  history: RecallEntry[];
 };
 
 type AssistantTool = {
@@ -62,6 +64,34 @@ function getCalibration(req: LookupRequest, deps: ToolDeps): string {
   return `get_calibration — ${describeStat(calibration.overall)} (overall; no specific category match)`;
 }
 
+function recallSnippet(entry: RecallEntry): string {
+  const parts: string[] = [];
+  if (entry.note) parts.push(entry.note);
+  if (entry.blocker) parts.push(`blocked — ${entry.blocker}`);
+  if (entry.nextAction) parts.push(`next — ${entry.nextAction}`);
+  const where = entry.category ? ` (${entry.category})` : "";
+  return `- [${entry.date}] "${entry.taskTitle}"${where}: ${parts.join("; ")}`;
+}
+
+function recall(req: LookupRequest, deps: ToolDeps): string {
+  if (deps.history.length === 0) return "recall: no logged reflections yet to search.";
+  const query = (req.query ?? "").trim().toLowerCase();
+  if (query.length === 0) return "recall: provide a non-empty query.";
+  const terms = query.split(/\s+/);
+  const scored = deps.history
+    .map((entry) => {
+      const hay = `${entry.taskTitle} ${entry.category ?? ""} ${entry.note ?? ""} ${entry.blocker ?? ""} ${entry.nextAction ?? ""}`.toLowerCase();
+      const score = terms.reduce((acc, term) => (hay.includes(term) ? acc + 1 : acc), 0);
+      return { entry, score };
+    })
+    .filter((row) => row.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_SEARCH_RESULTS);
+
+  if (scored.length === 0) return `recall("${req.query}"): no matching history.`;
+  return [`recall("${req.query}") found ${scored.length}:`, ...scored.map(({ entry }) => recallSnippet(entry))].join("\n");
+}
+
 const TOOL_REGISTRY: Record<string, AssistantTool> = {
   search_tasks: {
     name: "search_tasks",
@@ -74,6 +104,12 @@ const TOOL_REGISTRY: Record<string, AssistantTool> = {
     when: "you are about to set estimated_minutes and want to size it from real history",
     params: "category (optional, a category name; omit for the overall ratio)",
     execute: getCalibration
+  },
+  recall: {
+    name: "recall",
+    when: "the user asks about past work, what happened, lessons learned, or recurring blockers",
+    params: "query (required, keywords)",
+    execute: recall
   }
 };
 

@@ -107,6 +107,7 @@ const TOOL_PROTOCOL = [
   '- When you are ready, respond with the final { "reply", "actions" } object as usual. Do not mix lookups and a final answer in the same message.',
   "- Before creating any task, use search_tasks to check it does not already exist; if a close duplicate exists, do not recreate it — mention the existing task id in your reply instead.",
   "- Before setting estimated_minutes, you may use get_calibration to size the estimate from real history.",
+  "- When the user asks about past work, what happened, lessons learned, or recurring blockers, use recall to pull relevant notes from their logged history before answering.",
   "",
   "Read tools available:",
   toolCatalog()

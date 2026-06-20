@@ -4,6 +4,7 @@ import { buildAssistantContext, type AssistantStoreSnapshot } from "./contextBui
 import { parseAssistantResponse, parseLoopStep } from "./responseParser";
 import { buildAssistantSystemPrompt } from "./systemPrompt";
 import { executeLookup, type ToolDeps } from "./tools";
+import type { RecallEntry } from "./recallHistory";
 import type { AssistantTurnResult } from "./types";
 import type { RetrospectiveInsights } from "../../retrospect/types";
 
@@ -14,7 +15,8 @@ const MAX_STEPS = 4;
 
 const STEP_LABELS: Record<string, string> = {
   search_tasks: "Scanning your existing tasks…",
-  get_calibration: "Checking how long similar work takes…"
+  get_calibration: "Checking how long similar work takes…",
+  recall: "Recalling what you did before…"
 };
 
 export type RunAgentLoopInput = {
@@ -22,6 +24,7 @@ export type RunAgentLoopInput = {
   snapshot: AssistantStoreSnapshot;
   messages: ChatTurn[]; // full conversation history, oldest first, last = newest user turn
   insights?: RetrospectiveInsights | null;
+  history?: RecallEntry[]; // trailing window of logged reflections, for the recall tool
   onStep?: (label: string) => void;
 };
 
@@ -42,7 +45,11 @@ export async function runAgentLoop(
 ): Promise<AssistantTurnResult> {
   const ctx = buildAssistantContext(input.snapshot, input.insights);
   const system = buildAssistantSystemPrompt(ctx);
-  const toolDeps: ToolDeps = { allTasks: input.snapshot.allTasks, insights: input.insights ?? null };
+  const toolDeps: ToolDeps = {
+    allTasks: input.snapshot.allTasks,
+    insights: input.insights ?? null,
+    history: input.history ?? []
+  };
 
   const messages: ChatTurn[] = [...input.messages];
   let lastRaw = "";

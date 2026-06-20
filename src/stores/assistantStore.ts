@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { assistantMessageRepository } from "../db/assistantMessageRepository";
 import { ACTION_REGISTRY } from "../services/ai/assistant/actions";
 import { runAssistantTurn } from "../services/ai/assistant/assistantRunner";
+import { loadRecallEntries, type RecallEntry } from "../services/ai/assistant/recallHistory";
 import { buildAssistantContext, type AssistantStoreSnapshot } from "../services/ai/assistant/contextBuilder";
 import type { ChatMessage, ProposedAction } from "../services/ai/assistant/types";
 import type { ChatTurn } from "../services/ai/providers";
@@ -37,6 +38,7 @@ type AssistantState = {
   error: string | null;
   steps: string[];
   insights: RetrospectiveInsights | null;
+  history: RecallEntry[] | null;
   hydrate: () => Promise<void>;
   send: (text: string) => Promise<void>;
   applyAction: (messageId: string, actionId: string) => Promise<void>;
@@ -45,6 +47,7 @@ type AssistantState = {
   dismissAction: (messageId: string, actionId: string) => void;
   clear: () => void;
   loadInsights: () => Promise<void>;
+  loadHistory: () => Promise<void>;
   refreshInsights: () => Promise<void>;
 };
 
@@ -95,6 +98,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
   error: null,
   steps: [],
   insights: null,
+  history: null,
 
   hydrate: async () => {
     if (get().messages.length > 0) return; // already loaded this session
@@ -123,6 +127,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     set({ messages: history, status: "thinking", error: null, steps: [] });
     void assistantMessageRepository.append(userMessage).catch(() => {});
     await get().loadInsights();
+    await get().loadHistory();
 
     try {
       const result = await runAssistantTurn({
@@ -130,6 +135,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
         snapshot: snapshot(),
         messages: toChatTurns(history),
         insights: get().insights,
+        history: get().history ?? [],
         onStep: (label) => set({ steps: [...get().steps, label] })
       });
       const assistantMessage: ChatMessage = {
@@ -215,6 +221,16 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     } catch {
       // Analytics are best-effort; the assistant still works without them.
       set({ insights: null });
+    }
+  },
+
+  loadHistory: async () => {
+    if (get().history) return; // cached for the session
+    try {
+      set({ history: await loadRecallEntries() });
+    } catch {
+      // Recall is best-effort; the assistant still works without history.
+      set({ history: [] });
     }
   },
 

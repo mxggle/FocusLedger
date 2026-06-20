@@ -1,6 +1,7 @@
 import { runAgentLoop, type AgentLoopDeps } from "./agentLoop";
 import type { AiSettings, ChatTurn } from "../providers";
 import type { AssistantStoreSnapshot } from "./contextBuilder";
+import type { RecallEntry } from "./recallHistory";
 import type { AssistantTurnResult } from "./types";
 import type { RetrospectiveInsights } from "../../retrospect/types";
 
@@ -9,6 +10,7 @@ export type RunAssistantTurnInput = {
   snapshot: AssistantStoreSnapshot;
   messages: ChatTurn[]; // full conversation history, oldest first, last = newest user turn
   insights?: RetrospectiveInsights | null; // pre-computed retrospective facts
+  history?: RecallEntry[]; // trailing window of logged reflections, for the recall tool
   onStep?: (label: string) => void; // live status as the agent loop runs lookups
 };
 

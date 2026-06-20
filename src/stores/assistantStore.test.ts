@@ -13,6 +13,10 @@ const { messageRepo } = vi.hoisted(() => ({
 }));
 vi.mock("../db/assistantMessageRepository", () => ({ assistantMessageRepository: messageRepo }));
 
+vi.mock("../services/ai/assistant/recallHistory", () => ({
+  loadRecallEntries: vi.fn(async () => [])
+}));
+
 vi.mock("../services/retrospect", () => ({
   buildRetrospectiveInsights: vi.fn(async () => ({
     windowDays: 30,
