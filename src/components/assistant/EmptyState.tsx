@@ -1,10 +1,10 @@
 import { Sparkles } from "lucide-react";
 
 const STARTERS = [
-  "Plan my day around 3 hours of deep work",
+  "Plan my day",
+  "How is today looking?",
   "Break down: launch the new landing page this week",
-  "Reschedule what I didn't finish to tomorrow",
-  "Draft tasks from these notes: …"
+  "Reschedule what I didn't finish to tomorrow"
 ];
 
 export function AssistantEmptyState({ onPick }: { onPick: (text: string) => void }) {

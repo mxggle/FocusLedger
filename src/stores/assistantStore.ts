@@ -66,7 +66,8 @@ function snapshot(): AssistantStoreSnapshot {
     backlogTasks: state.backlogTasks,
     categories: state.categories,
     allTasks: state.allTasks,
-    profile: useSettingsStore.getState().settings.assistantProfile
+    profile: useSettingsStore.getState().settings.assistantProfile,
+    targetMinutes: useSettingsStore.getState().settings.dailyFocusTargetMinutes
   };
 }
 

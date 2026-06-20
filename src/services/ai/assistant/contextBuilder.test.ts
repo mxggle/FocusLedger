@@ -75,6 +75,17 @@ describe("buildAssistantContext", () => {
     expect(buildAssistantContext(snapshotRetro).allTasksCount).toBe(0);
   });
 
+  it("attaches a day briefing computed from today's tasks and target", () => {
+    const ctx = buildAssistantContext({
+      ...snapshot,
+      tasks: [task({ estimated_minutes: 300, status: "todo" })],
+      targetMinutes: 240
+    });
+    expect(ctx.briefing?.scheduledMinutes).toBe(300);
+    expect(ctx.briefing?.status).toBe("overcommitted");
+    expect(ctx.briefing?.overcommitMinutes).toBe(60);
+  });
+
   it("passes through a non-empty profile (trimmed) and omits a blank one", () => {
     expect(buildAssistantContext({ ...snapshot, profile: "  I'm a PM in Tokyo. " }).profile).toBe(
       "I'm a PM in Tokyo."

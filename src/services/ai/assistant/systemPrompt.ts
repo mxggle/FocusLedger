@@ -113,6 +113,32 @@ const TOOL_PROTOCOL = [
   toolCatalog()
 ].join("\n");
 
+function renderBriefing(ctx: AssistantContext): string[] {
+  const b = ctx.briefing;
+  if (!b) return [];
+  const target = b.targetMinutes > 0 ? ` vs ${b.targetMinutes}m target` : "";
+  const tail =
+    b.status === "overcommitted"
+      ? ` — overcommitted by ${b.overcommitMinutes}m`
+      : b.status === "empty"
+        ? " — nothing scheduled yet"
+        : b.status === "light"
+          ? " — a light day"
+          : "";
+  return [
+    "Today at a glance (pre-computed — do not recalculate):",
+    `- ${b.scheduledMinutes}m scheduled${target} (${b.openCount} open, ${b.doneCount} done), ${b.backlogCount} in backlog${tail}`
+  ];
+}
+
+const PROACTIVE_RULES = [
+  "Being proactive about the day:",
+  "- If today is overcommitted, say by how much and offer to defer or shrink the lowest-priority work — propose the specific reschedule/backlog moves.",
+  "- If today is empty or light, offer to pull suitable items from the backlog rather than leaving the user idle.",
+  "- When asked to plan the day, fit your proposals within the focus target, using calibrated estimates.",
+  "- Keep it a brief, helpful nudge — never nag, and never act without the usual confirm cards."
+].join("\n");
+
 const RETRO_RULES = [
   "Using history & patterns:",
   "- When the user asks how a day/week went or why things slip, ground your answer in the numbers above — cite them plainly.",
@@ -156,6 +182,10 @@ export function buildAssistantSystemPrompt(ctx: AssistantContext): string {
     "Current context:",
     renderContext(ctx)
   ];
+
+  if (ctx.briefing) {
+    lines.push("", ...renderBriefing(ctx), "", PROACTIVE_RULES);
+  }
 
   if (ctx.retro) {
     lines.push("", renderRetro(ctx.retro), "", RETRO_RULES);

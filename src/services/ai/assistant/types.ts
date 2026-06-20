@@ -1,6 +1,7 @@
 import type { CreateTaskInput, TaskPriority, TaskStatus } from "../../../types";
 import type { ChatRole } from "../providers";
 import type { RetrospectiveInsights } from "../../retrospect/types";
+import type { DayBriefing } from "./dayBriefing";
 
 export type { ChatRole };
 
@@ -45,6 +46,7 @@ export type AssistantContext = {
   backlog: ContextTask[]; // capped slice of backlog
   allTasksCount?: number; // total tasks searchable via search_tasks
   profile?: string; // the user's own "About me" description, when set
+  briefing?: DayBriefing; // deterministic snapshot of today's load
   retro?: RetrospectiveInsights; // present only when there is history to report
 };
 

@@ -150,3 +150,34 @@ describe("buildAssistantSystemPrompt — user profile", () => {
     expect(buildAssistantSystemPrompt(base)).not.toContain("About the user");
   });
 });
+
+describe("buildAssistantSystemPrompt — day briefing", () => {
+  const withBriefing: AssistantContext = {
+    today: "2026-06-20",
+    categories: [],
+    tasks: [],
+    backlog: [],
+    briefing: {
+      scheduledMinutes: 300,
+      targetMinutes: 240,
+      overcommitMinutes: 60,
+      openCount: 4,
+      doneCount: 1,
+      backlogCount: 7,
+      status: "overcommitted"
+    }
+  };
+
+  it("renders today's load and the proactive rules when a briefing is present", () => {
+    const prompt = buildAssistantSystemPrompt(withBriefing);
+    expect(prompt).toContain("Today at a glance");
+    expect(prompt).toContain("300m scheduled");
+    expect(prompt).toContain("overcommitted by 60m");
+    expect(prompt.toLowerCase()).toContain("proactive");
+  });
+
+  it("omits the briefing section when there is no briefing", () => {
+    const prompt = buildAssistantSystemPrompt({ today: "2026-06-20", categories: [], tasks: [], backlog: [] });
+    expect(prompt).not.toContain("Today at a glance");
+  });
+});
