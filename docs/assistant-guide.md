@@ -94,6 +94,16 @@ Talk to it like a planning coach. Examples:
 It proposes the matching changes as cards. Questions and advice come back as plain
 replies with no cards.
 
+### Proactive day sense
+The assistant knows today's real load — how much you've scheduled versus your **daily focus
+target** (Settings → AI), plus what's open, done, and waiting in the backlog. So it can:
+- **Warn when you're overcommitted** ("you've packed 6h into a 4h target — defer the
+  lowest-priority task?").
+- **Offer to fill a light or empty day** from the backlog.
+- **Plan your day within your target** — just say "Plan my day".
+
+It still only *proposes*; you approve. It nudges, it doesn't nag.
+
 ### Recall — ask about your past work
 When you log notes, blockers, or next-actions during focus sessions, the assistant can
 search them. Ask things like:
@@ -146,8 +156,9 @@ The model only narrates them. If there isn't enough history yet, it will hedge
   logged notes/blockers (see "Recall" below), but it matches on **keywords**, not meaning —
   so phrase your question with words you'd have used in the notes. (A future upgrade could
   add semantic/embedding search.)
-- **No proactive nudges yet.** It won't auto-plan your morning or warn about
-  overcommitment on its own. (Planned: Phase 3.)
+- **Proactive *within* a chat, not on a schedule.** It flags overcommitment and offers to
+  plan when you talk to it, but it doesn't yet *pop up on its own* each morning or run an
+  automatic end-of-day review. (Planned: Phase 3b — scheduled briefings + debrief loop.)
 - **Pasted text only.** No screenshot/email/Slack import yet.
 - **No live token streaming.** You see a step trace, then the full reply.
 - **Dedup skips, it doesn't merge.** On a near-duplicate it declines to recreate and
