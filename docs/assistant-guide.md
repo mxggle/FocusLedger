@@ -94,6 +94,16 @@ Talk to it like a planning coach. Examples:
 It proposes the matching changes as cards. Questions and advice come back as plain
 replies with no cards.
 
+### Recall — ask about your past work
+When you log notes, blockers, or next-actions during focus sessions, the assistant can
+search them. Ask things like:
+- "What blocked me last time I worked on the launch?"
+- "What did I learn from the last report?"
+- "What keeps slowing down my Japanese practice?"
+
+It pulls the relevant dated notes from your history and grounds its answer in them.
+(Keyword match — use words you'd have written in the notes.)
+
 ### Actions it can propose
 Create a task · Reschedule a task · Move a task to the backlog · Drop a task ·
 Complete a task · Start a focus session on a task.
@@ -132,11 +142,10 @@ The model only narrates them. If there isn't enough history yet, it will hedge
 
 ## 9. Current limits (so you're not surprised)
 
-- **Conversation is saved, but not yet *searched*.** Your **About me** and your **chat
-  history** are remembered across restarts (the panel reopens where you left off).
-  Proposals from a previous session show as already-handled, so nothing gets applied out
-  of context. What's still missing: the assistant doesn't yet *semantically search* your
-  full task/time history to pull in relevant past work. (Planned: Phase 2b-2 — recall.)
+- **Recall is keyword-based, not semantic.** The assistant can pull up past work from your
+  logged notes/blockers (see "Recall" below), but it matches on **keywords**, not meaning —
+  so phrase your question with words you'd have used in the notes. (A future upgrade could
+  add semantic/embedding search.)
 - **No proactive nudges yet.** It won't auto-plan your morning or warn about
   overcommitment on its own. (Planned: Phase 3.)
 - **Pasted text only.** No screenshot/email/Slack import yet.
