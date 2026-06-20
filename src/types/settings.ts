@@ -31,6 +31,10 @@ export type AppSettings = {
   aiLanguage: string;
   /** Free-text "About me" the assistant reads every turn (role, projects, hours, goals). */
   assistantProfile: string;
+  /** The assistant's display name (its "soul" answers to this). */
+  assistantName: string;
+  /** Markdown SOUL.md-style identity block. Blank → the shipped DEFAULT_SOUL is used. */
+  assistantSoul: string;
   /** Generate the daily debrief automatically at `debriefAutoTime`. */
   debriefAutoEnabled: boolean;
   /** Local time of day (`HH:mm`) for the automatic debrief. */
@@ -54,6 +58,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   aiBaseUrl: "",
   aiLanguage: "",
   assistantProfile: "",
+  assistantName: "Yolo Assistant",
+  assistantSoul: "",
   debriefAutoEnabled: false,
   debriefAutoTime: "23:00"
 };
