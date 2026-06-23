@@ -44,6 +44,32 @@ describe("assistantMessageRepository", () => {
     expect(params[4]).toBe("2026-06-20T10:00:00.000Z");
   });
 
+  it("append stores tool calls in the existing JSON column", async () => {
+    const message: ChatMessage = {
+      id: "m-tool",
+      role: "assistant",
+      content: "Done.",
+      createdAt: "2026-06-20T10:00:00.000Z",
+      toolCalls: [
+        {
+          id: "tc1",
+          name: "update_task",
+          args: { task_id: "t1", planned_start_time: "09:30" },
+          category: "write",
+          destructive: false,
+          summary: "Updated Report",
+          status: "executed"
+        }
+      ]
+    };
+
+    await assistantMessageRepository.append(message);
+
+    const params = mocks.execute.mock.calls[0][1];
+    const payload = JSON.parse(params[3]);
+    expect(payload[0]).toMatchObject({ id: "tc1", name: "update_task", status: "executed" });
+  });
+
   it("append stores null actions for a user message", async () => {
     const message: ChatMessage = {
       id: "u1",
@@ -85,6 +111,32 @@ describe("assistantMessageRepository", () => {
     const result = await assistantMessageRepository.getRecent(10);
     expect(result[0].actions).toHaveLength(1);
     expect(result[0].actions?.[0].status).toBe("applied");
+  });
+
+  it("getRecent parses tool call payloads back into toolCalls", async () => {
+    mocks.select.mockResolvedValue([
+      {
+        id: "m4",
+        role: "assistant",
+        content: "done",
+        actions: JSON.stringify([
+          {
+            id: "tc1",
+            name: "update_task",
+            args: { task_id: "t1" },
+            category: "write",
+            destructive: false,
+            summary: "Updated",
+            status: "executed"
+          }
+        ]),
+        created_at: "2026-06-20T10:03:00.000Z"
+      }
+    ]);
+    const result = await assistantMessageRepository.getRecent(10);
+    expect(result[0].toolCalls).toHaveLength(1);
+    expect(result[0].toolCalls?.[0].name).toBe("update_task");
+    expect(result[0].actions).toBeUndefined();
   });
 
   it("clear deletes all rows", async () => {

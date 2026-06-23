@@ -6,11 +6,14 @@ import {
   runAgentLoop,
   type AgentLoopDeps
 } from "./agentLoop";
+import type { AgentTaskStore, PermissionLevel } from "./agentTools/types";
 import { parseAssistantResponse, parseLoopStep } from "./responseParser";
 import { executeLookup } from "./tools";
+import { runToolLoop, type ToolLoopDeps, type ToolLoopResult } from "./toolLoop";
 import { generateChat as defaultGenerateChat, streamChat as defaultStreamChat } from "../chatClient";
 import type { AiSettings, ChatInput, ChatTurn } from "../providers";
-import type { AssistantStoreSnapshot } from "./contextBuilder";
+import { buildAssistantContext, type AssistantStoreSnapshot } from "./contextBuilder";
+import { buildAssistantSystemPrompt } from "./systemPrompt";
 import type { RecallEntry } from "./recallHistory";
 import type { AssistantTurnResult, ProposedAction } from "./types";
 import type { RetrospectiveInsights } from "../../retrospect/types";
@@ -27,6 +30,11 @@ export type RunAssistantTurnInput = {
 /** Injected for tests; defaults to the real network client. */
 export type AssistantRunnerDeps = AgentLoopDeps;
 
+export type AssistantToolRunnerDeps = Partial<ToolLoopDeps> & {
+  store: AgentTaskStore;
+  now?: () => string;
+};
+
 /**
  * Run one assistant turn. Delegates to the tool-using agent loop, which may
  * perform read-only lookups before producing the final reply + proposed actions.
@@ -36,6 +44,37 @@ export async function runAssistantTurn(
   deps?: AssistantRunnerDeps
 ): Promise<AssistantTurnResult> {
   return runAgentLoop(input, deps);
+}
+
+function permissionLevelFor(snapshot: AssistantStoreSnapshot): PermissionLevel {
+  return snapshot.permissionLevel ?? "auto";
+}
+
+/** Run one L1 tool-calling assistant turn. Write tools are executed or queued
+ * according to the permission level already captured in the snapshot. */
+export async function runAssistantToolTurn(
+  input: RunAssistantTurnInput,
+  deps: AssistantToolRunnerDeps
+): Promise<ToolLoopResult> {
+  const ctx = buildAssistantContext(input.snapshot, input.insights);
+  const system = buildAssistantSystemPrompt(ctx);
+  return runToolLoop(
+    {
+      settings: input.settings,
+      system,
+      messages: input.messages,
+      level: permissionLevelFor(input.snapshot),
+      deps: {
+        store: deps.store,
+        ctx,
+        insights: input.insights ?? null,
+        history: input.history ?? [],
+        now: deps.now ?? (() => new Date().toISOString())
+      },
+      onStep: input.onStep
+    },
+    { generateChat: deps.generateChat ?? defaultGenerateChat }
+  );
 }
 
 /** Streaming transport — like generateChat but forwards SSE deltas and returns

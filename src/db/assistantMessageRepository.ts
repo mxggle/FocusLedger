@@ -1,5 +1,6 @@
 import { getDatabase } from "./client";
 import type { ChatMessage, ProposedAction } from "../services/ai/assistant/types";
+import type { ToolCallRecord } from "../services/ai/assistant/agentTools/types";
 import type { ChatRole } from "../services/ai/providers";
 
 type AssistantMessageRow = {
@@ -10,13 +11,18 @@ type AssistantMessageRow = {
   created_at: string;
 };
 
-function parseActions(value: string | null): ProposedAction[] | undefined {
-  if (!value) return undefined;
+function parsePayload(value: string | null): Pick<ChatMessage, "actions" | "toolCalls"> {
+  if (!value) return {};
   try {
     const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? (parsed as ProposedAction[]) : undefined;
+    if (!Array.isArray(parsed)) return {};
+    const first = parsed[0] as Record<string, unknown> | undefined;
+    if (first && typeof first.name === "string" && "args" in first) {
+      return { toolCalls: parsed as ToolCallRecord[] };
+    }
+    return { actions: parsed as ProposedAction[] };
   } catch {
-    return undefined;
+    return {};
   }
 }
 
@@ -26,7 +32,7 @@ function toChatMessage(row: AssistantMessageRow): ChatMessage {
     role: row.role as ChatRole,
     content: row.content,
     createdAt: row.created_at,
-    actions: parseActions(row.actions)
+    ...parsePayload(row.actions)
   };
 }
 
@@ -43,7 +49,7 @@ export const assistantMessageRepository = {
         message.id,
         message.role,
         message.content,
-        message.actions ? JSON.stringify(message.actions) : null,
+        message.toolCalls ? JSON.stringify(message.toolCalls) : message.actions ? JSON.stringify(message.actions) : null,
         message.createdAt
       ]
     );

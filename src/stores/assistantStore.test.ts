@@ -1,13 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ChatMessage, ProposedAction } from "../services/ai/assistant/types";
+import type { ChatMessage } from "../services/ai/assistant/types";
+import type { Task } from "../types";
 
-const { runAssistantTurn, runAssistantTurnStreaming } = vi.hoisted(() => ({
-  runAssistantTurn: vi.fn(),
-  runAssistantTurnStreaming: vi.fn()
+const { runAssistantToolTurn } = vi.hoisted(() => ({
+  runAssistantToolTurn: vi.fn()
 }));
 vi.mock("../services/ai/assistant/assistantRunner", () => ({
-  runAssistantTurn,
-  runAssistantTurnStreaming
+  runAssistantToolTurn
 }));
 
 const { messageRepo } = vi.hoisted(() => ({
@@ -58,11 +57,14 @@ vi.mock("../services/retrospect", () => ({
 
 const taskState = {
   selectedDate: "2026-06-18",
-  tasks: [],
-  backlogTasks: [],
+  tasks: [] as Task[],
+  backlogTasks: [] as Task[],
   categories: [],
-  allTasks: [],
+  allTasks: [] as Task[],
   createTask: vi.fn().mockResolvedValue({ ok: true }),
+  updateTask: vi.fn().mockResolvedValue({ ok: true }),
+  deleteTask: vi.fn().mockResolvedValue({ ok: true }),
+  pauseActiveTask: vi.fn().mockResolvedValue({ ok: true }),
   rescheduleTask: vi.fn(), moveTaskToBacklog: vi.fn(), dropTask: vi.fn(),
   completeTask: vi.fn(), startTask: vi.fn(), ensureCategory: vi.fn(),
   refresh: vi.fn().mockResolvedValue(undefined)
@@ -77,7 +79,21 @@ vi.mock("./uiStore", () => ({ useUiStore: { getState: () => uiState } }));
 
 vi.mock("./settingsStore", () => ({
   useSettingsStore: {
-    getState: () => ({ settings: { aiProvider: "anthropic", aiApiKey: "k", aiModel: "", aiBaseUrl: "" } })
+    getState: () => ({
+      settings: {
+        aiProvider: "anthropic",
+        aiApiKey: "k",
+        aiModel: "",
+        aiBaseUrl: "",
+        assistantProfile: "",
+        assistantName: "Yolo Assistant",
+        assistantSoul: "",
+        assistantPermissionLevel: "auto",
+        assistantMemoryEnabled: false,
+        assistantMemoryModel: "",
+        dailyFocusTargetMinutes: 240
+      }
+    })
   }
 }));
 
@@ -89,16 +105,26 @@ function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-/** Drive the streaming callbacks synchronously (awaiting the async store hooks). */
-async function emit(
-  cb: { onToken?: (c: string) => void; onActions?: (a: ProposedAction[]) => void; onDone?: (r: string) => void },
-  tokens: string[],
-  actions: ProposedAction[],
-  reply: string
-): Promise<void> {
-  for (const t of tokens) cb.onToken?.(t);
-  await cb.onActions?.(actions);
-  await cb.onDone?.(reply);
+function taskFixture(overrides: Partial<Task> = {}): Task {
+  return {
+    id: "t1",
+    title: "Report",
+    description: null,
+    status: "todo",
+    priority: "medium",
+    category_id: null,
+    estimated_minutes: null,
+    due_date: "2026-06-20",
+    planned_start_time: null,
+    planned_end_time: null,
+    sort_order: null,
+    template_id: null,
+    created_at: "2026-06-20T09:00:00Z",
+    updated_at: "u0",
+    completed_at: null,
+    dropped_at: null,
+    ...overrides
+  };
 }
 
 beforeEach(() => {
@@ -113,8 +139,15 @@ beforeEach(() => {
     memories: null
   });
   vi.clearAllMocks();
-  runAssistantTurnStreaming.mockReset();
+  runAssistantToolTurn.mockReset();
+  taskState.tasks = [];
+  taskState.backlogTasks = [];
+  taskState.categories = [];
+  taskState.allTasks = [];
   taskState.createTask.mockResolvedValue({ ok: true });
+  taskState.updateTask.mockResolvedValue({ ok: true });
+  taskState.deleteTask.mockResolvedValue({ ok: true });
+  taskState.refresh.mockResolvedValue(undefined);
   uiState.confirm.mockResolvedValue(true);
   // Deterministic, synchronous rAF so token buffering flushes immediately in tests.
   vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
@@ -128,70 +161,72 @@ afterEach(() => {
 });
 
 describe("assistantStore.send", () => {
-  it("appends user + assistant messages with proposed actions", async () => {
-    runAssistantTurnStreaming.mockImplementation(async (_input, cb) => {
-      await emit(cb, ["Here's a plan"], [{ id: "a1", type: "create_task", params: { title: "X" }, summary: "Create X", destructive: false, status: "pending" }], "Here's a plan");
+  it("appends user + assistant messages with tool-call records", async () => {
+    runAssistantToolTurn.mockResolvedValue({
+      reply: "Here's a plan",
+      toolCalls: [
+        {
+          id: "tc1",
+          name: "create_task",
+          args: { title: "X" },
+          category: "write",
+          destructive: false,
+          summary: "Created X",
+          status: "executed"
+        }
+      ]
     });
     await useAssistantStore.getState().send("plan my day");
     const messages = useAssistantStore.getState().messages;
     expect(messages.map((m) => m.role)).toEqual(["user", "assistant"]);
-    // create_task is non-destructive → auto-applied during onActions
-    expect(messages[1].actions?.[0].summary).toBe("Create X");
-    expect(messages[1].actions?.[0].status).toBe("applied");
+    expect(messages[1].toolCalls?.[0]).toMatchObject({ name: "create_task", status: "executed" });
+    expect(taskState.refresh).toHaveBeenCalled();
     expect(useAssistantStore.getState().status).toBe("idle");
   });
 
   it("records an error when the runner throws", async () => {
-    runAssistantTurnStreaming.mockRejectedValue(new Error("no key"));
+    runAssistantToolTurn.mockRejectedValue(new Error("no key"));
     await useAssistantStore.getState().send("hi");
     expect(useAssistantStore.getState().status).toBe("error");
     expect(useAssistantStore.getState().error).toContain("no key");
   });
 });
 
-describe("assistantStore streaming", () => {
-  it("first token appends a placeholder assistant message and sets streaming status", async () => {
+describe("assistantStore tool turn", () => {
+  it("stays thinking with only the user message while the tool runner is pending", async () => {
     let proceed = () => {};
-    runAssistantTurnStreaming.mockImplementation(async (_input, cb) => {
-      cb.onToken?.("Hel");
+    runAssistantToolTurn.mockImplementation(async () => {
       await new Promise<void>((r) => { proceed = r; });
-      await emit(cb, [], [], "Hel");
+      return { reply: "Done", toolCalls: [] };
     });
     const sendPromise = useAssistantStore.getState().send("hi");
     await flush();
 
     const state = useAssistantStore.getState();
-    expect(state.status).toBe("streaming");
-    expect(state.streamingMessageId).not.toBeNull();
-    expect(state.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
-    expect(state.messages[1].content).toBe("Hel");
+    expect(state.status).toBe("thinking");
+    expect(state.streamingMessageId).toBeNull();
+    expect(state.messages.map((m) => m.role)).toEqual(["user"]);
 
     proceed();
     await sendPromise;
+    expect(useAssistantStore.getState().messages.map((m) => m.role)).toEqual(["user", "assistant"]);
   });
 
-  it("accumulates subsequent tokens into the streaming message content", async () => {
-    let proceed = () => {};
-    runAssistantTurnStreaming.mockImplementation(async (_input, cb) => {
-      cb.onToken?.("Hel");
-      cb.onToken?.("lo");
-      cb.onToken?.("!");
-      await new Promise<void>((r) => { proceed = r; });
-      await emit(cb, [], [], "Hello!");
+  it("records runner steps and clears them when done", async () => {
+    runAssistantToolTurn.mockImplementation(async (input) => {
+      input.onStep?.("Looking up list_tasks...");
+      return { reply: "Hello!", toolCalls: [] };
     });
     const sendPromise = useAssistantStore.getState().send("hi");
     await flush();
 
-    expect(useAssistantStore.getState().messages[1].content).toBe("Hello!");
-
-    proceed();
     await sendPromise;
+    expect(useAssistantStore.getState().messages[1].content).toBe("Hello!");
+    expect(useAssistantStore.getState().steps).toEqual([]);
   });
 
-  it("onDone sets status idle, clears streamingMessageId and steps, and persists", async () => {
-    runAssistantTurnStreaming.mockImplementation(async (_input, cb) => {
-      await emit(cb, ["ok"], [], "ok");
-    });
+  it("sets status idle, clears streamingMessageId and steps, and persists", async () => {
+    runAssistantToolTurn.mockResolvedValue({ reply: "ok", toolCalls: [] });
     await useAssistantStore.getState().send("remember this");
     const state = useAssistantStore.getState();
     expect(state.status).toBe("idle");
@@ -202,20 +237,16 @@ describe("assistantStore streaming", () => {
     expect(messageRepo.append.mock.calls[1][0]).toMatchObject({ role: "assistant", content: "ok" });
   });
 
-  it("stop keeps the partial, marks the message stopped, and goes idle", async () => {
+  it("stop during a pending tool turn suppresses the assistant message", async () => {
     let proceed = () => {};
-    runAssistantTurnStreaming.mockImplementation(async (_input, cb) => {
-      cb.onToken?.("Hel");
-      cb.onToken?.("lo");
+    runAssistantToolTurn.mockImplementation(async () => {
       await new Promise<void>((r) => { proceed = r; });
-      // After abort the transport returns the accumulated partial.
-      await cb.onActions?.([]);
-      await cb.onDone?.("Hello");
+      return { reply: "Hello", toolCalls: [] };
     });
     const sendPromise = useAssistantStore.getState().send("plan my day");
     await flush();
 
-    expect(useAssistantStore.getState().status).toBe("streaming");
+    expect(useAssistantStore.getState().status).toBe("thinking");
     useAssistantStore.getState().stop();
     proceed();
     await sendPromise;
@@ -223,11 +254,7 @@ describe("assistantStore streaming", () => {
     const state = useAssistantStore.getState();
     expect(state.status).toBe("idle");
     expect(state.streamingMessageId).toBeNull();
-    const msg = state.messages[1];
-    expect(msg.stopped).toBe(true);
-    expect(msg.content).toBe("Hello");
-    // partial is persisted
-    expect(messageRepo.append).toHaveBeenCalled();
+    expect(state.messages.map((m) => m.role)).toEqual(["user"]);
   });
 });
 
@@ -268,6 +295,92 @@ describe("assistantStore.applyAction", () => {
   });
 });
 
+describe("assistantStore tool calls", () => {
+  it("applies a pending write tool call and records undo metadata", async () => {
+    taskState.allTasks = [taskFixture()];
+    useAssistantStore.setState({
+      messages: [
+        {
+          id: "m1",
+          role: "assistant",
+          content: "ok",
+          createdAt: "2026-06-20T10:00:00Z",
+          toolCalls: [
+            {
+              id: "tc1",
+              name: "update_task",
+              args: { task_id: "t1", planned_start_time: "09:30" },
+              category: "write",
+              destructive: false,
+              summary: "Move Report",
+              status: "pending"
+            }
+          ]
+        }
+      ],
+      status: "idle"
+    });
+
+    await useAssistantStore.getState().applyToolCall("m1", "tc1");
+
+    expect(taskState.updateTask).toHaveBeenCalledWith("t1", expect.objectContaining({ planned_start_time: "09:30" }));
+    expect(taskState.refresh).toHaveBeenCalled();
+    expect(useAssistantStore.getState().messages[0].toolCalls?.[0]).toMatchObject({
+      status: "executed",
+      undo: { kind: "restore_task", taskId: "t1" }
+    });
+  });
+
+  it("reverts an executed write tool call", async () => {
+    taskState.allTasks = [taskFixture({ updated_at: "u1", planned_start_time: "09:30" })];
+    useAssistantStore.setState({
+      messages: [
+        {
+          id: "m1",
+          role: "assistant",
+          content: "ok",
+          createdAt: "2026-06-20T10:00:00Z",
+          toolCalls: [
+            {
+              id: "tc1",
+              name: "update_task",
+              args: { task_id: "t1", planned_start_time: "09:30" },
+              category: "write",
+              destructive: false,
+              summary: "Moved Report",
+              status: "executed",
+              expectedUpdatedAt: "u1",
+              undo: {
+                kind: "restore_task",
+                taskId: "t1",
+                before: {
+                  title: "Report",
+                  description: null,
+                  category_id: null,
+                  priority: "medium",
+                  estimated_minutes: null,
+                  due_date: "2026-06-20",
+                  planned_start_time: null,
+                  planned_end_time: null,
+                  status: "todo",
+                  updated_at: "u0"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      status: "idle"
+    });
+
+    await useAssistantStore.getState().revertToolCall("m1", "tc1");
+
+    expect(taskState.updateTask).toHaveBeenCalledWith("t1", expect.objectContaining({ planned_start_time: null }));
+    expect(taskState.refresh).toHaveBeenCalled();
+    expect(useAssistantStore.getState().messages[0].toolCalls?.[0].status).toBe("reverted");
+  });
+});
+
 describe("assistantStore.updateActionParams", () => {
   it("merges edited params and recomputes the summary", async () => {
     useAssistantStore.setState({
@@ -292,9 +405,7 @@ describe("assistantStore.updateActionParams", () => {
 
 describe("assistantStore regenerateLast / editUserMessage", () => {
   it("regenerateLast drops the trailing assistant message and re-runs", async () => {
-    runAssistantTurnStreaming.mockImplementation(async (_input, cb) => {
-      await emit(cb, ["Fresh"], [], "Fresh plan");
-    });
+    runAssistantToolTurn.mockResolvedValue({ reply: "Fresh plan", toolCalls: [] });
     useAssistantStore.setState({
       messages: [
         { id: "u1", role: "user", content: "plan", createdAt: "2026-06-20T10:00:00Z" },
@@ -318,13 +429,11 @@ describe("assistantStore regenerateLast / editUserMessage", () => {
       status: "idle"
     });
     await useAssistantStore.getState().regenerateLast();
-    expect(runAssistantTurnStreaming).not.toHaveBeenCalled();
+    expect(runAssistantToolTurn).not.toHaveBeenCalled();
   });
 
   it("editUserMessage drops everything after the edited turn and re-runs", async () => {
-    runAssistantTurnStreaming.mockImplementation(async (_input, cb) => {
-      await emit(cb, ["New"], [], "New answer");
-    });
+    runAssistantToolTurn.mockResolvedValue({ reply: "New answer", toolCalls: [] });
     useAssistantStore.setState({
       messages: [
         { id: "u1", role: "user", content: "old question", createdAt: "2026-06-20T10:00:00Z" },
@@ -350,22 +459,20 @@ describe("assistantStore regenerateLast / editUserMessage", () => {
       status: "idle"
     });
     await useAssistantStore.getState().editUserMessage("u1", "   ");
-    expect(runAssistantTurnStreaming).not.toHaveBeenCalled();
+    expect(runAssistantToolTurn).not.toHaveBeenCalled();
     expect(useAssistantStore.getState().messages[0].content).toBe("keep");
   });
 });
 
 describe("assistantStore.insights", () => {
   it("loads insights once and forwards them to the runner", async () => {
-    runAssistantTurnStreaming.mockImplementation(async (_input, cb) => {
-      await emit(cb, ["ok"], [], "ok");
-    });
+    runAssistantToolTurn.mockResolvedValue({ reply: "ok", toolCalls: [] });
 
     await useAssistantStore.getState().send("plan my day");
     await useAssistantStore.getState().send("and tomorrow?");
 
     expect(buildRetrospectiveInsights).toHaveBeenCalledTimes(1); // cached after first load
-    const calls = runAssistantTurnStreaming.mock.calls;
+    const calls = runAssistantToolTurn.mock.calls;
     const lastArg = calls[calls.length - 1][0];
     expect(lastArg.insights).not.toBeNull();
   });
@@ -428,16 +535,15 @@ describe("assistantStore persistence", () => {
     expect(messageRepo.clear).toHaveBeenCalled();
   });
 
-  it("clear aborts any in-flight stream and resets streamingMessageId", async () => {
+  it("clear aborts any in-flight tool turn and keeps the conversation cleared", async () => {
     let proceed = () => {};
-    runAssistantTurnStreaming.mockImplementation(async (_input, cb) => {
-      cb.onToken?.("Hel");
+    runAssistantToolTurn.mockImplementation(async () => {
       await new Promise<void>((r) => { proceed = r; });
-      await emit(cb, [], [], "Hel");
+      return { reply: "Hel", toolCalls: [] };
     });
     const sendPromise = useAssistantStore.getState().send("hi");
     await flush();
-    expect(useAssistantStore.getState().streamingMessageId).not.toBeNull();
+    expect(useAssistantStore.getState().status).toBe("thinking");
 
     useAssistantStore.getState().clear();
     expect(useAssistantStore.getState().streamingMessageId).toBeNull();

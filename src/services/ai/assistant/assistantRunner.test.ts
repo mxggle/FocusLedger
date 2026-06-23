@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { runAssistantTurn, runAssistantTurnStreaming } from "./assistantRunner";
+import { runAssistantToolTurn, runAssistantTurn, runAssistantTurnStreaming } from "./assistantRunner";
 import type { AssistantStoreSnapshot } from "./contextBuilder";
 import type { ChatTurn } from "../providers";
 import type { RetrospectiveInsights } from "../../retrospect/types";
+import type { Task } from "../../../types";
 
 const snapshot: AssistantStoreSnapshot = {
   selectedDate: "2026-06-18",
@@ -69,6 +70,106 @@ describe("runAssistantTurn", () => {
     );
 
     expect(capturedSystem).toContain("History & patterns");
+  });
+});
+
+function taskFixture(overrides: Partial<Task> = {}): Task {
+  return {
+    id: "t1",
+    title: "Report",
+    description: null,
+    status: "todo",
+    priority: "medium",
+    category_id: null,
+    estimated_minutes: null,
+    due_date: "2026-06-18",
+    planned_start_time: null,
+    planned_end_time: null,
+    sort_order: null,
+    template_id: null,
+    created_at: "2026-06-18T09:00:00Z",
+    updated_at: "u0",
+    completed_at: null,
+    dropped_at: null,
+    ...overrides
+  };
+}
+
+describe("runAssistantToolTurn", () => {
+  it("builds the tool prompt and executes reversible writes in auto mode", async () => {
+    const tasks = [taskFixture()];
+    const updateTask = vi.fn(async () => ({ ok: true }));
+    const generateChat = vi
+      .fn()
+      .mockResolvedValueOnce('{"tool_calls":[{"name":"update_task","args":{"task_id":"t1","planned_start_time":"09:30"}}]}')
+      .mockResolvedValueOnce("Done.");
+
+    const result = await runAssistantToolTurn(
+      {
+        settings,
+        snapshot: { ...snapshot, allTasks: tasks, tasks, permissionLevel: "auto" },
+        messages: [{ role: "user", content: "move report to 9:30" }]
+      },
+      {
+        generateChat,
+        store: {
+          getAllTasks: () => tasks,
+          getCategories: () => [],
+          updateTask,
+          createTask: vi.fn(),
+          deleteTask: vi.fn(),
+          startTask: vi.fn(),
+          pauseActiveTask: vi.fn(),
+          completeTask: vi.fn(),
+          dropTask: vi.fn(),
+          moveTaskToBacklog: vi.fn(),
+          ensureCategory: vi.fn(),
+          refresh: vi.fn()
+        }
+      }
+    );
+
+    expect(generateChat.mock.calls[0][1].system).toContain("tool_calls");
+    expect(updateTask).toHaveBeenCalledWith("t1", expect.objectContaining({ planned_start_time: "09:30" }));
+    expect(result.reply).toBe("Done.");
+    expect(result.toolCalls[0]).toMatchObject({ name: "update_task", status: "executed" });
+  });
+
+  it("uses the snapshot permission level to queue writes in ask mode", async () => {
+    const tasks = [taskFixture()];
+    const updateTask = vi.fn(async () => ({ ok: true }));
+    const generateChat = vi
+      .fn()
+      .mockResolvedValueOnce('{"tool_calls":[{"name":"update_task","args":{"task_id":"t1","planned_start_time":"09:30"}}]}')
+      .mockResolvedValueOnce("Queued.");
+
+    const result = await runAssistantToolTurn(
+      {
+        settings,
+        snapshot: { ...snapshot, allTasks: tasks, tasks, permissionLevel: "ask" },
+        messages: [{ role: "user", content: "move report" }]
+      },
+      {
+        generateChat,
+        store: {
+          getAllTasks: () => tasks,
+          getCategories: () => [],
+          updateTask,
+          createTask: vi.fn(),
+          deleteTask: vi.fn(),
+          startTask: vi.fn(),
+          pauseActiveTask: vi.fn(),
+          completeTask: vi.fn(),
+          dropTask: vi.fn(),
+          moveTaskToBacklog: vi.fn(),
+          ensureCategory: vi.fn(),
+          refresh: vi.fn()
+        }
+      }
+    );
+
+    expect(updateTask).not.toHaveBeenCalled();
+    expect(result.toolCalls[0]).toMatchObject({ name: "update_task", status: "pending" });
   });
 });
 

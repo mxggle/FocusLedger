@@ -5,8 +5,11 @@ import { rankMemories, MEMORY_INJECT_K } from "../services/ai/assistant/memory/r
 import { runMemoryReview, MEMORY_REVIEW_DEBOUNCE_MS } from "../services/ai/assistant/memory/runMemoryReview";
 import type { MemoryEntry } from "../services/ai/assistant/memory/types";
 import { ACTION_REGISTRY } from "../services/ai/assistant/actions";
-import { autoApplyActions } from "../services/ai/assistant/autoApply";
-import { runAssistantTurnStreaming } from "../services/ai/assistant/assistantRunner";
+import { createAgentTaskStore } from "../services/ai/assistant/agentTools/storeAdapter";
+import { hasDrifted, revertToolCall as revertExecutedToolCall } from "../services/ai/assistant/agentTools/revert";
+import { toolByName } from "../services/ai/assistant/agentTools/registry";
+import type { ToolCallRecord } from "../services/ai/assistant/agentTools/types";
+import { runAssistantToolTurn } from "../services/ai/assistant/assistantRunner";
 import { loadRecallEntries, type RecallEntry } from "../services/ai/assistant/recallHistory";
 import { buildAssistantContext, type AssistantStoreSnapshot } from "../services/ai/assistant/contextBuilder";
 import type { ChatMessage, ProposedAction } from "../services/ai/assistant/types";
@@ -60,12 +63,23 @@ function isAbortError(error: unknown): boolean {
  *  state that may have changed — so they render as already-handled, not actionable. */
 export function restoreHistoryActions(messages: ChatMessage[]): ChatMessage[] {
   return messages.map((message) => {
-    if (!message.actions) return message;
+    if (!message.actions && !message.toolCalls) return message;
     return {
       ...message,
-      actions: message.actions.map((action) =>
-        action.status === "pending" ? { ...action, status: "dismissed" as const } : action
-      )
+      ...(message.actions
+        ? {
+            actions: message.actions.map((action) =>
+              action.status === "pending" ? { ...action, status: "dismissed" as const } : action
+            )
+          }
+        : {}),
+      ...(message.toolCalls
+        ? {
+            toolCalls: message.toolCalls.map((call) =>
+              call.status === "pending" ? { ...call, status: "dismissed" as const } : call
+            )
+          }
+        : {})
     };
   });
 }
@@ -88,6 +102,9 @@ type AssistantState = {
   applyAll: (messageId: string) => Promise<void>;
   updateActionParams: (messageId: string, actionId: string, patch: Record<string, unknown>) => void;
   dismissAction: (messageId: string, actionId: string) => void;
+  applyToolCall: (messageId: string, toolCallId: string) => Promise<void>;
+  revertToolCall: (messageId: string, toolCallId: string) => Promise<void>;
+  dismissToolCall: (messageId: string, toolCallId: string) => void;
   clear: () => void;
   loadInsights: () => Promise<void>;
   loadHistory: () => Promise<void>;
@@ -113,7 +130,8 @@ function snapshot(): AssistantStoreSnapshot {
     profile: useSettingsStore.getState().settings.assistantProfile,
     targetMinutes: useSettingsStore.getState().settings.dailyFocusTargetMinutes,
     assistantName: useSettingsStore.getState().settings.assistantName,
-    assistantSoul: useSettingsStore.getState().settings.assistantSoul
+    assistantSoul: useSettingsStore.getState().settings.assistantSoul,
+    permissionLevel: useSettingsStore.getState().settings.assistantPermissionLevel
   };
 }
 
@@ -139,13 +157,26 @@ function patchAction(
   });
 }
 
-/** Immutably set content/actions/stopped on one message by id. */
-function patchMessage(
+function patchToolCall(
   messages: ChatMessage[],
   messageId: string,
-  patch: Partial<ChatMessage>
+  toolCallId: string,
+  patch: Partial<ToolCallRecord>
 ): ChatMessage[] {
-  return messages.map((m) => (m.id === messageId ? { ...m, ...patch } : m));
+  return messages.map((message) => {
+    if (message.id !== messageId || !message.toolCalls) return message;
+    return {
+      ...message,
+      toolCalls: message.toolCalls.map((call) =>
+        call.id === toolCallId ? { ...call, ...patch } : call
+      )
+    };
+  });
+}
+
+function expectedUpdatedAtFor(call: Pick<ToolCallRecord, "undo">): string | undefined {
+  if (!call.undo || call.undo.kind !== "restore_task") return undefined;
+  return useTaskStore.getState().allTasks.find((task) => task.id === call.undo?.taskId)?.updated_at;
 }
 
 export const useAssistantStore = create<AssistantState>((set, get) => ({
@@ -289,6 +320,114 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     set({ messages: patchAction(get().messages, messageId, actionId, { status: "dismissed" }) });
   },
 
+  applyToolCall: async (messageId, toolCallId) => {
+    const message = get().messages.find((entry) => entry.id === messageId);
+    const call = message?.toolCalls?.find((entry) => entry.id === toolCallId);
+    if (!call || call.status !== "pending") return;
+
+    const tool = toolByName(call.name);
+    if (!tool || tool.category !== "write") {
+      set({
+        messages: patchToolCall(get().messages, messageId, toolCallId, {
+          status: "failed",
+          error: "Tool is unavailable"
+        })
+      });
+      return;
+    }
+
+    if (tool.destructive) {
+      const confirmed = await useUiStore.getState().confirm({
+        message: `${call.summary}?`,
+        confirmLabel: "Apply",
+        danger: true
+      });
+      if (!confirmed) return;
+    }
+
+    const parsed = tool.parameters.safeParse(call.args);
+    if (!parsed.success) {
+      const error = parsed.error.issues[0]?.message ?? "Invalid tool arguments";
+      set({ messages: patchToolCall(get().messages, messageId, toolCallId, { status: "failed", error }) });
+      return;
+    }
+
+    const adapter = createAgentTaskStore();
+    const ctx = buildAssistantContext(snapshot(), get().insights);
+    try {
+      const result = await tool.execute(parsed.data, {
+        store: adapter,
+        ctx,
+        insights: get().insights,
+        history: get().history ?? [],
+        now: () => new Date().toISOString()
+      });
+      if (!result.ok) {
+        set({
+          messages: patchToolCall(get().messages, messageId, toolCallId, {
+            status: "failed",
+            error: result.error,
+            result: result.error
+          })
+        });
+        useUiStore.getState().addToast({ kind: "error", title: "Could not apply", description: result.error });
+        return;
+      }
+
+      await adapter.refresh();
+      set({
+        messages: patchToolCall(get().messages, messageId, toolCallId, {
+          status: "executed",
+          summary: result.summary,
+          result: result.summary,
+          undo: result.undo,
+          expectedUpdatedAt: expectedUpdatedAtFor({ undo: result.undo })
+        })
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Could not apply this change";
+      set({
+        messages: patchToolCall(get().messages, messageId, toolCallId, {
+          status: "failed",
+          error: detail,
+          result: detail
+        })
+      });
+      useUiStore.getState().addToast({ kind: "error", title: "Could not apply", description: detail });
+    }
+  },
+
+  revertToolCall: async (messageId, toolCallId) => {
+    const message = get().messages.find((entry) => entry.id === messageId);
+    const call = message?.toolCalls?.find((entry) => entry.id === toolCallId);
+    if (!call || call.status !== "executed" || !call.undo) return;
+
+    const adapter = createAgentTaskStore();
+    const currentTask = useTaskStore.getState().allTasks.find((task) => task.id === call.undo?.taskId);
+    if (hasDrifted(call, currentTask)) {
+      const confirmed = await useUiStore.getState().confirm({
+        message: "This task changed after the assistant edited it. Revert anyway?",
+        confirmLabel: "Revert"
+      });
+      if (!confirmed) return;
+    }
+
+    const result = await revertExecutedToolCall(call, adapter);
+    if (result.ok) {
+      await adapter.refresh();
+      set({ messages: patchToolCall(get().messages, messageId, toolCallId, { status: "reverted" }) });
+      return;
+    }
+
+    const detail = result.message ?? "Could not revert this change";
+    set({ messages: patchToolCall(get().messages, messageId, toolCallId, { status: "failed", error: detail }) });
+    useUiStore.getState().addToast({ kind: "error", title: "Could not revert", description: detail });
+  },
+
+  dismissToolCall: (messageId, toolCallId) => {
+    set({ messages: patchToolCall(get().messages, messageId, toolCallId, { status: "dismissed" }) });
+  },
+
   loadInsights: async () => {
     if (get().insights) return; // cached for the session
     try {
@@ -338,7 +477,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
 }));
 
 /**
- * Run the streaming assistant turn from an existing message history (without
+ * Run a tool-calling assistant turn from an existing message history (without
  * appending or persisting a new user message). Shared by `send`,
  * `regenerateLast`, and `editUserMessage`.
  */
@@ -353,120 +492,58 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
   const turnSnapshot = { ...snapshot(), learnedMemories: rankedMemories };
 
   currentAbort = new AbortController();
-  const signal = currentAbort.signal;
+  const controller = currentAbort;
+  const signal = controller.signal;
   store.setState({ status: "thinking", error: null, steps: [], streamingMessageId: null });
-
-  let streamingId: string | null = null;
-  let lastActions: ProposedAction[] = [];
-  let tokenBuffer = "";
-  let flushScheduled = false;
-
-  const flushTokens = () => {
-    flushScheduled = false;
-    if (streamingId === null) return;
-    const chunk = tokenBuffer;
-    tokenBuffer = "";
-    if (chunk.length === 0) return;
-    store.setState((state) => ({
-      messages: patchMessage(state.messages, streamingId as string, {
-        content: (state.messages.find((m) => m.id === streamingId)?.content ?? "") + chunk
-      })
-    }));
-  };
 
   const onStep = (label: string) => store.setState((state) => ({ steps: [...state.steps, label] }));
 
-  const onToken = (chunk: string) => {
-    if (streamingId === null) {
-      // First token: create the placeholder assistant message and flip to streaming.
-      const id = createId("msg");
-      streamingId = id;
-      store.setState((state) => ({
-        messages: [...state.messages, { id, role: "assistant", content: chunk, createdAt: new Date().toISOString() }],
-        streamingMessageId: id,
-        status: "streaming"
-      }));
-      return;
-    }
-    tokenBuffer += chunk;
-    if (typeof requestAnimationFrame === "function") {
-      if (!flushScheduled) {
-        flushScheduled = true;
-        requestAnimationFrame(flushTokens);
-      }
-    } else {
-      flushTokens();
-    }
-  };
-
-  const onActions = async (actions: ProposedAction[]) => {
-    const executed = await autoApplyActions(actions, useTaskStore.getState());
-    if (executed.appliedCount > 0) await useTaskStore.getState().refresh();
-    lastActions = executed.actions;
-    if (streamingId !== null) {
-      store.setState((state) => ({ messages: patchMessage(state.messages, streamingId as string, { actions: executed.actions }) }));
-    }
-  };
-
-  const onDone = async (fullReply: string) => {
-    const aborted = signal.aborted;
-    if (streamingId === null) {
-      // No tokens streamed (forced fallback or empty stream). On an abort with
-      // nothing to show, just go idle without leaving an empty message.
-      if (aborted && fullReply.length === 0) {
-        store.setState({ status: "idle", streamingMessageId: null, steps: [] });
-        currentAbort = null;
-        return;
-      }
-      const id = createId("msg");
-      const msg: ChatMessage = {
-        id,
-        role: "assistant",
-        content: fullReply,
-        createdAt: new Date().toISOString(),
-        actions: lastActions,
-        ...(aborted ? { stopped: true } : {})
-      };
-      store.setState((state) => ({ messages: [...state.messages, msg], status: "idle", streamingMessageId: null, steps: [] }));
-      void assistantMessageRepository.append(msg).catch(() => {});
-    } else {
-      // Flush any buffered tokens before committing the final content.
-      flushTokens();
-      store.setState((state) => ({
-        messages: patchMessage(state.messages, streamingId as string, {
-          content: fullReply,
-          actions: lastActions,
-          ...(aborted ? { stopped: true } : {})
-        }),
-        status: "idle",
-        streamingMessageId: null,
-        steps: []
-      }));
-      const finalized = store.getState().messages.find((m) => m.id === streamingId);
-      if (finalized) void assistantMessageRepository.append(finalized).catch(() => {});
-    }
-    if (!aborted && fullReply.trim().length > 0) {
-      scheduleMemoryReview(lastUserText, fullReply);
-    }
-    currentAbort = null;
-  };
-
   try {
-    await runAssistantTurnStreaming(
+    const adapter = createAgentTaskStore();
+    const result = await runAssistantToolTurn(
       {
         settings: useSettingsStore.getState().settings,
         snapshot: turnSnapshot,
         messages: toChatTurns(history),
         insights: store.getState().insights,
-        history: store.getState().history ?? []
+        history: store.getState().history ?? [],
+        onStep
       },
-      { onStep, onToken, onActions, onDone, signal }
+      { store: adapter }
     );
-  } catch (error) {
-    if (isAbortError(error)) {
-      // Defensive: the transport normally resolves on abort; ensure we're idle.
+
+    if (signal.aborted || currentAbort !== controller) {
       store.setState({ status: "idle", streamingMessageId: null, steps: [] });
-      currentAbort = null;
+      if (currentAbort === controller) currentAbort = null;
+      return;
+    }
+
+    if (result.toolCalls.some((call) => call.status === "executed")) {
+      await adapter.refresh();
+    }
+
+    const msg: ChatMessage = {
+      id: createId("msg"),
+      role: "assistant",
+      content: result.reply,
+      createdAt: new Date().toISOString(),
+      toolCalls: result.toolCalls
+    };
+    store.setState((state) => ({
+      messages: [...state.messages, msg],
+      status: "idle",
+      streamingMessageId: null,
+      steps: []
+    }));
+    void assistantMessageRepository.append(msg).catch(() => {});
+    if (result.reply.trim().length > 0) {
+      scheduleMemoryReview(lastUserText, result.reply);
+    }
+    currentAbort = null;
+  } catch (error) {
+    if (isAbortError(error) || signal.aborted || currentAbort !== controller) {
+      store.setState({ status: "idle", streamingMessageId: null, steps: [] });
+      if (currentAbort === controller) currentAbort = null;
     } else {
       const message = error instanceof Error ? error.message : "The assistant ran into a problem";
       store.setState({ status: "error", error: message, steps: [], streamingMessageId: null });
