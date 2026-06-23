@@ -18,7 +18,9 @@ export function useDayBriefing(): DayBriefing {
           status: task.status,
           priority: task.priority,
           estimatedMinutes: task.estimated_minutes,
-          categoryId: task.category_id
+          categoryId: task.category_id,
+          plannedStartTime: task.planned_start_time,
+          plannedEndTime: task.planned_end_time
         })),
         backlogCount,
         targetMinutes

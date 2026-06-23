@@ -20,7 +20,16 @@ const ctx = makeCtx({
   today: "2026-06-18",
   categories: [{ id: "c1", name: "Deep Work" }],
   tasks: [
-    { id: "t1", title: "Write report", status: "todo", priority: "high", estimatedMinutes: 60, categoryId: "c1" }
+    {
+      id: "t1",
+      title: "Write report",
+      status: "todo",
+      priority: "high",
+      estimatedMinutes: 60,
+      categoryId: "c1",
+      plannedStartTime: null,
+      plannedEndTime: null
+    }
   ]
 });
 
@@ -74,7 +83,7 @@ describe("buildAssistantSystemPrompt", () => {
             categoryId: "c1",
             plannedStartTime: "09:00",
             plannedEndTime: "10:00"
-          } as any
+          }
         ]
       })
     );

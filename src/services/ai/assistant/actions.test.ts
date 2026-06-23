@@ -6,10 +6,28 @@ const ctx: AssistantContext = {
   today: "2026-06-18",
   categories: [{ id: "c1", name: "Deep Work" }],
   tasks: [
-    { id: "t1", title: "Write report", status: "todo", priority: "high", estimatedMinutes: 60, categoryId: "c1" }
+    {
+      id: "t1",
+      title: "Write report",
+      status: "todo",
+      priority: "high",
+      estimatedMinutes: 60,
+      categoryId: "c1",
+      plannedStartTime: null,
+      plannedEndTime: null
+    }
   ],
   backlog: [
-    { id: "b1", title: "Backlog item", status: "todo", priority: "low", estimatedMinutes: null, categoryId: null }
+    {
+      id: "b1",
+      title: "Backlog item",
+      status: "todo",
+      priority: "low",
+      estimatedMinutes: null,
+      categoryId: null,
+      plannedStartTime: null,
+      plannedEndTime: null
+    }
   ],
   assistantName: "",
   assistantSoul: "",
@@ -132,7 +150,7 @@ describe("create_task category handling", () => {
 describe("update_task", () => {
   const ctx = makeCtx({
     tasks: [{ id: "t1", title: "Anki feature", status: "todo", priority: "low",
-      estimatedMinutes: null, categoryId: null }],
+      estimatedMinutes: null, categoryId: null, plannedStartTime: null, plannedEndTime: null }],
     categories: [{ id: "c-jp", name: "Japanese" }],
     allTaskRefs: [{ id: "t1", title: "Anki feature" }]
   });

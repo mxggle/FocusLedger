@@ -10,6 +10,7 @@ import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
 import { sendTestNotification } from "../../utils/notificationPermission";
 import type { AiProvider, AppTheme, NotificationStyle } from "../../types";
+import type { PermissionLevel } from "../../services/ai/assistant/agentTools/types";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Field, Input, Select } from "../ui/Field";
@@ -18,6 +19,12 @@ import { ShortcutInput } from "../ui/ShortcutInput";
 import { Switch } from "../ui/Switch";
 import { CategoryManager } from "./CategoryManager";
 import { MemoryManager } from "./MemoryManager";
+
+function permissionLabel(level: PermissionLevel): string {
+  if (level === "plan") return "Plan";
+  if (level === "ask") return "Ask";
+  return "Auto";
+}
 
 export function SettingsPage() {
   const settings = useSettingsStore((state) => state.settings);
@@ -277,6 +284,25 @@ export function SettingsPage() {
                     onChange={(event) => void updateSetting("assistantProfile", event.target.value)}
                     className="w-full resize-y rounded-md border border-input bg-surface px-3 py-2 text-sm leading-relaxed text-foreground shadow-xs outline-none transition-[box-shadow,border-color] duration-fast placeholder:text-subtle hover:border-border-strong focus:border-ring focus:shadow-ring"
                   />
+                </Field>
+                <Field label="Assistant autonomy" hint="Plan proposes changes, Ask confirms each change, Auto applies reversible changes.">
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {(["plan", "ask", "auto"] as const).map((level) => (
+                      <button
+                        key={level}
+                        type="button"
+                        onClick={() => void updateSetting("assistantPermissionLevel", level)}
+                        className={[
+                          "rounded-md border px-3 py-2 text-left text-sm font-medium transition-colors duration-fast",
+                          settings.assistantPermissionLevel === level
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-surface text-foreground hover:border-border-strong"
+                        ].join(" ")}
+                      >
+                        {permissionLabel(level)}
+                      </button>
+                    ))}
+                  </div>
                 </Field>
               </div>
             </div>

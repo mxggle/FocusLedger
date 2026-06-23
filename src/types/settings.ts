@@ -1,3 +1,5 @@
+import type { PermissionLevel } from "../services/ai/assistant/agentTools/types";
+
 export type AppTheme = "system" | "light" | "dark";
 
 export type AiProvider = "anthropic" | "openai" | "gemini" | "custom";
@@ -35,6 +37,8 @@ export type AppSettings = {
   assistantName: string;
   /** Markdown SOUL.md-style identity block. Blank → the shipped DEFAULT_SOUL is used. */
   assistantSoul: string;
+  /** How freely the assistant may apply write tools. */
+  assistantPermissionLevel: PermissionLevel;
   /** Master switch for self-curated memory (background review + recall). */
   assistantMemoryEnabled: boolean;
   /** Optional cheaper model for the background memory review; empty → reuse aiModel. */
@@ -64,6 +68,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   assistantProfile: "",
   assistantName: "Yolo Assistant",
   assistantSoul: "",
+  assistantPermissionLevel: "auto",
   assistantMemoryEnabled: true,
   assistantMemoryModel: "",
   debriefAutoEnabled: false,

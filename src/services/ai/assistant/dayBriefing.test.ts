@@ -9,7 +9,9 @@ function ctxTask(partial: Partial<ContextTask> & { id: string }): ContextTask {
     status: partial.status ?? "todo",
     priority: partial.priority ?? "medium",
     estimatedMinutes: partial.estimatedMinutes ?? null,
-    categoryId: partial.categoryId ?? null
+    categoryId: partial.categoryId ?? null,
+    plannedStartTime: partial.plannedStartTime ?? null,
+    plannedEndTime: partial.plannedEndTime ?? null
   };
 }
 
