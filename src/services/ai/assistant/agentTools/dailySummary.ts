@@ -18,9 +18,9 @@ export const dailySummaryTool: AgentTool = {
       if (scope !== "today" && !/^\d{4}-\d{2}-\d{2}$/.test(scope)) {
         return { ok: false, error: 'scope must be "today" or YYYY-MM-DD' };
       }
-      const briefing =
-        deps.ctx.briefing ??
-        computeDayBriefing(deps.ctx.tasks, deps.ctx.backlog.length, deps.ctx.briefing?.targetMinutes ?? 0);
+      const existing = deps.ctx.briefing;
+      const targetMinutes = existing?.targetMinutes ?? 0;
+      const briefing = existing ?? computeDayBriefing(deps.ctx.tasks, deps.ctx.backlog.length, targetMinutes);
       const summary = [
         `daily_summary(${scope}): ${briefing.status}`,
         `open ${briefing.openCount}, done ${briefing.doneCount}, backlog ${briefing.backlogCount}`,

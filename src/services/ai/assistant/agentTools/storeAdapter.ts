@@ -2,12 +2,14 @@ import { useTaskStore } from "../../../../stores/taskStore";
 import type { CreateTaskInput, UpdateTaskInput } from "../../../../types";
 import type { AgentTaskStore } from "./types";
 
+type StoreResult = { ok: boolean; message?: string };
+
 function okOf(result: { ok?: boolean } | undefined): boolean {
   return result?.ok !== false;
 }
 
-function messageOf(result: { message?: string } | undefined): string | undefined {
-  return result?.message;
+function messageOf(result: StoreResult): string | undefined {
+  return "message" in result ? result.message : undefined;
 }
 
 export function createAgentTaskStore(): AgentTaskStore {

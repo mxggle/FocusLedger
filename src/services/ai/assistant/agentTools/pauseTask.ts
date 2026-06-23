@@ -15,13 +15,16 @@ export const pauseTaskTool: AgentTool = {
     try {
       schema.parse(rawArgs);
       const running = deps.store.getAllTasks().find((task) => task.status === "doing");
-      const before = running ? snapshot(running) : undefined;
       const result = await deps.store.pauseActiveTask();
       if (!result.ok) return { ok: false, error: result.message ?? "pause failed" };
+      if (!running) {
+        return { ok: true, summary: "No running task to pause" };
+      }
+      const before = snapshot(running);
       return {
         ok: true,
-        summary: running ? `Paused "${running.title}"` : "No running task to pause",
-        undo: running ? { kind: "restore_task", taskId: running.id, before } : undefined
+        summary: `Paused "${running.title}"`,
+        undo: { kind: "restore_task", taskId: running.id, before }
       };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "invalid pause" };
