@@ -1,11 +1,11 @@
 # Yolo Assistant — How to Use
 
 The Yolo Assistant turns a messy brain-dump into a clean, scheduled set of tasks —
-and helps you adjust your day in plain language. It **proposes**; you **approve**.
-Nothing changes until you say so.
+and helps you adjust your day in plain language. It can operate on your tasks
+directly, with autonomy controls in **Settings → AI**.
 
-> Status: this guide covers **Phase 1** (shipped). Memory across sessions and
-> proactive nudges are planned (Phases 2–3) and **not yet available**.
+> Status: this guide covers the shipped in-app tool-calling assistant: task
+> tools, memory, retrospective context, permission levels, and session revert.
 
 ---
 
@@ -44,24 +44,31 @@ This is the fastest way to get value.
 3. Watch the **step trace** as the assistant works:
    - "Scanning your existing tasks…" — it checks for duplicates.
    - "Checking how long similar work takes…" — it sizes estimates from your history.
-4. You get a **Proposed plan** — a group of task cards, each editable.
+4. You get a concise reply plus tool-call rows showing what changed or what
+   needs approval.
 
 ### What the assistant does for you automatically
 - **Breaks the dump into well-scoped tasks** (aims for a tractable handful, not 30 trivia).
 - **Deduplicates** — if something already exists in your tasks, it won't recreate it;
   it tells you which existing task it matched instead.
-- **Categorizes** — assigns each task to an existing category, or **proposes a new
-  project** when a theme emerges (the card shows `in new project "…"`).
+- **Categorizes** — assigns each task to an existing category, or creates a new
+  category when a theme emerges and your autonomy level allows it.
 - **Estimates** — seeds `estimated_minutes` from how long your similar work actually
   takes (calibrated from completed tasks).
 - **Schedules** — spreads tasks across days by deadline and priority, or leaves them
   in the backlog when there's no implied timeframe.
 
-### Approving the plan
-- **Review/edit any card**, then approve it individually, **or**
-- Click **Approve all** in the "Proposed plan — N tasks" header to apply every
-  pending task at once.
-- Approving a card with a new project creates that category for you.
+### Autonomy levels
+
+Set **Assistant autonomy** in **Settings → AI**:
+
+- **Plan** — the assistant can read context, but every write appears as a pending
+  card for you to apply.
+- **Ask** — same confirmation behavior as Plan, useful when you want explicit
+  review on each change.
+- **Auto** — reversible writes apply immediately and render as **Done** with a
+  **Revert** button. Destructive writes, such as dropping a task, still require
+  confirmation.
 
 ---
 
@@ -107,8 +114,8 @@ A good Soul covers four short sections:
 - **Defaults** — how to handle broad or under-specified requests.
 
 The Soul changes the assistant's *voice and judgment* — it never gives it new powers.
-Every product guardrail still holds: it proposes, you approve, and it can't invent tasks
-or numbers (see §7 and §8).
+Every product guardrail still holds: it uses validated tools, destructive changes
+confirm first, and it can't invent tasks or numbers (see §7 and §8).
 
 ---
 
@@ -122,8 +129,8 @@ Talk to it like a planning coach. Examples:
 - "Mark the report task done."
 - "How did this week go?" (grounded in your real time data — see below.)
 
-It proposes the matching changes as cards. Questions and advice come back as plain
-replies with no cards.
+It uses tool-call rows for matching changes. Questions and advice come back as
+plain replies with no tool rows.
 
 ### Proactive day sense
 Open the assistant and a **briefing bar** at the top tells you today's shape at a glance —
@@ -140,7 +147,7 @@ So it can:
 - **Offer to fill a light or empty day** from the backlog.
 - **Plan your day within your target** — just say "Plan my day".
 
-It still only *proposes*; you approve. It nudges, it doesn't nag.
+It follows your autonomy level. It nudges, it doesn't nag.
 
 ### Recall — ask about your past work
 When you log notes, blockers, or next-actions during focus sessions, the assistant can
@@ -156,30 +163,32 @@ It pulls the relevant dated notes from your history and grounds its answer in th
 Beyond creating tasks, the assistant can **edit ones you already have**. Ask it to
 change a task's **title**, **description**, **category**, **priority**, or **estimate**
 ("rename the report task", "make the launch task high priority", "put the Anki task in
-the Japanese project") and it proposes an **edit card** showing exactly what changes. If
-you name a project that doesn't exist yet, approving the card creates it. As always, it's
-propose-then-confirm — nothing changes until you approve.
+the Japanese project"). It can also edit **planned start/end times**, so requests like
+"delay today's tasks by 30 minutes" update real schedule fields instead of creating a
+placeholder task. If you name a project that doesn't exist yet, the tool can create it.
 
 ### Bulk operations
-For "do this to all of them" requests — **"categorize everything"**,
-**"re-prioritize my backlog"** — the assistant first **lists the relevant set**, then
-proposes **one edit card per task**. Use **Apply all** in the group header to approve the
-whole batch in one click. To keep big sweeps reviewable, if more than ~20 tasks would
-change it proposes the **first batch and asks before continuing**, rather than dumping
-hundreds of cards at once.
+For "do this to all of them" requests — **"delay today's tasks 30 minutes"**,
+**"categorize everything"**, **"re-prioritize my backlog"** — the assistant first
+lists the relevant set, then calls the appropriate write tool per task. In Auto,
+safe bulk edits execute and can be reverted one by one; in Plan/Ask, they queue as
+pending rows.
 
-### Actions it can propose
-Create a task · **Edit a task** (title/description/category/priority/estimate) ·
-Reschedule a task · Move a task to the backlog · Drop a task · Complete a task ·
-Start a focus session on a task.
+### Tools it can use
+Read tasks · Search tasks · List categories · Read calibration/history · Create a
+task · **Edit a task** (title/description/category/priority/estimate/date/planned
+times/status) · Move a task to the backlog · Drop a task · Complete a task · Start
+or pause focus.
 
 ---
 
-## 7. How approval works (propose-then-confirm)
+## 7. How approval and revert work
 
-- **Nothing is applied automatically.** Every change is a card you approve.
-- **Destructive actions** (e.g. dropping a task) ask for an extra confirmation.
-- You can **edit a card's fields** before approving, or dismiss it entirely.
+- **Plan/Ask:** every write is pending until you apply it.
+- **Auto:** reversible writes apply immediately and show **Done**.
+- **Destructive actions** (e.g. dropping a task) always require confirmation.
+- **Revert:** executed reversible writes include a Revert control. If the task was
+  edited after the assistant changed it, Yolo asks before restoring the older snapshot.
 
 ---
 
@@ -227,5 +236,4 @@ The model only narrates them. If there isn't enough history yet, it will hedge
 - **"Assistant needs an API key"** → add one in Settings → AI.
 - **"The AI provider rejected your API key"** → re-check the key in Settings → AI.
 - **"…is rate-limiting you"** → wait a moment and retry.
-- **A proposed task looks wrong** → just edit the card before approving; the model's
-  proposals are starting points, not final.
+- **A pending change looks wrong** → dismiss it and ask for the exact correction.

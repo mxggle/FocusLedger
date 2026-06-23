@@ -64,111 +64,73 @@ User types in Composer
 assistantStore.send(text)                         (src/stores/assistantStore.ts)
         │  builds snapshot() from taskStore + settingsStore
         │  loads insights (retrospect) + history (recall) — cached per session
+        │  ranks learned memories for this turn
         ▼
-runAssistantTurn ──► runAgentLoop                 (assistant/agentLoop.ts)
+runAssistantToolTurn                              (assistant/assistantRunner.ts)
         │
         │  buildAssistantContext(snapshot, insights)   → AssistantContext
         │  buildAssistantSystemPrompt(ctx)             → system string
         │
-        │  ┌── loop, up to MAX_STEPS (6) ─────────────────────────┐
+        │  ┌── loop, up to MAX_STEPS (12) ────────────────────────┐
         │  │  generateChat(system, messages)                       │
-        │  │  parseLoopStep(raw):                                  │
-        │  │    • { lookups:[…] }  → executeLookup() each, feed    │
-        │  │                          results back as a user turn  │
-        │  │    • else             → final answer, break           │
+        │  │  parseToolCalls(raw):                                 │
+        │  │    • { tool_calls:[…] } → validate args with zod      │
+        │  │                           execute or queue writes     │
+        │  │                           feed tool results back      │
+        │  │    • else              → final Markdown answer        │
         │  └───────────────────────────────────────────────────────┘
         ▼
-parseAssistantResponse(raw, ctx)  →  { reply, actions: ProposedAction[] }
-        │
+assistant message stored with ToolCallRecord[]; taskStore.refresh()
         ▼
-autoApplyActions(actions, taskStore)              (assistant/autoApply.ts)
-        │  reversible actions → execute NOW, mark "applied"
-        │  destructive actions → leave "pending" (await confirm)
-        ▼
-assistant message stored with executed actions; taskStore.refresh()
-        ▼
-MessageBubble renders reply + ActionCards (done / pending-confirm)
+MessageRow renders reply + ToolCallCard rows (Done / pending / failed / reverted)
 ```
 
-### 3.2 Execution model — **agent, not form** (the key design)
+### 3.2 Tool registry and permission levels
 
-Historically every proposed change rendered as a confirm card the user had to
-click. That made bulk operations ("categorize all 19 backlog tasks") collapse
-into a wall of "Apply" buttons. The current model is **graduated autonomy**,
-decided by the agent itself — the user never configures it:
+The assistant now has one general tool surface under
+[`agentTools/`](../src/services/ai/assistant/agentTools/). Each `AgentTool` has a
+name, read/write category, destructive flag, zod parameter schema, prompt hint,
+and an `execute()` function over `AgentTaskStore`.
 
-- **Reversible actions execute immediately** the moment the turn finalizes:
-  `create_task`, `update_task`, `reschedule_task`, `move_to_backlog`,
-  `complete_task`, `start_task`. They render as **Done** (with the change already
-  live in the app).
-- **Destructive actions wait for confirmation**: `drop_task` only. It stays
-  `pending` and renders as a confirm card; `applyAction` routes destructive
-  applies through `uiStore.confirm()`.
+Current tools:
 
-This split lives in **`autoApplyActions`** ([autoApply.ts](../src/services/ai/assistant/autoApply.ts)),
-called from `assistantStore.send` after the turn. The function is pure
-orchestration over the action registry and never throws — a failed action is
-marked `failed` so one bad change can't sink the batch. The system prompt and the
-Soul preamble tell the model to act decisively and narrate in the **past tense**
-for reversible work, and to frame only destructive actions as proposals.
+| Category | Tools |
+|---|---|
+| Read | `list_tasks`, `get_task`, `search_tasks`, `list_categories`, `get_calibration`, `recall`, `daily_summary` |
+| Write | `create_task`, `update_task`, `start_task`, `pause_task`, `complete_task`, `move_to_backlog`, `drop_task` |
 
-> **Reversibility is by nature, not yet one-click.** There is no Undo button yet;
-> reversible actions are reversible *by hand* (re-edit, reschedule back). A
-> one-click Undo is the natural next increment.
+The model may emit:
 
-### 3.3 Action registry (the write surface)
-
-Every capability is an `ActionDescriptor` in
-[`actions.ts`](../src/services/ai/assistant/actions.ts), keyed by
-`AssistantActionType`. A descriptor bundles four things:
-
-```
-type      promptSpec   →  how the model is told to emit it (name/when/params)
-          validate()   →  raw LLM params → typed params, or throw (dropped, never crashes a turn)
-          describe()   →  human label for the card
-          execute()    →  run against AssistantTaskStore (a minimal slice of taskStore)
-          destructive  →  routes auto-apply vs confirm
+```json
+{"tool_calls":[{"name":"update_task","args":{"task_id":"t1","planned_start_time":"09:30"}}]}
 ```
 
-Current actions (the **closed** `AssistantActionType` union, [types.ts:9](../src/services/ai/assistant/types.ts)):
+`runToolLoop` validates args at the boundary. Invalid tools/args are fed back as
+tool-result errors; one bad call does not crash the turn. Write calls are gated by
+the user's **Assistant autonomy** setting (`PermissionLevel`):
 
-| Action | Destructive | Notes |
-|---|---|---|
-| `create_task` | no | decomposes brain-dumps into 3–7 scoped tasks; can create a new category |
-| `update_task` | no | title/description/category/priority/estimate — the bulk-categorize workhorse |
-| `reschedule_task` | no | move to a date (`today` or `YYYY-MM-DD`) |
-| `move_to_backlog` | no | unschedule |
-| `complete_task` | no | mark done |
-| `start_task` | no | start a focus session (auto-pauses any running one) |
-| `drop_task` | **yes** | abandon — the only confirm-gated action |
+| Level | Behavior |
+|---|---|
+| `plan` | Reads run; every write is queued as a pending card. |
+| `ask` | Reads run; every write is queued as a pending card. |
+| `auto` | Reversible writes execute immediately; destructive writes (`drop_task`) are queued for confirmation. |
 
-`validateAction` validates a raw action and returns a `ProposedAction`
-(`status: "pending"`) or `null` (unknown type / invalid params are silently dropped).
+All write results are stored as `ToolCallRecord`s with status
+`executed` / `pending` / `failed` / `reverted` / `dismissed`.
 
-> **Scope limitation (known):** the write surface is **task-only**. The assistant
-> cannot yet rename/merge categories, edit time entries, or change focus targets.
-> Widening this means extending the `AssistantActionType` union + registry. The
-> MCP server already proves these operations exist server-side.
+### 3.3 Undo and drift protection
 
-### 3.4 Read tools (the agent loop)
+Write tools return an inverse `UndoOp`:
 
-Before answering, the model may emit `{ "lookups": [ { "tool": …, "query": … } ] }`.
-Each lookup runs **deterministically in TS** (no DB call inside the loop — data is
-pre-loaded into `ToolDeps`) and the results are fed back as the next turn. Tools
-live in [`tools.ts`](../src/services/ai/assistant/tools.ts):
+- created tasks return `{ kind: "delete_task", taskId }`;
+- edits and state changes return `{ kind: "restore_task", taskId, before }`.
 
-| Tool | When | Reads |
-|---|---|---|
-| `search_tasks` | dedup before creating | keyword scan over all tasks |
-| `list_tasks` | enumerate a set for bulk ops | filter by status / category / undated |
-| `get_calibration` | sizing an estimate | retrospective calibration ratio |
-| `recall` | "what happened / why did this slip" | logged reflections (notes/blockers/next-actions) |
+Executed reversible calls render with a **Revert** control. Reverting checks
+`expectedUpdatedAt`; if the task changed since the assistant edit, the user must
+confirm before the older snapshot is restored. Undo is session/persistence scoped
+to the stored assistant message; it is not a global history system.
 
-The loop runs up to `MAX_STEPS = 6`, then forces a final answer
-([agentLoop.ts:14](../src/services/ai/assistant/agentLoop.ts)). Temperature is
-**0.3** for proposal consistency.
-
-### 3.5 Context assembled each turn
+### 3.4 Context assembled each turn
 
 `buildAssistantContext` ([contextBuilder.ts](../src/services/ai/assistant/contextBuilder.ts))
 maps the live `taskStore` snapshot into an `AssistantContext`:
@@ -182,46 +144,50 @@ maps the live `taskStore` snapshot into an `AssistantContext`:
 - `profile` — the user's free-text "About me" (`assistantProfile`), when set.
 - `retro` — `RetrospectiveInsights`, **only when `hasData`** (additive: no history
   → prompt unchanged).
+- `learnedMemories` — the top-ranked active memories for the current turn.
+- `permissionLevel` — the autonomy mode shown to the model.
+- `plannedStartTime` / `plannedEndTime` for today's and backlog tasks so schedule
+  edits can operate on real planned times.
 
-### 3.6 System prompt & the Soul
+### 3.5 System prompt & the Soul
 
 `buildAssistantSystemPrompt` ([systemPrompt.ts](../src/services/ai/assistant/systemPrompt.ts))
 composes, in order:
 
 1. **Soul block** ([soul.ts](../src/services/ai/assistant/soul.ts)) — a product
-   preamble (name + the agent contract: *reversible applied immediately,
-   destructive confirmed*) followed by either the user's custom `assistantSoul`
+   preamble (name + the agent contract) followed by either the user's custom `assistantSoul`
    markdown or the shipped `DEFAULT_SOUL` (a "capable operating partner" identity).
 2. Optional **About-the-user** profile.
-3. The **JSON output contract** (`{ reply, actions }`), action rules (act
-   decisively / past tense / confirm only destructive), and the complex-request
-   decomposition guidance.
-4. The **action catalog** + **read-tool protocol**.
+3. The **tool-call contract** (`{ tool_calls:[...] }`) and final-answer rule
+   (plain Markdown, no legacy action JSON).
+4. The generated tool catalog from `renderToolCatalog()`.
 5. **Current context** (date, categories, tasks, backlog).
-6. Optional **day briefing** + proactive rules, and **retrospective** facts + honesty rules.
+6. Optional **day briefing**, **learned memories**, and **retrospective** facts.
 
-The model must reply with a **single JSON object** and nothing else;
-`parseAssistantResponse` tolerates code fences / stray prose by extracting the
-outermost `{…}`, and falls back to treating the whole text as a plain reply with
-no actions.
+The prompt includes the honesty rule: `create_task` is only for genuinely new
+work the user wants tracked. If the request is unsupported, the assistant must
+say so rather than fabricating a task.
 
-### 3.7 State & persistence
+### 3.6 State & persistence
 
 `assistantStore` (Zustand) holds `messages`, `status` (`idle`/`thinking`/`error`),
 live `steps`, and session-cached `insights`/`history`. Messages persist via
 `assistantMessageRepository` (last `HISTORY_LIMIT = 40` restored on launch).
-**Restored pending proposals are downgraded to `dismissed`** — they reference a
-day state that may have changed, so they are shown as handled, not actionable
+The existing `assistant_messages.actions` JSON column now stores `toolCalls`.
+Legacy action-shaped payloads are ignored on hydrate. **Restored pending tool
+calls are downgraded to `dismissed`** because they reference a day state that
+may have changed
 (`restoreHistoryActions`).
 
-### 3.8 UI components (`src/components/assistant/`)
+### 3.7 UI components (`src/components/assistant/`)
 
 `AssistantPanel` (Radix dialog, framer-motion slide-in) → `BriefingBanner`
-(deterministic day glance) + `MessageList` → `MessageBubble` → `ActionCard` /
-`CreateTaskCard` + `ActionStatusBadge` (Done / Failed / Dismissed); `Composer`
-for input; `EmptyState` for first-run prompts.
+(deterministic day glance) + `MessageList` → `MessageRow` → `ToolCallCard`
+(Apply / Revert / Done / Failed / Dismissed); `Composer` for input; `EmptyState`
+for first-run prompts. Settings → AI includes the **Assistant autonomy** segmented
+control (`Plan` / `Ask` / `Auto`).
 
-### 3.9 Self-curated memory (the learning loop)
+### 3.8 Self-curated memory (the learning loop)
 
 Ported from the Hermes Agent learning loop
 ([spec](./superpowers/specs/2026-06-23-assistant-self-curated-memory-design.md)). The
@@ -316,6 +282,8 @@ agent actions are indistinguishable from the user's.
 | `assistantName` | display name; the Soul answers to it |
 | `assistantSoul` | custom identity markdown (empty → `DEFAULT_SOUL`) |
 | `assistantProfile` | free-text "About me" read every turn |
+| `assistantPermissionLevel` | autonomy level: `plan`, `ask`, or `auto` |
+| `assistantMemoryEnabled` / `assistantMemoryModel` | durable memory review gate and optional review model override |
 | `dailyFocusTargetMinutes` | drives the day briefing / overcommit logic (default 240) |
 | `debriefAutoEnabled` / `debriefAutoTime` | auto-debrief schedule (default off, 23:00) |
 
@@ -329,12 +297,13 @@ Edited in **Settings → AI** (`src/components/settings/SettingsPage.tsx`).
    briefing, stats) is computed in TS. The model never sees raw rows to total.
 2. **Additive insight.** With no history, the retrospective block is omitted and
    behavior is unchanged.
-3. **Agent autonomy is reversibility-based, not user-configured.** Reversible →
-   act; destructive → confirm. The agent decides; the user never sets it up.
-4. **Validation at the boundary.** Bad LLM actions/lookups are dropped, never
+3. **User-configured autonomy.** `plan`, `ask`, and `auto` determine whether write
+   tools are described only, queued for confirmation, or executed in-loop.
+   Destructive writes still require confirmation.
+4. **Validation at the boundary.** Bad LLM tool calls or arguments are dropped, never
    thrown — one malformed item can't sink a turn.
-5. **Pure cores, thin impure edges.** Request-builders, parsers, the action
-   registry, retrospective math, and `autoApply` are pure and injectable;
+5. **Pure cores, thin impure edges.** Request-builders, parsers, the tool
+   registry, permission checks, revert logic, and retrospective math are injectable;
    DB/network live at named seams (`chatClient`, `loadHistory`, `*Repository`).
 6. **Many small files.** One concern per file; registries make capabilities additive.
 
@@ -342,15 +311,14 @@ Edited in **Settings → AI** (`src/components/settings/SettingsPage.tsx`).
 
 ## 9. Extension points
 
-**Add an assistant action (write capability):**
-1. Add the name to `AssistantActionType` ([types.ts](../src/services/ai/assistant/types.ts)).
-2. Add an `ActionDescriptor` to `ACTION_REGISTRY` ([actions.ts](../src/services/ai/assistant/actions.ts))
-   with `promptSpec`, `validate`, `describe`, `execute`, and the right `destructive` flag.
-3. If it needs a new store op, extend `AssistantTaskStore` (and the real `taskStore`).
-4. The system prompt, auto-apply routing, and card rendering pick it up automatically.
-
-**Add a read tool:** add an entry to `TOOL_REGISTRY` ([tools.ts](../src/services/ai/assistant/tools.ts))
-— it surfaces in the prompt catalog and the loop dispatcher automatically.
+**Add an assistant tool:**
+1. Add a focused tool file under
+   [`agentTools/`](../src/services/ai/assistant/agentTools/) and export an `AgentTool`.
+2. Register it in [`agentTools/registry.ts`](../src/services/ai/assistant/agentTools/registry.ts).
+3. For writes, set the correct `permission`, `mutation`, and undo metadata.
+4. If it needs a new store operation, extend `AgentTaskStore` and the real
+   `taskStore` adapter.
+5. Add unit tests for validation, permission behavior, execution, and prompt catalog text.
 
 **Add an MCP tool:** `defineTool(...)` + register in `mcp/src/tools/index.ts` (mark `writes: true`, honest annotations).
 
@@ -358,12 +326,12 @@ Edited in **Settings → AI** (`src/components/settings/SettingsPage.tsx`).
 
 ## 10. Testing & verification
 
-- **Unit:** `vitest` covers providers, the action registry, `autoApply`, the agent
-  loop, response parsing, the system prompt, the soul, day briefing, recall, and
-  the whole retrospective layer (93 tests in `src/services/ai/assistant/` alone).
+- **Unit:** `vitest` covers providers, the assistant tool registry, permission
+  gating, tool loop, response parsing, the system prompt, the soul, day briefing,
+  recall, store/UI wiring, and the whole retrospective layer.
   The MCP server has its own suite under `mcp/test/`.
-- **Network/DB are injected** (`AgentLoopDeps.generateChat`, `AssistantTaskStore`,
-  `ToolDeps`), so the loop and actions are tested without a provider or a database.
+- **Network/DB are injected** (`ToolLoopDeps.generateChat`, `AgentTaskStore`,
+  `AgentToolDeps`), so the loop and tools are tested without a provider or a database.
 - **Verify changes with:** `yarn build` (tsc + vite), `yarn test`, and
   `cargo check` inside `src-tauri/` for Rust.
 
@@ -380,22 +348,25 @@ src/services/ai/
   debriefService.ts       debrief prompt + generateDebrief + input hash
   debriefRunner.ts        auto-debrief gate + runDebrief
   assistant/
-    types.ts              AssistantActionType, ProposedAction, AssistantContext, store iface
+    types.ts              AssistantContext + persisted ChatMessage shape
     contextBuilder.ts     taskStore snapshot → AssistantContext
     soul.ts               product preamble + DEFAULT_SOUL + buildSoulBlock
     systemPrompt.ts       full system prompt composition
-    actions.ts            ACTION_REGISTRY (the write surface) + validateAction
-    tools.ts              TOOL_REGISTRY (read tools) + executeLookup
-    agentLoop.ts          lookup-loop orchestration (MAX_STEPS)
-    assistantRunner.ts    thin entry → runAgentLoop
-    responseParser.ts     parseAssistantResponse / parseLoopStep
-    autoApply.ts          reversible→apply, destructive→confirm  ← execution model
+    responseParser.ts     parseToolCalls from JSON tool-call envelopes
+    toolLoop.ts           JSON tool-call loop, permission gating, MAX_STEPS
+    assistantRunner.ts    context/prompt assembly → runToolLoop
+    agentTools/
+      types.ts            AgentTool, ToolCallRecord, AgentTaskStore
+      registry.ts         AGENT_TOOLS + renderToolCatalog
+      permissions.ts      plan/ask/auto write gating
+      revert.ts           session undo + drift detection
+      *.ts                one read/write tool per file
     dayBriefing.ts        deterministic day-load snapshot
     recallHistory.ts      reflections window for the recall tool
     briefingSummary.ts    briefing → banner copy
 
 src/services/retrospect/   calibration / slips / weeklyReview / loadHistory / index (pure)
-src/stores/assistantStore.ts   orchestration + persistence + auto-apply wiring
-src/components/assistant/      panel, message list, action cards, composer, briefing
+src/stores/assistantStore.ts   orchestration + persistence + memory hooks + revert
+src/components/assistant/      panel, message list, tool-call controls, composer, briefing
 mcp/                           external MCP server (read + manage yolo.db)
 ```
