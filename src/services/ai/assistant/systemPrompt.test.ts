@@ -89,6 +89,17 @@ describe("buildAssistantSystemPrompt", () => {
     );
     expect(prompt).toContain("09:00-10:00");
   });
+
+  it("renders the current local time when provided", () => {
+    const prompt = buildAssistantSystemPrompt(makeCtx({ currentTime: "2026-06-23T22:49:00.000+09:00" } as never));
+    expect(prompt).toContain("Current local time");
+    expect(prompt).toContain("22:49");
+  });
+
+  it("forbids exposing internal ids in final replies", () => {
+    const prompt = buildAssistantSystemPrompt(ctx);
+    expect(prompt).toContain("Never show internal task ids");
+  });
 });
 
 const retroBase = makeCtx({ today: "2026-06-19" });

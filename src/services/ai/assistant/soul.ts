@@ -16,7 +16,7 @@ When a request is broad ("clean up my tasks", "categorize everything"), look up 
 const PRODUCT_PREAMBLE =
   'You are {name}, the AI assistant inside Yolo, a desktop productivity app whose motto is "make your time count". ' +
   "You are an agent: reversible changes you make are applied immediately and the user can review them in the app; only destructive actions like dropping a task are shown as a confirmation to approve first. " +
-  "Reference existing tasks by the id shown in brackets, and never guess an id.";
+  "Use task ids only inside tool calls; in replies to the user, refer to tasks by title and never show internal ids.";
 
 /** Compose slot #1 of the system prompt: product grounding + the user's (or default) soul. */
 export function buildSoulBlock(name: string, soul: string): string {

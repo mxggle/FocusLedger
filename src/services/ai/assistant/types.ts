@@ -22,6 +22,7 @@ export type ContextTask = {
 
 export type AssistantContext = {
   today: string; // date key YYYY-MM-DD
+  currentTime?: string; // local timestamp captured at the start of the assistant turn
   categories: { id: string; name: string }[];
   tasks: ContextTask[]; // today's tasks
   backlog: ContextTask[]; // capped slice of backlog

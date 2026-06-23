@@ -26,4 +26,10 @@ describe("buildSoulBlock", () => {
     expect(block.toLowerCase()).toContain("applied immediately");
     expect(block.toLowerCase()).toContain("destructive");
   });
+
+  it("limits task ids to internal tool use instead of user-facing replies", () => {
+    const block = buildSoulBlock("Yolo", "");
+    expect(block).toContain("Use task ids only inside tool calls");
+    expect(block).not.toContain("Reference existing tasks by the id shown");
+  });
 });

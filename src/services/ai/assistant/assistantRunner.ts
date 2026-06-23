@@ -25,13 +25,26 @@ function permissionLevelFor(snapshot: AssistantStoreSnapshot): PermissionLevel {
   return snapshot.permissionLevel ?? "auto";
 }
 
+function currentLocalTimestamp(): string {
+  const date = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const offsetMinutes = -date.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const absOffset = Math.abs(offsetMinutes);
+  const offset = `${sign}${pad(Math.floor(absOffset / 60))}:${pad(absOffset % 60)}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(
+    date.getMinutes()
+  )}:${pad(date.getSeconds())}.${String(date.getMilliseconds()).padStart(3, "0")}${offset}`;
+}
+
 /** Run one L1 tool-calling assistant turn. Write tools are executed or queued
  * according to the permission level already captured in the snapshot. */
 export async function runAssistantToolTurn(
   input: RunAssistantTurnInput,
   deps: AssistantToolRunnerDeps
 ): Promise<ToolLoopResult> {
-  const ctx = buildAssistantContext(input.snapshot, input.insights);
+  const turnTime = deps.now ? deps.now() : currentLocalTimestamp();
+  const ctx = { ...buildAssistantContext(input.snapshot, input.insights), currentTime: turnTime };
   const system = buildAssistantSystemPrompt(ctx);
   return runToolLoop(
     {
@@ -44,7 +57,7 @@ export async function runAssistantToolTurn(
         ctx,
         insights: input.insights ?? null,
         history: input.history ?? [],
-        now: deps.now ?? (() => new Date().toISOString())
+        now: () => turnTime
       },
       onStep: input.onStep
     },

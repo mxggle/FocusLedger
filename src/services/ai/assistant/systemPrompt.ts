@@ -24,8 +24,17 @@ function describeTask(task: ContextTask): string {
   return `- [${task.id}] "${task.title}" (${task.status}, ${task.priority}, ${time}${estimate})`;
 }
 
+function localTimeLabel(value: string): string {
+  const match = /T(\d{2}:\d{2})/.exec(value);
+  return match?.[1] ?? value;
+}
+
 function renderContext(ctx: AssistantContext): string {
   const lines: string[] = [`Current date (the day the user is viewing): ${ctx.today}`];
+
+  if (ctx.currentTime) {
+    lines.push(`Current local time: ${localTimeLabel(ctx.currentTime)} (${ctx.currentTime})`);
+  }
 
   lines.push(
     ctx.categories.length > 0
@@ -115,6 +124,8 @@ const TOOL_PROTOCOL = [
   '- To use tools, respond with ONLY a JSON object: { "tool_calls": [ { "name": "list_tasks", "args": { "scope": "today" } } ] }',
   "- You will receive tool results as the next message. Continue with more tool_calls if needed, or give your final answer.",
   "- Final answers are plain Markdown. Do not append legacy actions JSON or wrap the reply in JSON.",
+  "- Never show internal task ids, category ids, or tool names in final replies. Use task titles and human-readable times only.",
+  "- You know the current local time from Current context. For requests like 'from now', 'current time', or '剩下的时间', use that time with today's task list and schedule fields.",
   "- Reads can gather facts. Writes may execute or be queued depending on the permission level below.",
   "- create_task is ONLY for genuinely new work the user wants tracked. If a request cannot be done with the available tools, say so plainly and suggest the closest supported action - never invent a task to fake completion.",
   "- Before changing many tasks, call list_tasks to fetch exact ids and current schedule times, then call update_task per affected task.",

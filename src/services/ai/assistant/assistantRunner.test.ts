@@ -134,4 +134,24 @@ describe("runAssistantToolTurn", () => {
 
     expect(capturedSystem).toContain("History & patterns");
   });
+
+  it("passes the current time into the system prompt", async () => {
+    let capturedSystem = "";
+    const generateChat = vi.fn(async (_settings, input) => {
+      capturedSystem = input.system;
+      return "ok";
+    });
+
+    await runAssistantToolTurn(
+      {
+        settings,
+        snapshot,
+        messages: [{ role: "user", content: "rearrange based on now" }]
+      },
+      { generateChat, store: storeWith([]), now: () => "2026-06-23T22:49:00.000+09:00" }
+    );
+
+    expect(capturedSystem).toContain("Current local time");
+    expect(capturedSystem).toContain("22:49");
+  });
 });

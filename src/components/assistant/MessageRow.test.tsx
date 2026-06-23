@@ -172,7 +172,8 @@ describe("MessageRow — assistant", () => {
   });
 
   it("hides task ids in assistant prose and highlights known affected task names", () => {
-    const taskId = "taske5f24bfb-5b67-49a7-be01-8c4090dc3388";
+    const taskId = "task_e5f24bfb-5b67-49a7-be01-8c4090dc3388";
+    mockTaskStore.allTasks = [{ ...mockTaskStore.allTasks[0], id: taskId }];
     const message = assistantMessage({
       content: `I've adjusted "${mockTaskStore.allTasks[0].title}" [${taskId}] to 19:40-20:15.`,
       toolCalls: [
