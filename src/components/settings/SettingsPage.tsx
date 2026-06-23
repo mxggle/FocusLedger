@@ -15,16 +15,17 @@ import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Field, Input, Select } from "../ui/Field";
 import { PageHeader, SettingsSection } from "../ui/PageHeader";
+import { SegmentedControl } from "../ui/SegmentedControl";
 import { ShortcutInput } from "../ui/ShortcutInput";
 import { Switch } from "../ui/Switch";
 import { CategoryManager } from "./CategoryManager";
 import { MemoryManager } from "./MemoryManager";
 
-function permissionLabel(level: PermissionLevel): string {
-  if (level === "plan") return "Plan";
-  if (level === "ask") return "Ask";
-  return "Auto";
-}
+const PERMISSION_SEGMENTS: { value: PermissionLevel; label: string; icon: typeof SlidersHorizontal }[] = [
+  { value: "plan", label: "Plan", icon: SlidersHorizontal },
+  { value: "ask", label: "Ask", icon: Bell },
+  { value: "auto", label: "Auto", icon: Sparkles }
+];
 
 export function SettingsPage() {
   const settings = useSettingsStore((state) => state.settings);
@@ -286,23 +287,12 @@ export function SettingsPage() {
                   />
                 </Field>
                 <Field label="Assistant autonomy" hint="Plan proposes changes, Ask confirms each change, Auto applies reversible changes.">
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {(["plan", "ask", "auto"] as const).map((level) => (
-                      <button
-                        key={level}
-                        type="button"
-                        onClick={() => void updateSetting("assistantPermissionLevel", level)}
-                        className={[
-                          "rounded-md border px-3 py-2 text-left text-sm font-medium transition-colors duration-fast",
-                          settings.assistantPermissionLevel === level
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border bg-surface text-foreground hover:border-border-strong"
-                        ].join(" ")}
-                      >
-                        {permissionLabel(level)}
-                      </button>
-                    ))}
-                  </div>
+                  <SegmentedControl
+                    segments={PERMISSION_SEGMENTS}
+                    value={settings.assistantPermissionLevel}
+                    onChange={(level) => void updateSetting("assistantPermissionLevel", level)}
+                    className="w-full justify-between sm:w-auto"
+                  />
                 </Field>
               </div>
             </div>

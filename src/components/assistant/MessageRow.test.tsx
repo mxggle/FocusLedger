@@ -19,6 +19,9 @@ const { mockAssistant } = vi.hoisted(() => ({
     applyAll: vi.fn(),
     updateActionParams: vi.fn(),
     dismissAction: vi.fn(),
+    applyToolCall: vi.fn(),
+    revertToolCall: vi.fn(),
+    dismissToolCall: vi.fn(),
     clear: vi.fn()
   }
 }));
@@ -115,6 +118,66 @@ describe("MessageRow — assistant", () => {
     const container = render(<MessageRow message={message} isStreaming={false} />);
     fireClick(byLabel(container, "Regenerate"));
     expect(mockAssistant.regenerateLast).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders a pending tool call and applies or dismisses it", () => {
+    const message = assistantMessage({
+      toolCalls: [
+        {
+          id: "tc1",
+          name: "update_task",
+          args: { task_id: "t1", planned_start_time: "09:30" },
+          category: "write",
+          destructive: false,
+          summary: "Move Report to 09:30",
+          status: "pending"
+        }
+      ]
+    });
+    mockAssistant.messages = [message];
+    const container = render(<MessageRow message={message} isStreaming={false} />);
+    expect(container.textContent).toContain("Move Report to 09:30");
+    fireClick(buttonByText(container, "Apply"));
+    expect(mockAssistant.applyToolCall).toHaveBeenCalledWith("a1", "tc1");
+    fireClick(byLabel(container, "Dismiss tool call"));
+    expect(mockAssistant.dismissToolCall).toHaveBeenCalledWith("a1", "tc1");
+  });
+
+  it("renders an executed tool call with a revert action", () => {
+    const message = assistantMessage({
+      toolCalls: [
+        {
+          id: "tc1",
+          name: "update_task",
+          args: { task_id: "t1" },
+          category: "write",
+          destructive: false,
+          summary: "Moved Report",
+          status: "executed",
+          undo: {
+            kind: "restore_task",
+            taskId: "t1",
+            before: {
+              title: "Report",
+              description: null,
+              category_id: null,
+              priority: "medium",
+              estimated_minutes: null,
+              due_date: "2026-06-20",
+              planned_start_time: null,
+              planned_end_time: null,
+              status: "todo",
+              updated_at: "u0"
+            }
+          }
+        }
+      ]
+    });
+    mockAssistant.messages = [message];
+    const container = render(<MessageRow message={message} isStreaming={false} />);
+    expect(container.textContent).toContain("Done");
+    fireClick(byLabel(container, "Revert tool call"));
+    expect(mockAssistant.revertToolCall).toHaveBeenCalledWith("a1", "tc1");
   });
 });
 

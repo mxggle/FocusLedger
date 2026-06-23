@@ -8,6 +8,7 @@ import { Markdown } from "../ui/Markdown";
 import { IconButton } from "../ui/IconButton";
 import { ActionCard } from "./ActionCard";
 import { MessageEditor } from "./MessageEditor";
+import { ToolCallCard } from "./ToolCallCard";
 
 type MessageRowProps = {
   message: ChatMessage;
@@ -28,6 +29,9 @@ function AssistantRow({ message, isStreaming }: { message: ChatMessage; isStream
   const applyAction = useAssistantStore((s) => s.applyAction);
   const applyAll = useAssistantStore((s) => s.applyAll);
   const dismissAction = useAssistantStore((s) => s.dismissAction);
+  const applyToolCall = useAssistantStore((s) => s.applyToolCall);
+  const revertToolCall = useAssistantStore((s) => s.revertToolCall);
+  const dismissToolCall = useAssistantStore((s) => s.dismissToolCall);
   const addToast = useUiStore((s) => s.addToast);
 
   const lastAssistantId = findLastAssistantId(messages);
@@ -96,6 +100,20 @@ function AssistantRow({ message, isStreaming }: { message: ChatMessage; isStream
                 action={action}
                 onApply={() => void applyAction(message.id, action.id)}
                 onDismiss={() => dismissAction(message.id, action.id)}
+              />
+            ))}
+          </div>
+        ) : null}
+
+        {message.toolCalls && message.toolCalls.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            {message.toolCalls.map((call) => (
+              <ToolCallCard
+                key={call.id}
+                call={call}
+                onApply={() => void applyToolCall(message.id, call.id)}
+                onDismiss={() => dismissToolCall(message.id, call.id)}
+                onRevert={() => void revertToolCall(message.id, call.id)}
               />
             ))}
           </div>
