@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseAssistantResponse, parseLoopStep } from "./responseParser";
+import { parseAssistantResponse, parseLoopStep, parseToolCalls } from "./responseParser";
 import type { AssistantContext } from "./types";
 
 const ctx: AssistantContext = {
@@ -134,5 +134,21 @@ describe("parseLoopStep", () => {
 
   it("treats unparseable text as final", () => {
     expect(parseLoopStep("plain text").kind).toBe("final");
+  });
+});
+
+describe("parseToolCalls", () => {
+  it("parses a tool_calls object", () => {
+    const raw =
+      '{"tool_calls":[{"name":"list_tasks","args":{"scope":"today"}},{"name":"update_task","args":{"task_id":"t1","planned_start_time":"09:30"}}]}';
+    expect(parseToolCalls(raw)).toEqual([
+      { name: "list_tasks", args: { scope: "today" } },
+      { name: "update_task", args: { task_id: "t1", planned_start_time: "09:30" } }
+    ]);
+  });
+
+  it("returns null for a non-tool-call final markdown reply", () => {
+    expect(parseToolCalls("Here is your plan.")).toBeNull();
+    expect(parseToolCalls('{"reply":"x"}')).toBeNull();
   });
 });
