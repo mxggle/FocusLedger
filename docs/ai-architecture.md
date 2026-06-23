@@ -221,6 +221,35 @@ day state that may have changed, so they are shown as handled, not actionable
 `CreateTaskCard` + `ActionStatusBadge` (Done / Failed / Dismissed); `Composer`
 for input; `EmptyState` for first-run prompts.
 
+### 3.9 Self-curated memory (the learning loop)
+
+Ported from the Hermes Agent learning loop
+([spec](./superpowers/specs/2026-06-23-assistant-self-curated-memory-design.md)). The
+assistant learns durable facts about the user from conversations and recalls the relevant
+ones each turn. Code lives in [`assistant/memory/`](../src/services/ai/assistant/memory)
+(pure cores) plus [`assistantMemoryRepository`](../src/db/assistantMemoryRepository.ts) and
+the `assistant_memory` table.
+
+- **Pre-turn (recall):** `assistantStore` loads active memories (session-cached like
+  insights), `rankMemories` picks the top-`MEMORY_INJECT_K` (8) for the user's message —
+  deterministically in TS, like the read tools — and they ride into the prompt via
+  `AssistantContext.learnedMemories` → `renderMemoryBlock`. The block sits beside the static
+  "About me"; both are kept (additive: no memories ⇒ prompt byte-identical to before).
+- **Post-turn (review):** after the turn settles, a **debounced**
+  (`MEMORY_REVIEW_DEBOUNCE_MS = 1500`) background pass runs — but only if
+  `assistantMemoryEnabled` and `reviewGate.shouldReview` passes (skips trivial acks).
+  `runMemoryReview` makes **one** aux LLM call on the configurable `assistantMemoryModel`
+  (empty ⇒ the main `aiModel`), parses a JSON `MemoryOp[]` (`reviewParser`, invalid dropped),
+  folds them (`applyOps`: dedup → usage bump, contradiction → update/archive, pinned
+  protected, **archive-not-delete**), and persists. Fire-and-forget — it never blocks or
+  breaks a turn.
+- **Viewer:** `MemoryManager` (Settings → AI) lists / edits / pins / forgets memories, with a
+  "Forgotten" (archived) list to restore.
+
+Invariants: deterministic retrieval (the LLM only *extracts/narrates*, never ranks);
+validation drops-never-throws; BYO-key with **no new provider dependency** (no embeddings,
+no FTS5). **Next pillars:** learned skills + cross-session conversation recall.
+
 ---
 
 ## 4. Focus Debrief
