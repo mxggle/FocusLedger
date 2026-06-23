@@ -17,6 +17,7 @@ import { PageHeader, SettingsSection } from "../ui/PageHeader";
 import { ShortcutInput } from "../ui/ShortcutInput";
 import { Switch } from "../ui/Switch";
 import { CategoryManager } from "./CategoryManager";
+import { MemoryManager } from "./MemoryManager";
 
 export function SettingsPage() {
   const settings = useSettingsStore((state) => state.settings);
@@ -276,6 +277,35 @@ export function SettingsPage() {
                     onChange={(event) => void updateSetting("assistantProfile", event.target.value)}
                     className="w-full resize-y rounded-md border border-input bg-surface px-3 py-2 text-sm leading-relaxed text-foreground shadow-xs outline-none transition-[box-shadow,border-color] duration-fast placeholder:text-subtle hover:border-border-strong focus:border-ring focus:shadow-ring"
                   />
+                </Field>
+              </div>
+            </div>
+
+            <div className="mt-6 border-t border-border pt-4">
+              <h3 className="mb-3 text-sm font-medium text-foreground">Memory</h3>
+              <SettingRow
+                label="Self-curated memory"
+                hint="Let the assistant learn durable facts about you from your conversations and recall them in future chats."
+                value={settings.assistantMemoryEnabled}
+                onChange={(value) => void updateSetting("assistantMemoryEnabled", value)}
+              />
+              <div className="mt-4 space-y-4">
+                <Field
+                  label="Memory model (optional)"
+                  hint="A cheaper model for the background memory review. Leave empty to reuse your assistant model."
+                >
+                  <Input
+                    type="text"
+                    placeholder={settings.aiModel || DEFAULT_MODELS[settings.aiProvider] || "same as assistant"}
+                    value={settings.assistantMemoryModel}
+                    onChange={(event) => void updateSetting("assistantMemoryModel", event.target.value)}
+                  />
+                </Field>
+                <Field
+                  label="What the assistant has learned"
+                  hint="Inspect, pin, or forget anything the assistant has learned about you."
+                >
+                  <MemoryManager />
                 </Field>
               </div>
             </div>
