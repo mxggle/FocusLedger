@@ -109,7 +109,8 @@ export type AgentTool = {
   category: ToolCategory;
   destructive: boolean;
   description: string;                   // prompt text: when + how to use
-  parameters: z.ZodType<unknown>;        // arg schema; rendered to the prompt + validated by the loop
+  paramsHint: string;                    // human-readable param doc for the prompt
+  parameters: z.ZodType<unknown>;        // arg schema; validated by the loop
   execute: (args: unknown, deps: AgentToolDeps) => Promise<ToolResult>;
 };
 ```
@@ -185,14 +186,14 @@ Every executed write carries an `undo: UndoOp` on its `ToolCallRecord`. UI expos
 ```ts
 async function revertToolCall(rec: ToolCallRecord, store: AgentTaskStore): Promise<{ ok: boolean; message?: string }> {
   if (rec.status !== "executed" || !rec.undo) return { ok: false, message: "Nothing to revert" };
-  // drift check: if the target task was changed since this action, warn before clobbering.
+  // The caller checks drift by comparing the live task's updated_at to rec.expectedUpdatedAt.
   if (rec.undo.kind === "delete_task") return store.deleteTask(rec.undo.taskId);
   // restore_task: write back the captured fields (incl. status)
   return store.updateTask(rec.undo.taskId, { ...rec.undo.before });
 }
 ```
 
-- Drift detection: `restore_task` compares the current task's `updated_at` against the value the record expects (the `updated_at` right after the action). If they differ, the task was edited since → the UI asks "changed since — revert anyway?" before applying. If the task no longer exists → report "can't revert (task was deleted)."
+- Drift detection: `restore_task` compares the current task's `updated_at` against `ToolCallRecord.expectedUpdatedAt`, captured from the task row immediately after the write succeeds. Do **not** compare against `undo.before.updated_at`; `taskRepository.updateTask()` advances `updated_at` as part of the write, so the pre-action value would make every successful write look drifted. If the live value differs from `expectedUpdatedAt`, the task was edited since → the UI asks "changed since — revert anyway?" before applying. If the task no longer exists → report "can't revert (task was deleted)."
 - After revert, set `status: "reverted"`, call `store.refresh()`, re-render the card.
 - Scope is the chat session, but because messages + their `toolCalls` persist (see §3.7), revert works for any past turn still in the conversation.
 
@@ -220,6 +221,7 @@ export type ToolCallRecord = {
   result?: string;
   error?: string;
   undo?: UndoOp;            // present once executed
+  expectedUpdatedAt?: string; // for restore_task drift: task.updated_at immediately after execution
 };
 ```
 

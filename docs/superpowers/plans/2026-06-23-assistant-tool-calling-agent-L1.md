@@ -103,6 +103,7 @@ export type ToolCallRecord = {
   result?: string;
   error?: string;
   undo?: UndoOp;
+  expectedUpdatedAt?: string; // for restore_task drift: task.updated_at immediately after execution
 };
 ```
 
@@ -193,7 +194,7 @@ git commit -m "feat(agent): permission-level write gating"
 ```ts
 // revert.test.ts
 import { describe, expect, it, vi } from "vitest";
-import { revertToolCall } from "./revert";
+import { hasDrifted, revertToolCall } from "./revert";
 import type { AgentTaskStore, ToolCallRecord, TaskUndoSnapshot } from "./types";
 
 function store(): AgentTaskStore {
@@ -231,6 +232,11 @@ describe("revertToolCall", () => {
     const s = store();
     await revertToolCall(rec({ kind: "delete_task", taskId: "t9" }), s);
     expect(s.deleteTask).toHaveBeenCalledWith("t9");
+  });
+  it("flags drift only when current updated_at differs from the post-action expected value", () => {
+    const r = { ...rec({ kind: "restore_task", taskId: "t1", before }), expectedUpdatedAt: "u1" };
+    expect(hasDrifted(r, { updated_at: "u1" })).toBe(false);
+    expect(hasDrifted(r, { updated_at: "u2" })).toBe(true);
   });
   it("refuses when not executed or no undo", async () => {
     const s = store();
@@ -273,11 +279,12 @@ export async function revertToolCall(
 export function hasDrifted(rec: ToolCallRecord, current: { updated_at: string } | undefined): boolean {
   if (!rec.undo || rec.undo.kind !== "restore_task") return false;
   if (!current) return false; // missing task handled by caller
-  return current.updated_at !== rec.undo.before.updated_at;
+  if (!rec.expectedUpdatedAt) return false; // legacy executed records cannot be drift-checked
+  return current.updated_at !== rec.expectedUpdatedAt;
 }
 ```
 
-> Drift note: `hasDrifted` compares the live task's `updated_at` to the snapshot captured **before** the action. After the action the row's `updated_at` advanced once; if it advanced again (a later edit), they differ → drift. The UI uses this to ask "changed since — revert anyway?" (Task 15). For missing tasks (`current === undefined`) the caller reports "task was deleted."
+> Drift note: `hasDrifted` compares the live task's `updated_at` to `rec.expectedUpdatedAt`, captured from the task row immediately after the action succeeds. Do **not** compare against `rec.undo.before.updated_at`: `taskRepository.updateTask()` advances `updated_at` during the write, so the pre-action value would make every successful write look drifted. The UI/store wiring uses drift to ask "changed since — revert anyway?" (Tasks 13-14). For missing tasks (`current === undefined`) the caller reports "task was deleted."
 
 - [ ] **Step 4: Run — expect PASS.**
 
@@ -564,7 +571,7 @@ Implement each per this table (all `category:"write"`; `drop_task` is the only `
 
 | tool | parameters (zod) | store call | summary | undo |
 |---|---|---|---|---|
-| `create_task` | `{title:str≥1, description?:str|null, category?:str, priority?:enum, estimated_minutes?:num>0, due_date?:str|null, planned_start_time?:str|null, planned_end_time?:str|null}` (validate times w/ `HHMM_RE`, resolve category via `ensureCategory` if new, `due_date` via `resolveDueDate`) | `store.createTask(input)` | `Created "<title>" <for date|in backlog>` | `{kind:"delete_task", taskId: res.id}` (use the adapter-captured id; if `res.id` missing → return ok with no undo) |
+| `create_task` | `{title:str≥1, description?:str|null, category?:str, priority?:enum, estimated_minutes?:num>0, due_date?:str|null, planned_start_time?:str|null, planned_end_time?:str|null}` (validate times w/ `HHMM_RE`, resolve category via `ensureCategory` if new, `due_date` via `resolveDueDate`) | `store.createTask(input)` | `Created "<title>" <for date|in backlog>` | `{kind:"delete_task", taskId: res.id}` (use the adapter-captured id; if `res.id` is missing → return `{ok:false,error}` because the write cannot be reverted) |
 | `start_task` | `{task_id:str≥1}` | `store.startTask(id)` (returns "started"/"failed") | `Started focus on "<title>"` | `{kind:"restore_task", taskId, before}` |
 | `pause_task` | `{}` | `store.pauseActiveTask()` (pauses the running task; resolve which via `getAllTasks().find(status==="doing")` for the snapshot/summary) | `Paused "<title>"` | `{kind:"restore_task", taskId, before}` (omit undo if nothing was running) |
 | `complete_task` | `{task_id:str≥1, note?:str}` | `store.completeTask(id, note)` | `Marked "<title>" done` | `{kind:"restore_task", taskId, before}` |
@@ -735,10 +742,12 @@ export function parseToolCalls(raw: string): ParsedToolCall[] | null {
 ### Task 10: The tool-calling loop
 
 **Files:**
-- Create: `src/services/ai/assistant/toolLoop.ts` (new loop; the old `agentLoop.ts` is removed in Task 17)
+- Create: `src/services/ai/assistant/toolLoop.ts` (new loop; the old `agentLoop.ts` is removed in Task 15)
 - Test: `src/services/ai/assistant/toolLoop.test.ts`
 
 Behavior (spec §3.3–§3.4): build system prompt; loop ≤ `MAX_STEPS=12`; each turn → `parseToolCalls`; for each call validate via `tool.parameters.safeParse`; reads + auto-reversible writes execute (capture undo) and feed back; deferred writes become `pending` records fed back as "queued"; non-tool-call turn → final. Returns `{ reply, toolCalls }`.
+
+For any executed write whose `undo.kind === "restore_task"`, re-read that task from `deps.store.getAllTasks()` immediately after the tool succeeds and set `ToolCallRecord.expectedUpdatedAt` to the live task's post-action `updated_at`. This is the value used for later drift detection; the pre-action `undo.before.updated_at` is only part of the restore snapshot.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -815,6 +824,12 @@ export type ToolLoopInput = {
 export type ToolLoopDeps = { generateChat: (s: AiSettings, i: ChatInput) => Promise<string> };
 export type ToolLoopResult = { reply: string; toolCalls: ToolCallRecord[] };
 
+function expectedUpdatedAtFor(rec: Pick<ToolCallRecord, "undo">, deps: AgentToolDeps): string | undefined {
+  if (!rec.undo || rec.undo.kind !== "restore_task") return undefined;
+  const taskId = rec.undo.taskId;
+  return deps.store.getAllTasks().find((task) => task.id === taskId)?.updated_at;
+}
+
 export async function runToolLoop(
   input: Omit<ToolLoopInput, "settings"> & { settings?: AiSettings },
   deps: ToolLoopDeps = { generateChat: defaultGenerateChat }
@@ -848,7 +863,18 @@ export async function runToolLoop(
         feedback.push(`${call.name}: queued for the user's confirmation (not applied yet)`);
       } else {
         const r = await tool.execute(call.args, input.deps);
-        if (r.ok) { records.push({ ...base, status: "executed", summary: r.summary, result: r.summary, undo: r.undo }); feedback.push(`${call.name}: ${r.summary}`); }
+        if (r.ok) {
+          const undo = r.undo;
+          records.push({
+            ...base,
+            status: "executed",
+            summary: r.summary,
+            result: r.summary,
+            undo,
+            expectedUpdatedAt: expectedUpdatedAtFor({ undo }, input.deps)
+          });
+          feedback.push(`${call.name}: ${r.summary}`);
+        }
         else { records.push({ ...base, status: "failed", error: r.error, result: r.error }); feedback.push(`${call.name}: FAILED — ${r.error}`); }
       }
     }
@@ -874,7 +900,7 @@ export async function runToolLoop(
 - [ ] **Step 1: Failing tests** — `systemPrompt` includes the tool catalog (e.g. contains `update_task`), the honesty rule (`only for genuinely new work`), NO "decompose" wording, a permission line that varies by an added `ctx.permissionLevel`, and renders a task's `plannedStartTime` when set; `contextBuilder` passes through times.
 - [ ] **Step 2: Run — expect FAIL.**
 - [ ] **Step 3: Implement:**
-  - `types.ts`: `ContextTask` += `plannedStartTime: string | null; plannedEndTime: string | null;`; `AssistantContext` += `permissionLevel?: PermissionLevel`; `ChatMessage` += `toolCalls?: ToolCallRecord[]`. Keep `ProposedAction`/`AssistantActionType` for now (removed in Task 17).
+  - `types.ts`: `ContextTask` += `plannedStartTime: string | null; plannedEndTime: string | null;`; `AssistantContext` += `permissionLevel?: PermissionLevel`; `ChatMessage` += `toolCalls?: ToolCallRecord[]`. Keep `ProposedAction`/`AssistantActionType` for now (removed in Task 15).
   - `contextBuilder.ts`: `toContextTask` sets `plannedStartTime: task.planned_start_time, plannedEndTime: task.planned_end_time`; thread `permissionLevel` from snapshot.
   - `systemPrompt.ts`: replace `renderActionCatalog()` + `TOOL_PROTOCOL` with `renderToolCatalog()` (from registry) and the tool-call protocol text; add honesty rule; add permission line:
     ```ts
@@ -907,8 +933,8 @@ export async function runToolLoop(
 - [ ] **Step 2: Run — expect FAIL.**
 - [ ] **Step 3: Implement:**
   - Replace the `runAssistantTurnStreaming` body to build `system` (via `buildAssistantSystemPrompt`), `deps = { store: createAgentTaskStore(), ctx, insights, history, now }`, read `level = settings.assistantPermissionLevel`, and drive `runToolLoop`. Stream the final reply tokens; emit read-tool steps via `onStep`. (Tool-call JSON turns are buffered, same classification as today.)
-  - Store `toolCalls` on the assistant `ChatMessage`; for executed reversible writes the message renders Done+Revert; pending → confirm cards.
-  - Add store actions: `applyToolCall(messageId, id)` (run `toolByName(name).execute`, capture undo, mark executed, `refresh`), `applyAllToolCalls(messageId)`, `revertToolCall(messageId, id)` (use `agentTools/revert.revertToolCall` + drift check via live task), `revertTurn(messageId)`, `dismissToolCall`.
+  - Store `toolCalls` on the assistant `ChatMessage`; for executed reversible writes the message renders Done+Revert; pending → confirm cards. When a `restore_task` undo is captured, re-read the target task after the write and set `expectedUpdatedAt` to that post-action `updated_at` for drift detection.
+  - Add store actions: `applyToolCall(messageId, id)` (run `toolByName(name).execute`, capture undo, set `expectedUpdatedAt` for `restore_task` undos, mark executed, `refresh`), `applyAllToolCalls(messageId)`, `revertToolCall(messageId, id)` (use `agentTools/revert.revertToolCall` + drift check via live task), `revertTurn(messageId)`, `dismissToolCall`.
   - Keep memory hooks unchanged (post-turn `runMemoryReview` with last user text + final reply).
 - [ ] **Step 4: Run — expect PASS.** **Step 5: Commit** `feat(agent): drive tool-loop from assistantStore + apply/revert actions`.
 
