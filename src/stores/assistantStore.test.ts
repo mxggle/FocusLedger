@@ -21,6 +21,20 @@ const { messageRepo } = vi.hoisted(() => ({
 }));
 vi.mock("../db/assistantMessageRepository", () => ({ assistantMessageRepository: messageRepo }));
 
+const { memoryRepo } = vi.hoisted(() => ({
+  memoryRepo: {
+    getActive: vi.fn((): Promise<unknown[]> => Promise.resolve([])),
+    getAll: vi.fn((): Promise<unknown[]> => Promise.resolve([]))
+  }
+}));
+vi.mock("../db/assistantMemoryRepository", () => ({ assistantMemoryRepository: memoryRepo }));
+
+const { reviewMock } = vi.hoisted(() => ({ reviewMock: { runMemoryReview: vi.fn(async () => {}) } }));
+vi.mock("../services/ai/assistant/memory/runMemoryReview", () => ({
+  runMemoryReview: reviewMock.runMemoryReview,
+  MEMORY_REVIEW_DEBOUNCE_MS: 0
+}));
+
 vi.mock("../services/ai/assistant/recallHistory", () => ({
   loadRecallEntries: vi.fn(async () => [])
 }));
@@ -95,7 +109,8 @@ beforeEach(() => {
     steps: [],
     streamingMessageId: null,
     insights: null,
-    history: null
+    history: null,
+    memories: null
   });
   vi.clearAllMocks();
   runAssistantTurnStreaming.mockReset();
@@ -369,6 +384,21 @@ describe("assistantStore.insights", () => {
 
     expect(useAssistantStore.getState().messages).toEqual([]);
     expect(useAssistantStore.getState().insights).toBe(cached);
+  });
+});
+
+describe("assistantStore.memories", () => {
+  it("loadMemories caches active memories for the session", async () => {
+    await useAssistantStore.getState().loadMemories();
+    expect(memoryRepo.getActive).toHaveBeenCalledOnce();
+    await useAssistantStore.getState().loadMemories();
+    expect(memoryRepo.getActive).toHaveBeenCalledOnce(); // cached, not re-fetched
+  });
+
+  it("force-reload bypasses the cache", async () => {
+    await useAssistantStore.getState().loadMemories();
+    await useAssistantStore.getState().loadMemories(true);
+    expect(memoryRepo.getActive).toHaveBeenCalledTimes(2);
   });
 });
 

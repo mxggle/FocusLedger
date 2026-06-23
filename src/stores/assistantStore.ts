@@ -1,5 +1,9 @@
 import { create } from "zustand";
 import { assistantMessageRepository } from "../db/assistantMessageRepository";
+import { assistantMemoryRepository } from "../db/assistantMemoryRepository";
+import { rankMemories, MEMORY_INJECT_K } from "../services/ai/assistant/memory/retrieve";
+import { runMemoryReview, MEMORY_REVIEW_DEBOUNCE_MS } from "../services/ai/assistant/memory/runMemoryReview";
+import type { MemoryEntry } from "../services/ai/assistant/memory/types";
 import { ACTION_REGISTRY } from "../services/ai/assistant/actions";
 import { autoApplyActions } from "../services/ai/assistant/autoApply";
 import { runAssistantTurnStreaming } from "../services/ai/assistant/assistantRunner";
@@ -21,6 +25,29 @@ const HISTORY_LIMIT = 40;
 
 /** Abort controller for the in-flight stream. Kept outside Zustand state. */
 let currentAbort: AbortController | null = null;
+
+/** Debounce timer for the post-turn background memory review. */
+let memoryReviewTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Schedule a debounced background memory review for the just-finished exchange. */
+function scheduleMemoryReview(userText: string, assistantText: string): void {
+  const settings = useSettingsStore.getState().settings;
+  if (!settings.assistantMemoryEnabled) return;
+  if (userText.trim().length === 0 || assistantText.trim().length === 0) return;
+  if (memoryReviewTimer) clearTimeout(memoryReviewTimer);
+  memoryReviewTimer = setTimeout(() => {
+    memoryReviewTimer = null;
+    const aux = settings.assistantMemoryModel.trim() || settings.aiModel;
+    void runMemoryReview({
+      settings: { ...settings, aiModel: aux },
+      userText,
+      assistantText,
+      existing: useAssistantStore.getState().memories ?? []
+    })
+      .then(() => useAssistantStore.getState().loadMemories(true)) // refresh cache with new learning
+      .catch(() => {});
+  }, MEMORY_REVIEW_DEBOUNCE_MS);
+}
 
 function isAbortError(error: unknown): boolean {
   return (
@@ -50,6 +77,7 @@ type AssistantState = {
   steps: string[];
   insights: RetrospectiveInsights | null;
   history: RecallEntry[] | null;
+  memories: MemoryEntry[] | null;
   streamingMessageId: string | null;
   hydrate: () => Promise<void>;
   send: (text: string, modelText?: string) => Promise<void>;
@@ -63,6 +91,7 @@ type AssistantState = {
   clear: () => void;
   loadInsights: () => Promise<void>;
   loadHistory: () => Promise<void>;
+  loadMemories: (force?: boolean) => Promise<void>;
   refreshInsights: () => Promise<void>;
 };
 
@@ -126,6 +155,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
   steps: [],
   insights: null,
   history: null,
+  memories: null,
   streamingMessageId: null,
 
   hydrate: async () => {
@@ -280,6 +310,15 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     }
   },
 
+  loadMemories: async (force = false) => {
+    if (!force && get().memories) return; // cached for the session
+    try {
+      set({ memories: await assistantMemoryRepository.getActive() });
+    } catch {
+      set({ memories: [] }); // best-effort
+    }
+  },
+
   refreshInsights: async () => {
     try {
       set({ insights: await buildRetrospectiveInsights() });
@@ -307,6 +346,11 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
   const store = useAssistantStore;
   await store.getState().loadInsights();
   await store.getState().loadHistory();
+  await store.getState().loadMemories();
+
+  const lastUserText = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
+  const rankedMemories = rankMemories(store.getState().memories ?? [], lastUserText, MEMORY_INJECT_K);
+  const turnSnapshot = { ...snapshot(), learnedMemories: rankedMemories };
 
   currentAbort = new AbortController();
   const signal = currentAbort.signal;
@@ -401,6 +445,9 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
       const finalized = store.getState().messages.find((m) => m.id === streamingId);
       if (finalized) void assistantMessageRepository.append(finalized).catch(() => {});
     }
+    if (!aborted && fullReply.trim().length > 0) {
+      scheduleMemoryReview(lastUserText, fullReply);
+    }
     currentAbort = null;
   };
 
@@ -408,7 +455,7 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
     await runAssistantTurnStreaming(
       {
         settings: useSettingsStore.getState().settings,
-        snapshot: snapshot(),
+        snapshot: turnSnapshot,
         messages: toChatTurns(history),
         insights: store.getState().insights,
         history: store.getState().history ?? []
