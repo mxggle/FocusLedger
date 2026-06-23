@@ -27,6 +27,12 @@ export type ChatRole = "user" | "assistant";
 
 export type ChatTurn = { role: ChatRole; content: string };
 
+export type ChatToolSpec = {
+  name: string;
+  description: string;
+  parameters?: Record<string, unknown>;
+};
+
 export type ChatInput = {
   system: string;
   messages: ChatTurn[];
@@ -34,6 +40,11 @@ export type ChatInput = {
   temperature?: number;
   /** When true, build a streaming request (SSE). */
   stream?: boolean;
+  /**
+   * Optional function declarations for providers with native tool calling.
+   * The assistant loop still consumes provider-neutral JSON after parsing.
+   */
+  tools?: ChatToolSpec[];
 };
 
 export const PROVIDER_LABELS: Record<AiProvider, string> = {
@@ -190,6 +201,19 @@ export function buildChatRequest(settings: AiSettings, input: ChatInput): AiRequ
             role: turn.role === "assistant" ? "model" : "user",
             parts: [{ text: turn.content }]
           })),
+          ...(input.tools && input.tools.length > 0
+            ? {
+                tools: [
+                  {
+                    functionDeclarations: input.tools.map((tool) => ({
+                      name: tool.name,
+                      description: tool.description,
+                      ...(tool.parameters ? { parameters: tool.parameters } : {})
+                    }))
+                  }
+                ]
+              }
+            : {}),
           ...(input.temperature !== undefined
             ? { generationConfig: { temperature: input.temperature } }
             : {})
@@ -214,7 +238,14 @@ type OpenAiResponse = {
 };
 
 type GeminiResponse = {
-  candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?: string;
+        functionCall?: { name?: string; args?: Record<string, unknown> };
+      }>;
+    };
+  }>;
 };
 
 export function parseAiResponse(provider: AiProvider, payload: unknown): string {
@@ -237,9 +268,16 @@ export function parseAiResponse(provider: AiProvider, payload: unknown): string 
     }
     case "gemini": {
       const response = payload as GeminiResponse;
-      text = (response.candidates?.[0]?.content?.parts ?? [])
-        .map((part) => part.text ?? "")
-        .join("");
+      const parts = response.candidates?.[0]?.content?.parts ?? [];
+      const toolCalls = parts
+        .map((part) => part.functionCall)
+        .filter((call): call is { name: string; args?: Record<string, unknown> } => typeof call?.name === "string")
+        .map((call) => ({ name: call.name, args: call.args ?? {} }));
+      if (toolCalls.length > 0) {
+        text = JSON.stringify({ tool_calls: toolCalls });
+      } else {
+        text = parts.map((part) => part.text ?? "").join("");
+      }
       break;
     }
   }

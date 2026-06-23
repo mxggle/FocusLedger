@@ -1,7 +1,7 @@
 import { generateChat as defaultGenerateChat } from "../chatClient";
 import type { AiSettings, ChatInput, ChatTurn } from "../providers";
 import { needsConfirm } from "./agentTools/permissions";
-import { toolByName } from "./agentTools/registry";
+import { nativeToolSpecs, toolByName } from "./agentTools/registry";
 import type { AgentToolDeps, PermissionLevel, ToolCallRecord } from "./agentTools/types";
 import { parseToolCalls } from "./responseParser";
 import { createId } from "../../../utils/id";
@@ -40,7 +40,8 @@ export async function runToolLoop(
     const raw = await deps.generateChat(settings, {
       system: input.system,
       messages,
-      temperature: TOOL_TEMPERATURE
+      temperature: TOOL_TEMPERATURE,
+      tools: nativeToolSpecs()
     });
     const calls = parseToolCalls(raw);
     if (!calls) return { reply: raw.trim(), toolCalls: records };

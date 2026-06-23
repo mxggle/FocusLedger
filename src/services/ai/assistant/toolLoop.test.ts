@@ -105,6 +105,30 @@ describe("runToolLoop", () => {
     expect(res.toolCalls.find((call) => call.name === "update_task")?.status).toBe("pending");
   });
 
+  it("passes native tool specs to the provider call", async () => {
+    const generateChat = vi.fn(async () => "Done.");
+
+    await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "x" }],
+        level: "ask",
+        deps: depsWith()
+      },
+      { generateChat }
+    );
+
+    const firstInput = (generateChat.mock.calls[0] as unknown[] | undefined)?.[1] as
+      | { tools?: unknown[] }
+      | undefined;
+    expect(firstInput?.tools).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "list_tasks" }),
+        expect.objectContaining({ name: "update_task" })
+      ])
+    );
+  });
+
   it("regression: bulk schedule shifts update existing tasks instead of creating a junk task", async () => {
     const update = vi.fn(async () => ({ ok: true }));
     const create = vi.fn(async () => ({ ok: true, id: "junk" }));

@@ -109,6 +109,33 @@ describe("parseAiResponse", () => {
     expect(parseAiResponse("gemini", payload)).toBe("Part one. Part two.");
   });
 
+  it("parses Gemini native function calls as assistant tool-call JSON", () => {
+    const payload = {
+      candidates: [
+        {
+          content: {
+            parts: [
+              { functionCall: { name: "list_tasks", args: { scope: "today" } } },
+              {
+                functionCall: {
+                  name: "update_task",
+                  args: { task_id: "t1", planned_start_time: "09:10" }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    };
+
+    expect(JSON.parse(parseAiResponse("gemini", payload))).toEqual({
+      tool_calls: [
+        { name: "list_tasks", args: { scope: "today" } },
+        { name: "update_task", args: { task_id: "t1", planned_start_time: "09:10" } }
+      ]
+    });
+  });
+
   it("throws on empty responses", () => {
     expect(() => parseAiResponse("openai", { choices: [] })).toThrow(/empty/i);
     expect(() => parseAiResponse("anthropic", {})).toThrow(/empty/i);
@@ -158,6 +185,37 @@ describe("buildChatRequest", () => {
     const contents = req.body.contents as Array<{ role: string }>;
     expect(contents.map((c) => c.role)).toEqual(["user", "model", "user"]);
     expect(req.body.systemInstruction).toEqual({ parts: [{ text: "You are a planner." }] });
+  });
+
+  it("gemini: includes native function declarations when chat tools are provided", () => {
+    const req = buildChatRequest(settings({ aiProvider: "gemini", aiModel: "gemini-2.5-flash" }), {
+      ...chatInput,
+      tools: [
+        {
+          name: "list_tasks",
+          description: "List tasks.",
+          parameters: {
+            type: "object",
+            properties: { scope: { type: "string", enum: ["today", "backlog", "all"] } }
+          }
+        }
+      ]
+    });
+
+    expect(req.body.tools).toEqual([
+      {
+        functionDeclarations: [
+          {
+            name: "list_tasks",
+            description: "List tasks.",
+            parameters: {
+              type: "object",
+              properties: { scope: { type: "string", enum: ["today", "backlog", "all"] } }
+            }
+          }
+        ]
+      }
+    ]);
   });
 
   it("custom: requires base url, posts to /chat/completions", () => {
