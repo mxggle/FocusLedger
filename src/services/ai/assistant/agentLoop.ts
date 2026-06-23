@@ -9,11 +9,11 @@ import type { AssistantTurnResult } from "./types";
 import type { RetrospectiveInsights } from "../../retrospect/types";
 
 /** Low temperature keeps proposals consistent for the same day state. */
-const ASSISTANT_TEMPERATURE = 0.3;
+export const ASSISTANT_TEMPERATURE = 0.3;
 /** Maximum lookup rounds before we force a final answer. */
-const MAX_STEPS = 6;
+export const MAX_STEPS = 6;
 
-const STEP_LABELS: Record<string, string> = {
+export const STEP_LABELS: Record<string, string> = {
   search_tasks: "Scanning your existing tasks…",
   get_calibration: "Checking how long similar work takes…",
   recall: "Recalling what you did before…",
@@ -34,6 +34,25 @@ export type AgentLoopDeps = {
   generateChat: (settings: AiSettings, input: ChatInput) => Promise<string>;
 };
 
+/** Shared context + system prompt + tool deps built from the loop input. */
+export type LoopState = {
+  ctx: ReturnType<typeof buildAssistantContext>;
+  system: string;
+  toolDeps: ToolDeps;
+};
+
+export function buildLoopState(input: RunAgentLoopInput): LoopState {
+  const ctx = buildAssistantContext(input.snapshot, input.insights);
+  const system = buildAssistantSystemPrompt(ctx);
+  const toolDeps: ToolDeps = {
+    allTasks: input.snapshot.allTasks,
+    insights: input.insights ?? null,
+    history: input.history ?? [],
+    categories: input.snapshot.categories.map((category) => ({ id: category.id, name: category.name }))
+  };
+  return { ctx, system, toolDeps };
+}
+
 /**
  * Provider-agnostic agent loop. The model may respond with a `lookups` array of
  * read-only tool requests (executed deterministically in TS) or a final
@@ -44,14 +63,7 @@ export async function runAgentLoop(
   input: RunAgentLoopInput,
   deps: AgentLoopDeps = { generateChat: defaultGenerateChat }
 ): Promise<AssistantTurnResult> {
-  const ctx = buildAssistantContext(input.snapshot, input.insights);
-  const system = buildAssistantSystemPrompt(ctx);
-  const toolDeps: ToolDeps = {
-    allTasks: input.snapshot.allTasks,
-    insights: input.insights ?? null,
-    history: input.history ?? [],
-    categories: input.snapshot.categories.map((category) => ({ id: category.id, name: category.name }))
-  };
+  const { ctx, system, toolDeps } = buildLoopState(input);
 
   const messages: ChatTurn[] = [...input.messages];
   let lastRaw = "";

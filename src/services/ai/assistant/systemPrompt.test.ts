@@ -25,16 +25,23 @@ const ctx = makeCtx({
 });
 
 describe("buildAssistantSystemPrompt", () => {
-  it("includes persona, JSON contract, every action name, and the context", () => {
+  it("includes persona, the fenced-actions contract, every action name, and the context", () => {
     const prompt = buildAssistantSystemPrompt(ctx);
     expect(prompt).toContain("Yolo");
-    expect(prompt).toContain('"reply"');
-    expect(prompt).toContain('"actions"');
+    expect(prompt).toContain("```json");
+    expect(prompt).toContain("actions array");
     expect(prompt).toContain("create_task");
     expect(prompt).toContain("reschedule_task");
     expect(prompt).toContain("Write report");
     expect(prompt).toContain("2026-06-18");
     expect(prompt).toContain("t1");
+  });
+
+  it("instructs the model to write markdown with a trailing fenced actions block", () => {
+    const prompt = buildAssistantSystemPrompt(ctx);
+    expect(prompt.toLowerCase()).toContain("markdown");
+    expect(prompt).toContain("fenced ```json");
+    expect(prompt).not.toContain("SINGLE JSON object");
   });
 
   it("notes when there are no tasks", () => {

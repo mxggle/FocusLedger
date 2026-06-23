@@ -40,12 +40,17 @@ export function CreateTaskCard({ messageId, action, onApply, onDismiss }: Create
     return (
       <div
         className={
-          "flex items-center gap-2.5 rounded-xl border border-border bg-surface px-3 py-2 text-sm " +
+          "flex items-center gap-2.5 px-1 py-0.5 text-sm " +
           (action.status === "dismissed" ? "opacity-60" : "")
         }
       >
-        <Plus className="h-4 w-4 shrink-0 text-primary" />
-        <p className="min-w-0 flex-1 truncate text-foreground">{params.title}</p>
+        <Plus
+          className={
+            "h-3.5 w-3.5 shrink-0 " +
+            (action.status === "applied" ? "text-muted-foreground" : "text-primary")
+          }
+        />
+        <p className="min-w-0 flex-1 truncate text-muted-foreground">{params.title}</p>
         <ActionStatusBadge status={action.status} />
       </div>
     );

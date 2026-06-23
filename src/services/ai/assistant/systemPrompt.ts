@@ -104,8 +104,8 @@ const TOOL_PROTOCOL = [
   "Gathering facts before you answer (optional, up to a few rounds):",
   "- Before proposing changes you may look things up. To do so, respond with ONLY a JSON object of the form:",
   '  { "lookups": [ { "tool": "search_tasks", "query": "..." } ] }',
-  "- You will then receive the results as the next message and can look up more or give your final answer.",
-  '- When you are ready, respond with the final { "reply", "actions" } object as usual. Do not mix lookups and a final answer in the same message.',
+    "- You will then receive the results as the next message and can look up more or give your final answer.",
+    "- When you are ready, give your final answer: Markdown reply followed by the fenced ```json actions block. Do not mix lookups and a final answer in the same message.",
   "- Before creating any task, use search_tasks to check it does not already exist; if a close duplicate exists, do not recreate it — mention the existing task id in your reply instead.",
   "- Before setting estimated_minutes, you may use get_calibration to size the estimate from real history.",
   "- When the user asks about past work, what happened, lessons learned, or recurring blockers, use recall to pull relevant notes from their logged history before answering.",
@@ -160,8 +160,8 @@ export function buildAssistantSystemPrompt(ctx: AssistantContext): string {
           ""
         ]
       : []),
-    "You respond with a SINGLE JSON object and nothing else — no prose outside it, no markdown code fences. The shape is:",
-    '{ "reply": "<short conversational message in Markdown>", "actions": [ { "type": "<action>", ...params } ] }',
+    "Write your reply as Markdown. At the very end, append a fenced ```json block containing the actions array (an empty array if there are no actions). Do not put the reply inside JSON. Example:",
+    "Here is your plan…\n\n```json\n[{ \"type\": \"create_task\", \"title\": \"…\", \"due_date\": \"today\" }]\n```",
     "",
     "Rules for actions:",
     "- You are an agent: when the user asks for a change, do it. Don't ask permission for reversible work and don't make the user click to confirm safe changes.",

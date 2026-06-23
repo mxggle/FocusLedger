@@ -1,11 +1,13 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "framer-motion";
 import { Eraser, Sparkles, X } from "lucide-react";
-import { useAssistantStore } from "../../stores/assistantStore";
+import { PROVIDER_LABELS, resolveModel } from "../../services/ai/providers";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useUiStore } from "../../stores/uiStore";
 import { isMac } from "../../utils/platform";
+import { cn } from "../../utils/cn";
 import { IconButton } from "../ui/IconButton";
+import { useAssistantStore } from "../../stores/assistantStore";
 import { BriefingBanner } from "./BriefingBanner";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
@@ -17,10 +19,14 @@ export function AssistantPanel() {
   const openAssistant = useUiStore((state) => state.openAssistant);
   const close = useUiStore((state) => state.closeAssistant);
   const toggle = useUiStore((state) => state.toggleAssistant);
-  const clear = useAssistantStore((state) => state.clear);
-  const hasMessages = useAssistantStore((state) => state.messages.length > 0);
-  const assistantName = useSettingsStore((state) => state.settings.assistantName);
-  const name = assistantName.trim() || "Assistant";
+  const clear = useAssistantStore((s) => s.clear);
+  const hasMessages = useAssistantStore((s) => s.messages.length > 0);
+  const status = useAssistantStore((s) => s.status);
+  const settings = useSettingsStore((state) => state.settings);
+  const name = settings.assistantName.trim() || "Assistant";
+  const active = status === "thinking" || status === "streaming";
+  const provider = PROVIDER_LABELS[settings.aiProvider];
+  const model = resolveModel(settings);
 
   return (
     <>
@@ -66,10 +72,22 @@ export function AssistantPanel() {
                 >
                   <div className="flex items-center justify-between border-b border-border px-4 py-3">
                     <Dialog.Title className="flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <span className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                         <Sparkles className="h-3.5 w-3.5" />
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-background",
+                            active ? "animate-pulse bg-primary" : "bg-muted-foreground"
+                          )}
+                        />
                       </span>
-                      <span className="truncate">{name}</span>
+                      <span className="flex min-w-0 flex-col leading-tight">
+                        <span className="truncate">{name}</span>
+                        <span className="truncate text-[11px] font-normal text-muted-foreground">
+                          {model} · {provider}
+                        </span>
+                      </span>
                     </Dialog.Title>
                     <div className="flex shrink-0 items-center gap-1">
                       {hasMessages ? (

@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { assistantMessageRepository } from "../db/assistantMessageRepository";
 import { ACTION_REGISTRY } from "../services/ai/assistant/actions";
 import { autoApplyActions } from "../services/ai/assistant/autoApply";
-import { runAssistantTurn } from "../services/ai/assistant/assistantRunner";
+import { runAssistantTurnStreaming } from "../services/ai/assistant/assistantRunner";
 import { loadRecallEntries, type RecallEntry } from "../services/ai/assistant/recallHistory";
 import { buildAssistantContext, type AssistantStoreSnapshot } from "../services/ai/assistant/contextBuilder";
 import type { ChatMessage, ProposedAction } from "../services/ai/assistant/types";
@@ -14,10 +14,20 @@ import { useSettingsStore } from "./settingsStore";
 import { useTaskStore } from "./taskStore";
 import { useUiStore } from "./uiStore";
 
-export type AssistantStatus = "idle" | "thinking" | "error";
+export type AssistantStatus = "idle" | "thinking" | "streaming" | "error";
 
 /** How many past messages to restore on launch. Bounds the prompt size too. */
 const HISTORY_LIMIT = 40;
+
+/** Abort controller for the in-flight stream. Kept outside Zustand state. */
+let currentAbort: AbortController | null = null;
+
+function isAbortError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === "AbortError" || /abort/i.test(error.message))
+  );
+}
 
 /** Proposals restored from a previous session are stale — they reference a day
  *  state that may have changed — so they render as already-handled, not actionable. */
@@ -40,8 +50,12 @@ type AssistantState = {
   steps: string[];
   insights: RetrospectiveInsights | null;
   history: RecallEntry[] | null;
+  streamingMessageId: string | null;
   hydrate: () => Promise<void>;
-  send: (text: string) => Promise<void>;
+  send: (text: string, modelText?: string) => Promise<void>;
+  stop: () => void;
+  regenerateLast: () => Promise<void>;
+  editUserMessage: (messageId: string, newContent: string) => Promise<void>;
   applyAction: (messageId: string, actionId: string) => Promise<void>;
   applyAll: (messageId: string) => Promise<void>;
   updateActionParams: (messageId: string, actionId: string, patch: Record<string, unknown>) => void;
@@ -75,7 +89,7 @@ function snapshot(): AssistantStoreSnapshot {
 }
 
 function toChatTurns(messages: ChatMessage[]): ChatTurn[] {
-  return messages.map((message) => ({ role: message.role, content: message.content }));
+  return messages.map((message) => ({ role: message.role, content: message.modelContent ?? message.content }));
 }
 
 /** Immutably replace one action inside one message. */
@@ -96,6 +110,15 @@ function patchAction(
   });
 }
 
+/** Immutably set content/actions/stopped on one message by id. */
+function patchMessage(
+  messages: ChatMessage[],
+  messageId: string,
+  patch: Partial<ChatMessage>
+): ChatMessage[] {
+  return messages.map((m) => (m.id === messageId ? { ...m, ...patch } : m));
+}
+
 export const useAssistantStore = create<AssistantState>((set, get) => ({
   messages: [],
   status: "idle",
@@ -103,6 +126,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
   steps: [],
   insights: null,
   history: null,
+  streamingMessageId: null,
 
   hydrate: async () => {
     if (get().messages.length > 0) return; // already loaded this session
@@ -117,51 +141,63 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     }
   },
 
-  send: async (text) => {
+  send: async (text, modelText) => {
     const trimmed = text.trim();
-    if (trimmed.length === 0 || get().status === "thinking") return;
+    if (trimmed.length === 0) return;
+    const status = get().status;
+    if (status === "thinking" || status === "streaming") return;
 
+    const trimmedModel = modelText?.trim();
     const userMessage: ChatMessage = {
       id: createId("msg"),
       role: "user",
       content: trimmed,
+      modelContent: trimmedModel && trimmedModel !== trimmed ? trimmedModel : undefined,
       createdAt: new Date().toISOString()
     };
     const history = [...get().messages, userMessage];
-    set({ messages: history, status: "thinking", error: null, steps: [] });
+    set({ messages: history, status: "thinking", error: null, steps: [], streamingMessageId: null });
     void assistantMessageRepository.append(userMessage).catch(() => {});
-    await get().loadInsights();
-    await get().loadHistory();
+    await runStreamFrom(history);
+  },
 
-    try {
-      const result = await runAssistantTurn({
-        settings: useSettingsStore.getState().settings,
-        snapshot: snapshot(),
-        messages: toChatTurns(history),
-        insights: get().insights,
-        history: get().history ?? [],
-        onStep: (label) => set({ steps: [...get().steps, label] })
-      });
-      // Act on reversible changes immediately — an agent does the safe thing
-      // itself and only asks before what it can't take back. Destructive
-      // actions stay pending and render as a confirmation.
-      const executed = await autoApplyActions(result.actions, useTaskStore.getState());
-      if (executed.appliedCount > 0) await useTaskStore.getState().refresh();
+  stop: () => {
+    const status = get().status;
+    if (status !== "thinking" && status !== "streaming") return;
+    currentAbort?.abort();
+  },
 
-      const assistantMessage: ChatMessage = {
-        id: createId("msg"),
-        role: "assistant",
-        content: result.reply,
-        createdAt: new Date().toISOString(),
-        actions: executed.actions
-      };
-      set({ messages: [...history, assistantMessage], status: "idle", steps: [] });
-      void assistantMessageRepository.append(assistantMessage).catch(() => {});
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "The assistant ran into a problem";
-      set({ status: "error", error: message, steps: [] });
-      useUiStore.getState().addToast({ kind: "error", title: "Assistant error", description: message });
+  regenerateLast: async () => {
+    if (get().status !== "idle") return;
+    const messages = get().messages;
+    let lastAssistantIdx = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "assistant") {
+        lastAssistantIdx = i;
+        break;
+      }
     }
+    if (lastAssistantIdx === -1) return;
+    const removed = messages[lastAssistantIdx];
+    const remaining = messages.slice(0, lastAssistantIdx);
+    set({ messages: remaining, status: "thinking", error: null, steps: [], streamingMessageId: null });
+    void assistantMessageRepository.deleteOne(removed.id).catch(() => {});
+    await runStreamFrom(remaining);
+  },
+
+  editUserMessage: async (messageId, newContent) => {
+    if (get().status !== "idle") return;
+    const trimmed = newContent.trim();
+    if (trimmed.length === 0) return;
+    const messages = get().messages;
+    const idx = messages.findIndex((m) => m.id === messageId && m.role === "user");
+    if (idx === -1) return;
+    const edited: ChatMessage = { ...messages[idx], content: trimmed };
+    const kept = [...messages.slice(0, idx), edited];
+    set({ messages: kept, status: "thinking", error: null, steps: [], streamingMessageId: null });
+    void assistantMessageRepository.deleteAfter(messageId).catch(() => {});
+    void assistantMessageRepository.append(edited).catch(() => {});
+    await runStreamFrom(kept);
   },
 
   applyAction: async (messageId, actionId) => {
@@ -253,7 +289,142 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
   },
 
   clear: () => {
-    set({ messages: [], status: "idle", error: null, steps: [] });
+    if (currentAbort) {
+      currentAbort.abort();
+      currentAbort = null;
+    }
+    set({ messages: [], status: "idle", error: null, steps: [], streamingMessageId: null });
     void assistantMessageRepository.clear().catch(() => {});
   }
 }));
+
+/**
+ * Run the streaming assistant turn from an existing message history (without
+ * appending or persisting a new user message). Shared by `send`,
+ * `regenerateLast`, and `editUserMessage`.
+ */
+async function runStreamFrom(history: ChatMessage[]): Promise<void> {
+  const store = useAssistantStore;
+  await store.getState().loadInsights();
+  await store.getState().loadHistory();
+
+  currentAbort = new AbortController();
+  const signal = currentAbort.signal;
+  store.setState({ status: "thinking", error: null, steps: [], streamingMessageId: null });
+
+  let streamingId: string | null = null;
+  let lastActions: ProposedAction[] = [];
+  let tokenBuffer = "";
+  let flushScheduled = false;
+
+  const flushTokens = () => {
+    flushScheduled = false;
+    if (streamingId === null) return;
+    const chunk = tokenBuffer;
+    tokenBuffer = "";
+    if (chunk.length === 0) return;
+    store.setState((state) => ({
+      messages: patchMessage(state.messages, streamingId as string, {
+        content: (state.messages.find((m) => m.id === streamingId)?.content ?? "") + chunk
+      })
+    }));
+  };
+
+  const onStep = (label: string) => store.setState((state) => ({ steps: [...state.steps, label] }));
+
+  const onToken = (chunk: string) => {
+    if (streamingId === null) {
+      // First token: create the placeholder assistant message and flip to streaming.
+      const id = createId("msg");
+      streamingId = id;
+      store.setState((state) => ({
+        messages: [...state.messages, { id, role: "assistant", content: chunk, createdAt: new Date().toISOString() }],
+        streamingMessageId: id,
+        status: "streaming"
+      }));
+      return;
+    }
+    tokenBuffer += chunk;
+    if (typeof requestAnimationFrame === "function") {
+      if (!flushScheduled) {
+        flushScheduled = true;
+        requestAnimationFrame(flushTokens);
+      }
+    } else {
+      flushTokens();
+    }
+  };
+
+  const onActions = async (actions: ProposedAction[]) => {
+    const executed = await autoApplyActions(actions, useTaskStore.getState());
+    if (executed.appliedCount > 0) await useTaskStore.getState().refresh();
+    lastActions = executed.actions;
+    if (streamingId !== null) {
+      store.setState((state) => ({ messages: patchMessage(state.messages, streamingId as string, { actions: executed.actions }) }));
+    }
+  };
+
+  const onDone = async (fullReply: string) => {
+    const aborted = signal.aborted;
+    if (streamingId === null) {
+      // No tokens streamed (forced fallback or empty stream). On an abort with
+      // nothing to show, just go idle without leaving an empty message.
+      if (aborted && fullReply.length === 0) {
+        store.setState({ status: "idle", streamingMessageId: null, steps: [] });
+        currentAbort = null;
+        return;
+      }
+      const id = createId("msg");
+      const msg: ChatMessage = {
+        id,
+        role: "assistant",
+        content: fullReply,
+        createdAt: new Date().toISOString(),
+        actions: lastActions,
+        ...(aborted ? { stopped: true } : {})
+      };
+      store.setState((state) => ({ messages: [...state.messages, msg], status: "idle", streamingMessageId: null, steps: [] }));
+      void assistantMessageRepository.append(msg).catch(() => {});
+    } else {
+      // Flush any buffered tokens before committing the final content.
+      flushTokens();
+      store.setState((state) => ({
+        messages: patchMessage(state.messages, streamingId as string, {
+          content: fullReply,
+          actions: lastActions,
+          ...(aborted ? { stopped: true } : {})
+        }),
+        status: "idle",
+        streamingMessageId: null,
+        steps: []
+      }));
+      const finalized = store.getState().messages.find((m) => m.id === streamingId);
+      if (finalized) void assistantMessageRepository.append(finalized).catch(() => {});
+    }
+    currentAbort = null;
+  };
+
+  try {
+    await runAssistantTurnStreaming(
+      {
+        settings: useSettingsStore.getState().settings,
+        snapshot: snapshot(),
+        messages: toChatTurns(history),
+        insights: store.getState().insights,
+        history: store.getState().history ?? []
+      },
+      { onStep, onToken, onActions, onDone, signal }
+    );
+  } catch (error) {
+    if (isAbortError(error)) {
+      // Defensive: the transport normally resolves on abort; ensure we're idle.
+      store.setState({ status: "idle", streamingMessageId: null, steps: [] });
+      currentAbort = null;
+    } else {
+      const message = error instanceof Error ? error.message : "The assistant ran into a problem";
+      store.setState({ status: "error", error: message, steps: [], streamingMessageId: null });
+      useUiStore.getState().addToast({ kind: "error", title: "Assistant error", description: message });
+      currentAbort = null;
+    }
+  }
+}

@@ -1,24 +1,60 @@
-import { SendHorizonal, Sparkles } from "lucide-react";
+import { SendHorizonal, Square } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { hasAiKey } from "../../services/ai/aiClient";
-import { useAssistantStore } from "../../stores/assistantStore";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { isMac } from "../../utils/platform";
+import { useUiStore } from "../../stores/uiStore";
 import { IconButton } from "../ui/IconButton";
+import { AnimatePresence } from "framer-motion";
+import { useAssistantStore } from "../../stores/assistantStore";
+import { SlashCommandMenu, type SlashCommand, type SlashMode } from "./SlashCommandMenu";
 
 const MAX_HEIGHT = 220;
-const SEND_KEY = isMac ? "⌘↵" : "Ctrl+↵";
+
+export function buildPlanPrompt(text: string): string {
+  return `Organize the following into well-scoped tasks. Check for duplicates first and estimate from my history:\n\n${text}`;
+}
+
+const SLASH_PROMPTS: Record<string, (args: string) => string> = {
+  plan: (args) => buildPlanPrompt(args),
+  today: () => "How is today looking?",
+  reschedule: () => "Reschedule what I didn't finish to tomorrow.",
+  backlog: () => "Review my backlog and propose what to schedule this week."
+};
+
+type SlashState = { start: number; query: string } | null;
+
+function activeSlashToken(value: string, caret: number): SlashState {
+  const before = value.slice(0, caret);
+  const lastSpace = before.lastIndexOf(" ");
+  const tokenStart = lastSpace + 1;
+  const token = before.slice(tokenStart);
+  if (token.startsWith("/")) {
+    return { start: tokenStart, query: token.slice(1) };
+  }
+  return null;
+}
 
 export function Composer() {
   const [value, setValue] = useState("");
+  const [mode, setMode] = useState<SlashMode>("plan");
+  const [slash, setSlash] = useState<SlashState>(null);
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const send = useAssistantStore((state) => state.send);
-  const status = useAssistantStore((state) => state.status);
-  const thinking = status === "thinking";
+
+  const send = useAssistantStore((s) => s.send);
+  const stop = useAssistantStore((s) => s.stop);
+  const clear = useAssistantStore((s) => s.clear);
+  const status = useAssistantStore((s) => s.status);
   const settings = useSettingsStore((s) => s.settings);
+  const addToast = useUiStore((s) => s.addToast);
   const keyConfigured = hasAiKey(settings);
 
-  // Auto-grow the textarea to fit long-form input, up to a cap.
+  const busy = status === "thinking" || status === "streaming";
+
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
+
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -26,22 +62,42 @@ export function Composer() {
     el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
   }, [value]);
 
-  const isLongDump = value.trim().length > 200;
-
   function submit() {
     const text = value.trim();
-    if (text.length === 0 || thinking || !keyConfigured) return;
-    setValue("");
-    void send(text);
-  }
+    if (text.length === 0 || busy || !keyConfigured) return;
 
-  function planThis() {
-    const text = value.trim();
-    if (text.length === 0 || thinking || !keyConfigured) return;
+    // `display` is what the user sees in the chat; `outgoing` is what the model receives.
+    // Plan-mode wrapping is internal scaffolding, so it must not leak into the bubble.
+    let display = text;
+    let outgoing = text;
+    if (text.startsWith("/")) {
+      const [name, ...rest] = text.slice(1).split(/\s+/);
+      const args = rest.join(" ").trim();
+      const builder = SLASH_PROMPTS[name ?? ""];
+      if (name === "clear") {
+        clear();
+        addToast({ kind: "info", title: "Conversation cleared" });
+        setValue("");
+        setSlash(null);
+        return;
+      }
+      if (builder) {
+        if (name === "plan") {
+          setMode("plan");
+          display = args || text;
+          outgoing = buildPlanPrompt(args);
+        } else {
+          display = builder(args);
+          outgoing = display;
+        }
+      }
+    } else if (mode === "plan") {
+      outgoing = buildPlanPrompt(text);
+    }
+
     setValue("");
-    void send(
-      `Organize the following into well-scoped tasks. Check for duplicates first and estimate from my history:\n\n${text}`
-    );
+    setSlash(null);
+    void send(display, outgoing === display ? undefined : outgoing);
   }
 
   function handleSubmit(event: FormEvent) {
@@ -50,57 +106,140 @@ export function Composer() {
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    // Cmd/Ctrl+Enter sends; plain Enter inserts a newline for long-form input.
-    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+    if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
+      if (slash !== null) return; // let the slash menu handle Enter (insert highlighted)
       submit();
     }
   }
 
-  const placeholder = thinking
+  function handleChange(event: React.ChangeEvent<HTMLTextAreaElement>) {
+    const next = event.target.value;
+    const caret = event.target.selectionStart ?? next.length;
+    const token = activeSlashToken(next, caret);
+    setSlash(token);
+    if (token) {
+      setAnchorRect(event.target.getBoundingClientRect());
+    }
+    setValue(next);
+  }
+
+  function handleSlashSelect(command: SlashCommand) {
+    if (command.immediate) {
+      clear();
+      addToast({ kind: "info", title: "Conversation cleared" });
+      setValue("");
+      setSlash(null);
+      return;
+    }
+    const el = textareaRef.current;
+    const caret = el?.selectionStart ?? value.length;
+    const token = activeSlashToken(value, caret);
+    const start = token?.start ?? caret;
+    const inserted = `/${command.name} `;
+    const next = value.slice(0, start) + inserted + value.slice(caret);
+    setValue(next);
+    setSlash(null);
+    if (command.mode) setMode(command.mode);
+    requestAnimationFrame(() => {
+      const node = textareaRef.current;
+      if (!node) return;
+      const pos = start + inserted.length;
+      node.focus();
+      node.setSelectionRange(pos, pos);
+    });
+  }
+
+  const placeholder = busy
     ? "Thinking…"
     : keyConfigured
-      ? "Describe what you want to plan — be as detailed as you like…"
+      ? "Describe what you want to plan…"
       : "Add an API key in Settings → AI";
 
   return (
     <form onSubmit={handleSubmit} className="border-t border-border p-3">
-      <div className="flex items-end gap-2 rounded-xl border border-border bg-surface px-2.5 py-2 focus-within:border-primary">
+      <div className="relative flex items-end gap-2 rounded-xl border border-border bg-surface px-2.5 py-2 focus-within:border-primary">
         <textarea
           ref={textareaRef}
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={handleChange}
           onKeyDown={handleKeyDown}
-          rows={2}
+          rows={1}
           placeholder={placeholder}
-          disabled={thinking || !keyConfigured}
-          className="min-h-[3rem] flex-1 resize-none bg-transparent py-1 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60"
+          disabled={!keyConfigured}
+          className="max-h-[220px] min-h-[2.25rem] flex-1 resize-none bg-transparent py-1 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground focus-visible:shadow-none disabled:opacity-60"
         />
-        <IconButton
-          type="submit"
-          icon={SendHorizonal}
-          label="Send"
-          variant="secondary"
-          disabled={thinking || !keyConfigured || value.trim().length === 0}
-        />
+        {busy ? (
+          <IconButton
+            icon={Square}
+            label="Stop"
+            variant="ghost"
+            size="sm"
+            onClick={() => stop()}
+            className="bg-destructive-soft text-destructive hover:brightness-[1.02]"
+          />
+        ) : (
+          <IconButton
+            type="submit"
+            icon={SendHorizonal}
+            label="Send"
+            variant="secondary"
+            size="sm"
+            disabled={!keyConfigured || value.trim().length === 0}
+          />
+        )}
+
+        <AnimatePresence>
+          {slash ? (
+            <SlashCommandMenu
+              query={slash.query}
+              anchorRect={anchorRect}
+              onSelect={handleSlashSelect}
+              onClose={() => setSlash(null)}
+            />
+          ) : null}
+        </AnimatePresence>
       </div>
+
       {keyConfigured ? (
         <div className="mt-1.5 flex items-center justify-between gap-2 pl-1">
+          <div className="flex items-center gap-1.5" role="group" aria-label="Send mode">
+            <ModeChip label="Plan" active={mode === "plan"} onClick={() => setMode("plan")} />
+            <ModeChip label="Quick" active={mode === "quick"} onClick={() => setMode("quick")} />
+          </div>
           <p className="text-[11px] text-muted-foreground">
-            <kbd className="rounded border border-border bg-muted px-1 font-sans">{SEND_KEY}</kbd> to send ·{" "}
-            <kbd className="rounded border border-border bg-muted px-1 font-sans">↵</kbd> for a new line
+            <kbd className="rounded border border-border bg-muted px-1 font-sans">↵</kbd> to send ·{" "}
+            <kbd className="rounded border border-border bg-muted px-1 font-sans">Shift+↵</kbd> for a new line
+            {value.length > 0 ? ` · ${value.length}` : ""}
           </p>
-          {isLongDump && !thinking ? (
-            <button
-              type="button"
-              onClick={planThis}
-              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-primary/40 px-2 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/10"
-            >
-              <Sparkles className="h-3 w-3" /> Plan this
-            </button>
-          ) : null}
         </div>
       ) : null}
     </form>
+  );
+}
+
+function ModeChip({
+  label,
+  active,
+  onClick
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={
+        "rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors " +
+        (active
+          ? "border-primary bg-primary-soft text-primary-soft-foreground"
+          : "border-border text-muted-foreground hover:bg-muted")
+      }
+    >
+      {label}
+    </button>
   );
 }

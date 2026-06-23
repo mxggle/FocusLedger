@@ -91,4 +91,31 @@ describe("assistantMessageRepository", () => {
     await assistantMessageRepository.clear();
     expect(mocks.execute).toHaveBeenCalledWith("DELETE FROM assistant_messages");
   });
+
+  it("deleteOne deletes a single row by id", async () => {
+    await assistantMessageRepository.deleteOne("m9");
+    expect(mocks.execute).toHaveBeenCalledWith(
+      "DELETE FROM assistant_messages WHERE id = $1",
+      ["m9"]
+    );
+  });
+
+  it("deleteAfter looks up created_at then deletes newer rows", async () => {
+    mocks.select.mockResolvedValueOnce([{ created_at: "2026-06-20T10:00:00.000Z" }]);
+
+    await assistantMessageRepository.deleteAfter("m1");
+
+    const selectCall = mocks.select.mock.calls[0];
+    expect(selectCall[0]).toContain("SELECT created_at FROM assistant_messages");
+    expect(selectCall[1]).toEqual(["m1"]);
+    const deleteCall = mocks.execute.mock.calls[0];
+    expect(deleteCall[0]).toBe("DELETE FROM assistant_messages WHERE created_at > $1");
+    expect(deleteCall[1]).toEqual(["2026-06-20T10:00:00.000Z"]);
+  });
+
+  it("deleteAfter is a no-op when the id is not found", async () => {
+    mocks.select.mockResolvedValueOnce([]);
+    await assistantMessageRepository.deleteAfter("missing");
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
 });

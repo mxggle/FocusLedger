@@ -11,16 +11,56 @@ function extractJsonObject(raw: string): string | null {
   return raw.slice(start, end + 1);
 }
 
+function tryParseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The streaming final-turn format puts the actions array in a trailing fenced
+ * code block (so the markdown reply can stream verbatim). Find that block when
+ * it sits at the very end of the text and return its contents plus everything
+ * before it.
+ */
+function extractTrailingFence(raw: string): { content: string; before: string } | null {
+  const trimmed = raw.replace(/\s+$/, "");
+  if (!trimmed.endsWith("```")) return null;
+  const closeIdx = trimmed.length - 3;
+  const openIdx = trimmed.lastIndexOf("```", closeIdx - 1);
+  if (openIdx <= 0) return null;
+  const inner = trimmed.slice(openIdx + 3); // strip opening fence
+  const firstNl = inner.indexOf("\n");
+  if (firstNl === -1) return null;
+  const content = inner.slice(firstNl + 1).replace(/\n```$/, "").trim();
+  const before = trimmed.slice(0, openIdx).trim();
+  return { content, before };
+}
+
 export function parseAssistantResponse(raw: string, ctx: AssistantContext): AssistantTurnResult {
+  // 1. Trailing fenced JSON actions block (new streaming format): reply is the
+  //    markdown before the fence, actions are the fenced array.
+  const fence = extractTrailingFence(raw);
+  if (fence) {
+    const parsed = tryParseJson(fence.content);
+    if (Array.isArray(parsed)) {
+      const actions = parsed
+        .map((entry) => validateAction(entry, ctx))
+        .filter((entry): entry is ProposedAction => entry !== null);
+      const reply = fence.before.length > 0 ? fence.before : raw.trim();
+      return { reply, actions };
+    }
+    // A fenced {reply, actions} object falls through to the legacy branch.
+  }
+
+  // 2. Legacy single-JSON-object format: { "reply": ..., "actions": [...] }.
   const candidate = extractJsonObject(raw);
 
   let parsed: unknown = null;
   if (candidate) {
-    try {
-      parsed = JSON.parse(candidate);
-    } catch {
-      parsed = null;
-    }
+    parsed = tryParseJson(candidate);
   }
 
   // Unparseable → treat the whole text as a plain reply with no actions.

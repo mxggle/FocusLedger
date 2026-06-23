@@ -32,6 +32,8 @@ export type ChatInput = {
   messages: ChatTurn[];
   maxTokens?: number;
   temperature?: number;
+  /** When true, build a streaming request (SSE). */
+  stream?: boolean;
 };
 
 export const PROVIDER_LABELS: Record<AiProvider, string> = {
@@ -145,7 +147,8 @@ function buildOpenAiCompatibleChatRequest(
         { role: "system", content: input.system },
         ...input.messages
       ],
-      ...(input.temperature !== undefined ? { temperature: input.temperature } : {})
+      ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
+      ...(input.stream ? { stream: true } : {})
     }
   };
 }
@@ -165,15 +168,18 @@ export function buildChatRequest(settings: AiSettings, input: ChatInput): AiRequ
           max_tokens: input.maxTokens ?? DEFAULT_MAX_TOKENS,
           system: input.system,
           messages: input.messages,
-          ...(input.temperature !== undefined ? { temperature: input.temperature } : {})
+          ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
+          ...(input.stream ? { stream: true } : {})
         }
       };
     case "openai":
       return buildOpenAiCompatibleChatRequest("https://api.openai.com/v1", settings, input);
     case "gemini": {
       const model = resolveModel(settings);
+      const action = input.stream ? "streamGenerateContent" : "generateContent";
+      const query = input.stream ? "?alt=sse" : "";
       return {
-        url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:${action}${query}`,
         headers: {
           "Content-Type": "application/json",
           "x-goog-api-key": settings.aiApiKey

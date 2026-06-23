@@ -62,5 +62,25 @@ export const assistantMessageRepository = {
   async clear(): Promise<void> {
     const db = await getDatabase();
     await db.execute("DELETE FROM assistant_messages");
+  },
+
+  /** Delete a single message by id. */
+  async deleteOne(id: string): Promise<void> {
+    const db = await getDatabase();
+    await db.execute("DELETE FROM assistant_messages WHERE id = $1", [id]);
+  },
+
+  /** Delete every message created after the given message (by created_at). */
+  async deleteAfter(id: string): Promise<void> {
+    const db = await getDatabase();
+    const rows = await db.select<{ created_at: string }[]>(
+      "SELECT created_at FROM assistant_messages WHERE id = $1",
+      [id]
+    );
+    if (rows.length === 0) return;
+    await db.execute(
+      "DELETE FROM assistant_messages WHERE created_at > $1",
+      [rows[0].created_at]
+    );
   }
 };

@@ -167,4 +167,28 @@ describe("buildChatRequest", () => {
     );
     expect(req.url).toBe("http://localhost:11434/v1/chat/completions");
   });
+
+  it("stream: true adds stream to the body and switches Gemini to the SSE endpoint", () => {
+    const anthropic = buildChatRequest(settings({ aiProvider: "anthropic" }), { ...chatInput, stream: true });
+    expect(anthropic.body).toMatchObject({ stream: true });
+
+    const openai = buildChatRequest(settings({ aiProvider: "openai" }), { ...chatInput, stream: true });
+    expect(openai.body).toMatchObject({ stream: true });
+
+    const gemini = buildChatRequest(
+      settings({ aiProvider: "gemini", aiModel: "gemini-2.5-flash" }),
+      { ...chatInput, stream: true }
+    );
+    expect(gemini.url).toContain(":streamGenerateContent?alt=sse");
+    expect(gemini.body).not.toMatchObject({ stream: true });
+  });
+
+  it("stream omitted keeps the non-streaming Gemini endpoint and no stream flag", () => {
+    const gemini = buildChatRequest(
+      settings({ aiProvider: "gemini", aiModel: "gemini-2.5-flash" }),
+      chatInput
+    );
+    expect(gemini.url).toContain(":generateContent");
+    expect(gemini.body).not.toMatchObject({ stream: true });
+  });
 });

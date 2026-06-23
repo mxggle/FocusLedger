@@ -33,38 +33,58 @@ export function ActionCard({ messageId, action, onApply, onDismiss }: ActionCard
   const Icon = ICONS[action.type];
   const pending = action.status === "pending";
 
+  // Resolved proposals (applied / failed / dismissed) are no longer actionable, so
+  // render them as a flat, lightweight checklist row instead of a heavy card — a batch
+  // of confirmations should read as a quiet list, not a stack of floating cards.
+  if (!pending) {
+    return (
+      <div
+        className={
+          "flex items-center gap-2.5 px-1 py-0.5 text-sm " +
+          (action.status === "dismissed" ? "opacity-60" : "")
+        }
+      >
+        <Icon
+          className={
+            "h-3.5 w-3.5 shrink-0 " +
+            (action.status === "applied"
+              ? "text-muted-foreground"
+              : action.destructive
+                ? "text-destructive"
+                : "text-primary")
+          }
+        />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-muted-foreground">{action.summary}</p>
+          {action.status === "failed" && action.error ? (
+            <p className="truncate text-xs text-destructive">{action.error}</p>
+          ) : null}
+        </div>
+        <ActionStatusBadge status={action.status} />
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={
-        "flex flex-col gap-2 rounded-xl border border-border bg-surface px-3 py-2.5 text-sm shadow-xs " +
-        (action.status === "dismissed" ? "opacity-60" : "")
-      }
-    >
+    <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface px-3 py-2.5 text-sm shadow-xs">
       <div className="flex items-center gap-2.5">
         <Icon
           className={"h-4 w-4 shrink-0 " + (action.destructive ? "text-destructive" : "text-primary")}
         />
         <div className="min-w-0 flex-1">
           <p className="truncate text-foreground">{action.summary}</p>
-          {action.status === "failed" && action.error ? (
-            <p className="truncate text-xs text-destructive">{action.error}</p>
-          ) : null}
         </div>
-        {pending ? (
-          <div className="flex shrink-0 items-center gap-1">
-            <Button size="sm" variant="ghost" onClick={onDismiss} aria-label="Dismiss">
-              <X className="h-3.5 w-3.5" />
-            </Button>
-            <Button size="sm" variant={action.destructive ? "danger" : "primary"} onClick={onApply}>
-              Apply
-            </Button>
-          </div>
-        ) : (
-          <ActionStatusBadge status={action.status} />
-        )}
+        <div className="flex shrink-0 items-center gap-1">
+          <Button size="sm" variant="ghost" onClick={onDismiss} aria-label="Dismiss">
+            <X className="h-3.5 w-3.5" />
+          </Button>
+          <Button size="sm" variant={action.destructive ? "danger" : "primary"} onClick={onApply}>
+            Apply
+          </Button>
+        </div>
       </div>
 
-      {pending && action.type === "reschedule_task" ? <RescheduleDate messageId={messageId} action={action} /> : null}
+      {action.type === "reschedule_task" ? <RescheduleDate messageId={messageId} action={action} /> : null}
     </div>
   );
 }

@@ -71,9 +71,11 @@ export type ProposedAction = {
 export type ChatMessage = {
   id: string;
   role: ChatRole;
-  content: string; // user text, or assistant reply (markdown)
+  content: string; // user text (as displayed), or assistant reply (markdown)
+  modelContent?: string; // what to send to the model when it differs from `content` (e.g. Plan-mode wrapping); transient, not persisted
   createdAt: string; // ISO
   actions?: ProposedAction[]; // assistant turns only
+  stopped?: boolean; // true when a stream was aborted by the user (transient; not persisted)
 };
 
 export type AssistantTurnResult = {
