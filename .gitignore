@@ -11,3 +11,5 @@ src-tauri/gen
 *.tsbuildinfo
 !src/**/*.d.ts
 .superpowers/
+.worktrees
+.worktrees/
