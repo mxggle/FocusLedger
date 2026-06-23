@@ -197,3 +197,31 @@ describe("buildAssistantSystemPrompt — day briefing", () => {
     expect(prompt).not.toContain("Today at a glance");
   });
 });
+
+describe("buildAssistantSystemPrompt — learned memory", () => {
+  it("includes learned memories when present", () => {
+    const prompt = buildAssistantSystemPrompt(
+      makeCtx({
+        learnedMemories: [
+          {
+            id: "a",
+            kind: "preference",
+            text: "Prefers mornings",
+            pinned: false,
+            status: "active",
+            sourceMessageId: null,
+            useCount: 0,
+            lastUsedAt: null,
+            createdAt: "2026-06-01T00:00:00.000Z",
+            updatedAt: "2026-06-01T00:00:00.000Z"
+          }
+        ]
+      })
+    );
+    expect(prompt).toContain("Prefers mornings");
+  });
+
+  it("omits the block when there are no learned memories (byte-identical)", () => {
+    expect(buildAssistantSystemPrompt(makeCtx())).not.toContain("learned about the user over time");
+  });
+});

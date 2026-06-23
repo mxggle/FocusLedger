@@ -1,5 +1,6 @@
 import { actionPromptSpecs } from "./actions";
 import { buildSoulBlock } from "./soul";
+import { renderMemoryBlock } from "./memory/injectMemory";
 import { toolCatalog } from "./tools";
 import type { AssistantContext, ContextTask } from "./types";
 import type {
@@ -159,6 +160,9 @@ export function buildAssistantSystemPrompt(ctx: AssistantContext): string {
           ctx.profile,
           ""
         ]
+      : []),
+    ...(ctx.learnedMemories && ctx.learnedMemories.length > 0
+      ? [renderMemoryBlock(ctx.learnedMemories), ""]
       : []),
     "Write your reply as Markdown. At the very end, append a fenced ```json block containing the actions array (an empty array if there are no actions). Do not put the reply inside JSON. Example:",
     "Here is your plan…\n\n```json\n[{ \"type\": \"create_task\", \"title\": \"…\", \"due_date\": \"today\" }]\n```",

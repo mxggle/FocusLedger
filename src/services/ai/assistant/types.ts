@@ -2,6 +2,7 @@ import type { CreateTaskInput, TaskPriority, TaskStatus, UpdateTaskInput } from 
 import type { ChatRole } from "../providers";
 import type { RetrospectiveInsights } from "../../retrospect/types";
 import type { DayBriefing } from "./dayBriefing";
+import type { MemoryEntry } from "./memory/types";
 
 export type { ChatRole };
 
@@ -53,6 +54,7 @@ export type AssistantContext = {
   profile?: string; // the user's own "About me" description, when set
   briefing?: DayBriefing; // deterministic snapshot of today's load
   retro?: RetrospectiveInsights; // present only when there is history to report
+  learnedMemories?: MemoryEntry[]; // ranked top-K for this turn (empty/absent → no block)
 };
 
 /** One proposed change, rendered as a confirm card. `params` is validated. */

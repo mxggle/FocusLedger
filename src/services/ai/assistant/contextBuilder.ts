@@ -1,6 +1,7 @@
 import type { Category, Task } from "../../../types";
 import type { AssistantContext, ContextTask } from "./types";
 import type { RetrospectiveInsights } from "../../retrospect/types";
+import type { MemoryEntry } from "./memory/types";
 import { computeDayBriefing } from "./dayBriefing";
 
 const BACKLOG_CAP = 30;
@@ -16,6 +17,7 @@ export type AssistantStoreSnapshot = {
   targetMinutes?: number;
   assistantName?: string;
   assistantSoul?: string;
+  learnedMemories?: MemoryEntry[];
 };
 
 function toContextTask(task: Task): ContextTask {
@@ -48,6 +50,9 @@ export function buildAssistantContext(
     ...(snapshot.profile && snapshot.profile.trim().length > 0
       ? { profile: snapshot.profile.trim() }
       : {}),
-    ...(insights && insights.hasData ? { retro: insights } : {})
+    ...(insights && insights.hasData ? { retro: insights } : {}),
+    ...(snapshot.learnedMemories && snapshot.learnedMemories.length > 0
+      ? { learnedMemories: snapshot.learnedMemories }
+      : {})
   };
 }
