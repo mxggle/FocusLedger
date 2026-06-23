@@ -15,10 +15,6 @@ const { mockAssistant } = vi.hoisted(() => ({
     stop: vi.fn(),
     regenerateLast: vi.fn(),
     editUserMessage: vi.fn(),
-    applyAction: vi.fn(),
-    applyAll: vi.fn(),
-    updateActionParams: vi.fn(),
-    dismissAction: vi.fn(),
     clear: vi.fn()
   }
 }));

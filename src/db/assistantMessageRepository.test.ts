@@ -21,29 +21,6 @@ describe("assistantMessageRepository", () => {
     mocks.select.mockReset();
   });
 
-  it("append inserts the message with actions serialized to JSON", async () => {
-    const message: ChatMessage = {
-      id: "m1",
-      role: "assistant",
-      content: "Here is a plan.",
-      createdAt: "2026-06-20T10:00:00.000Z",
-      actions: [
-        { id: "a1", type: "create_task", params: { title: "X" }, summary: "Create X", destructive: false, status: "pending" }
-      ]
-    };
-
-    await assistantMessageRepository.append(message);
-
-    expect(mocks.execute).toHaveBeenCalledOnce();
-    const [sql, params] = mocks.execute.mock.calls[0];
-    expect(sql).toContain("INSERT INTO assistant_messages");
-    expect(params[0]).toBe("m1");
-    expect(params[1]).toBe("assistant");
-    expect(params[2]).toBe("Here is a plan.");
-    expect(JSON.parse(params[3])).toHaveLength(1);
-    expect(params[4]).toBe("2026-06-20T10:00:00.000Z");
-  });
-
   it("append stores tool calls in the existing JSON column", async () => {
     const message: ChatMessage = {
       id: "m-tool",
@@ -67,7 +44,9 @@ describe("assistantMessageRepository", () => {
 
     const params = mocks.execute.mock.calls[0][1];
     const payload = JSON.parse(params[3]);
+    expect(mocks.execute.mock.calls[0][0]).toContain("INSERT INTO assistant_messages");
     expect(payload[0]).toMatchObject({ id: "tc1", name: "update_task", status: "executed" });
+    expect(params[4]).toBe("2026-06-20T10:00:00.000Z");
   });
 
   it("append stores null actions for a user message", async () => {
@@ -81,7 +60,7 @@ describe("assistantMessageRepository", () => {
     expect(mocks.execute.mock.calls[0][1][3]).toBeNull();
   });
 
-  it("getRecent returns rows oldest-first and parses actions JSON", async () => {
+  it("getRecent returns rows oldest-first", async () => {
     // DB returns newest-first (matching the SQL ORDER BY DESC + LIMIT).
     mocks.select.mockResolvedValue([
       { id: "m2", role: "assistant", content: "second", actions: null, created_at: "2026-06-20T10:01:00.000Z" },
@@ -98,7 +77,7 @@ describe("assistantMessageRepository", () => {
     expect(result[0].createdAt).toBe("2026-06-20T10:00:00.000Z");
   });
 
-  it("getRecent parses a non-null actions column back into an array", async () => {
+  it("getRecent ignores legacy action-shaped JSON", async () => {
     mocks.select.mockResolvedValue([
       {
         id: "m3",
@@ -109,8 +88,7 @@ describe("assistantMessageRepository", () => {
       }
     ]);
     const result = await assistantMessageRepository.getRecent(10);
-    expect(result[0].actions).toHaveLength(1);
-    expect(result[0].actions?.[0].status).toBe("applied");
+    expect(result[0].toolCalls).toBeUndefined();
   });
 
   it("getRecent parses tool call payloads back into toolCalls", async () => {
@@ -136,7 +114,6 @@ describe("assistantMessageRepository", () => {
     const result = await assistantMessageRepository.getRecent(10);
     expect(result[0].toolCalls).toHaveLength(1);
     expect(result[0].toolCalls?.[0].name).toBe("update_task");
-    expect(result[0].actions).toBeUndefined();
   });
 
   it("clear deletes all rows", async () => {

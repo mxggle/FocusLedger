@@ -4,7 +4,6 @@ import { assistantMemoryRepository } from "../db/assistantMemoryRepository";
 import { rankMemories, MEMORY_INJECT_K } from "../services/ai/assistant/memory/retrieve";
 import { runMemoryReview, MEMORY_REVIEW_DEBOUNCE_MS } from "../services/ai/assistant/memory/runMemoryReview";
 import type { MemoryEntry } from "../services/ai/assistant/memory/types";
-import { ACTION_REGISTRY } from "../services/ai/assistant/actions";
 import { createAgentTaskStore } from "../services/ai/assistant/agentTools/storeAdapter";
 import { hasDrifted, revertToolCall as revertExecutedToolCall } from "../services/ai/assistant/agentTools/revert";
 import { toolByName } from "../services/ai/assistant/agentTools/registry";
@@ -12,7 +11,7 @@ import type { ToolCallRecord } from "../services/ai/assistant/agentTools/types";
 import { runAssistantToolTurn } from "../services/ai/assistant/assistantRunner";
 import { loadRecallEntries, type RecallEntry } from "../services/ai/assistant/recallHistory";
 import { buildAssistantContext, type AssistantStoreSnapshot } from "../services/ai/assistant/contextBuilder";
-import type { ChatMessage, ProposedAction } from "../services/ai/assistant/types";
+import type { ChatMessage } from "../services/ai/assistant/types";
 import type { ChatTurn } from "../services/ai/providers";
 import { buildRetrospectiveInsights } from "../services/retrospect";
 import type { RetrospectiveInsights } from "../services/retrospect/types";
@@ -59,27 +58,16 @@ function isAbortError(error: unknown): boolean {
   );
 }
 
-/** Proposals restored from a previous session are stale — they reference a day
- *  state that may have changed — so they render as already-handled, not actionable. */
+/** Pending tool calls restored from a previous session are stale — they reference
+ *  a day state that may have changed — so they render as already-handled. */
 export function restoreHistoryActions(messages: ChatMessage[]): ChatMessage[] {
   return messages.map((message) => {
-    if (!message.actions && !message.toolCalls) return message;
+    if (!message.toolCalls) return message;
     return {
       ...message,
-      ...(message.actions
-        ? {
-            actions: message.actions.map((action) =>
-              action.status === "pending" ? { ...action, status: "dismissed" as const } : action
-            )
-          }
-        : {}),
-      ...(message.toolCalls
-        ? {
-            toolCalls: message.toolCalls.map((call) =>
-              call.status === "pending" ? { ...call, status: "dismissed" as const } : call
-            )
-          }
-        : {})
+      toolCalls: message.toolCalls.map((call) =>
+        call.status === "pending" ? { ...call, status: "dismissed" as const } : call
+      )
     };
   });
 }
@@ -98,10 +86,6 @@ type AssistantState = {
   stop: () => void;
   regenerateLast: () => Promise<void>;
   editUserMessage: (messageId: string, newContent: string) => Promise<void>;
-  applyAction: (messageId: string, actionId: string) => Promise<void>;
-  applyAll: (messageId: string) => Promise<void>;
-  updateActionParams: (messageId: string, actionId: string, patch: Record<string, unknown>) => void;
-  dismissAction: (messageId: string, actionId: string) => void;
   applyToolCall: (messageId: string, toolCallId: string) => Promise<void>;
   revertToolCall: (messageId: string, toolCallId: string) => Promise<void>;
   dismissToolCall: (messageId: string, toolCallId: string) => void;
@@ -111,13 +95,6 @@ type AssistantState = {
   loadMemories: (force?: boolean) => Promise<void>;
   refreshInsights: () => Promise<void>;
 };
-
-/** Ids of actions in a message that are safe to bulk-apply (pending, non-destructive). */
-export function nextAfterApplyAll(messages: ChatMessage[], messageId: string): string[] {
-  const message = messages.find((m) => m.id === messageId);
-  if (!message?.actions) return [];
-  return message.actions.filter((a) => a.status === "pending" && !a.destructive).map((a) => a.id);
-}
 
 function snapshot(): AssistantStoreSnapshot {
   const state = useTaskStore.getState();
@@ -137,24 +114,6 @@ function snapshot(): AssistantStoreSnapshot {
 
 function toChatTurns(messages: ChatMessage[]): ChatTurn[] {
   return messages.map((message) => ({ role: message.role, content: message.modelContent ?? message.content }));
-}
-
-/** Immutably replace one action inside one message. */
-function patchAction(
-  messages: ChatMessage[],
-  messageId: string,
-  actionId: string,
-  patch: Partial<ProposedAction>
-): ChatMessage[] {
-  return messages.map((message) => {
-    if (message.id !== messageId || !message.actions) return message;
-    return {
-      ...message,
-      actions: message.actions.map((action) =>
-        action.id === actionId ? { ...action, ...patch } : action
-      )
-    };
-  });
 }
 
 function patchToolCall(
@@ -259,65 +218,6 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     void assistantMessageRepository.deleteAfter(messageId).catch(() => {});
     void assistantMessageRepository.append(edited).catch(() => {});
     await runStreamFrom(kept);
-  },
-
-  applyAction: async (messageId, actionId) => {
-    const message = get().messages.find((entry) => entry.id === messageId);
-    const action = message?.actions?.find((entry) => entry.id === actionId);
-    if (!action || action.status !== "pending") return;
-
-    if (action.destructive) {
-      const confirmed = await useUiStore.getState().confirm({
-        message: `${action.summary}?`,
-        confirmLabel: "Apply",
-        danger: true
-      });
-      if (!confirmed) return;
-    }
-
-    const descriptor = ACTION_REGISTRY[action.type];
-    try {
-      const result = await descriptor.execute(action.params, useTaskStore.getState());
-      if (result.ok) {
-        await useTaskStore.getState().refresh();
-        set({ messages: patchAction(get().messages, messageId, actionId, { status: "applied" }) });
-      } else {
-        set({ messages: patchAction(get().messages, messageId, actionId, { status: "failed", error: result.message }) });
-        useUiStore.getState().addToast({ kind: "error", title: "Could not apply", description: result.message });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not apply this change";
-      set({ messages: patchAction(get().messages, messageId, actionId, { status: "failed", error: message }) });
-      useUiStore.getState().addToast({ kind: "error", title: "Could not apply", description: message });
-    }
-  },
-
-  applyAll: async (messageId) => {
-    const ids = nextAfterApplyAll(get().messages, messageId);
-    for (const actionId of ids) {
-      await get().applyAction(messageId, actionId);
-    }
-  },
-
-  updateActionParams: (messageId, actionId, patch) => {
-    const message = get().messages.find((entry) => entry.id === messageId);
-    const action = message?.actions?.find((entry) => entry.id === actionId);
-    if (!action || action.status !== "pending") return;
-
-    const nextParams = { ...(action.params as Record<string, unknown>), ...patch };
-    const descriptor = ACTION_REGISTRY[action.type];
-    const ctx = buildAssistantContext(snapshot(), get().insights);
-    let summary = action.summary;
-    try {
-      summary = descriptor.describe(nextParams, ctx);
-    } catch {
-      // Keep the previous summary if the edited params can't be described yet.
-    }
-    set({ messages: patchAction(get().messages, messageId, actionId, { params: nextParams, summary }) });
-  },
-
-  dismissAction: (messageId, actionId) => {
-    set({ messages: patchAction(get().messages, messageId, actionId, { status: "dismissed" }) });
   },
 
   applyToolCall: async (messageId, toolCallId) => {

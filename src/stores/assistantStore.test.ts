@@ -258,43 +258,6 @@ describe("assistantStore tool turn", () => {
   });
 });
 
-describe("assistantStore.applyAction", () => {
-  it("executes the action and marks it applied, refreshing tasks", async () => {
-    useAssistantStore.setState({
-      messages: [{ id: "m1", role: "assistant", content: "ok", createdAt: "2026-06-20T10:00:00Z", actions: [{ id: "a1", type: "create_task", params: { title: "X" }, summary: "Create X", destructive: false, status: "pending" }] }],
-      status: "idle"
-    });
-    await useAssistantStore.getState().applyAction("m1", "a1");
-    expect(taskState.createTask).toHaveBeenCalledWith({ title: "X" });
-    expect(taskState.refresh).toHaveBeenCalled();
-    expect(useAssistantStore.getState().messages[0].actions?.[0].status).toBe("applied");
-  });
-
-  it("marks the action failed and toasts when the store method throws", async () => {
-    taskState.createTask.mockRejectedValue(new Error("boom"));
-    useAssistantStore.setState({
-      messages: [{ id: "m1", role: "assistant", content: "ok", createdAt: "2026-06-20T10:00:00Z", actions: [{ id: "a1", type: "create_task", params: { title: "X" }, summary: "Create X", destructive: false, status: "pending" }] }],
-      status: "idle"
-    });
-    await useAssistantStore.getState().applyAction("m1", "a1");
-    const failed = useAssistantStore.getState().messages[0].actions?.[0];
-    expect(failed?.status).toBe("failed");
-    expect(failed?.error).toBe("boom");
-    expect(uiState.addToast).toHaveBeenCalled();
-  });
-
-  it("confirms before a destructive action and marks failed on error", async () => {
-    taskState.dropTask = vi.fn().mockResolvedValue({ ok: false, message: "nope" });
-    useAssistantStore.setState({
-      messages: [{ id: "m1", role: "assistant", content: "ok", createdAt: "2026-06-20T10:00:00Z", actions: [{ id: "d1", type: "drop_task", params: { task_id: "t1", title: "T" }, summary: "Drop T", destructive: true, status: "pending" }] }],
-      status: "idle"
-    });
-    await useAssistantStore.getState().applyAction("m1", "d1");
-    expect(uiState.confirm).toHaveBeenCalled();
-    expect(useAssistantStore.getState().messages[0].actions?.[0].status).toBe("failed");
-  });
-});
-
 describe("assistantStore tool calls", () => {
   it("applies a pending write tool call and records undo metadata", async () => {
     taskState.allTasks = [taskFixture()];
@@ -381,35 +344,13 @@ describe("assistantStore tool calls", () => {
   });
 });
 
-describe("assistantStore.updateActionParams", () => {
-  it("merges edited params and recomputes the summary", async () => {
-    useAssistantStore.setState({
-      messages: [{ id: "m1", role: "assistant", content: "ok", createdAt: "2026-06-20T10:00:00Z", actions: [{ id: "a1", type: "create_task", params: { title: "X", due_date: null }, summary: "Create X in backlog", destructive: false, status: "pending" }] }],
-      status: "idle"
-    });
-    useAssistantStore.getState().updateActionParams("m1", "a1", { title: "Launch", due_date: "2026-06-20" });
-    const action = useAssistantStore.getState().messages[0].actions?.[0];
-    expect(action?.params).toMatchObject({ title: "Launch", due_date: "2026-06-20" });
-    expect(action?.summary).toBe('Create task "Launch" for 2026-06-20');
-  });
-
-  it("ignores edits to a non-pending action", async () => {
-    useAssistantStore.setState({
-      messages: [{ id: "m1", role: "assistant", content: "ok", createdAt: "2026-06-20T10:00:00Z", actions: [{ id: "a1", type: "create_task", params: { title: "X" }, summary: "Create X", destructive: false, status: "applied" }] }],
-      status: "idle"
-    });
-    useAssistantStore.getState().updateActionParams("m1", "a1", { title: "Changed" });
-    expect(useAssistantStore.getState().messages[0].actions?.[0].params).toMatchObject({ title: "X" });
-  });
-});
-
 describe("assistantStore regenerateLast / editUserMessage", () => {
   it("regenerateLast drops the trailing assistant message and re-runs", async () => {
     runAssistantToolTurn.mockResolvedValue({ reply: "Fresh plan", toolCalls: [] });
     useAssistantStore.setState({
       messages: [
         { id: "u1", role: "user", content: "plan", createdAt: "2026-06-20T10:00:00Z" },
-        { id: "a1", role: "assistant", content: "old plan", createdAt: "2026-06-20T10:00:01Z", actions: [] }
+        { id: "a1", role: "assistant", content: "old plan", createdAt: "2026-06-20T10:00:01Z", toolCalls: [] }
       ],
       status: "idle"
     });
@@ -510,7 +451,7 @@ describe("assistantStore.memories", () => {
 });
 
 describe("assistantStore persistence", () => {
-  it("hydrate loads recent messages and downgrades stale pending actions", async () => {
+  it("hydrate loads recent messages and downgrades stale pending tool calls", async () => {
     const rows: ChatMessage[] = [
       { id: "u1", role: "user", content: "earlier", createdAt: "2026-06-19T10:00:00Z" },
       {
@@ -518,7 +459,17 @@ describe("assistantStore persistence", () => {
         role: "assistant",
         content: "older plan",
         createdAt: "2026-06-19T10:00:01Z",
-        actions: [{ id: "a1", type: "create_task", params: {}, summary: "S", destructive: false, status: "pending" }]
+        toolCalls: [
+          {
+            id: "tc1",
+            name: "update_task",
+            args: { task_id: "t1" },
+            category: "write",
+            destructive: false,
+            summary: "S",
+            status: "pending"
+          }
+        ]
       }
     ];
     messageRepo.getRecent.mockResolvedValueOnce(rows);
@@ -527,7 +478,7 @@ describe("assistantStore persistence", () => {
 
     const messages = useAssistantStore.getState().messages;
     expect(messages).toHaveLength(2);
-    expect(messages[1].actions?.[0].status).toBe("dismissed");
+    expect(messages[1].toolCalls?.[0].status).toBe("dismissed");
   });
 
   it("clear wipes the persisted history", () => {

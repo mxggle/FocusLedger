@@ -6,7 +6,6 @@ import { useAssistantStore } from "../../stores/assistantStore";
 import { useUiStore } from "../../stores/uiStore";
 import { Markdown } from "../ui/Markdown";
 import { IconButton } from "../ui/IconButton";
-import { ActionCard } from "./ActionCard";
 import { MessageEditor } from "./MessageEditor";
 import { ToolCallCard } from "./ToolCallCard";
 
@@ -26,9 +25,6 @@ function AssistantRow({ message, isStreaming }: { message: ChatMessage; isStream
   const messages = useAssistantStore((s) => s.messages);
   const status = useAssistantStore((s) => s.status);
   const regenerateLast = useAssistantStore((s) => s.regenerateLast);
-  const applyAction = useAssistantStore((s) => s.applyAction);
-  const applyAll = useAssistantStore((s) => s.applyAll);
-  const dismissAction = useAssistantStore((s) => s.dismissAction);
   const applyToolCall = useAssistantStore((s) => s.applyToolCall);
   const revertToolCall = useAssistantStore((s) => s.revertToolCall);
   const dismissToolCall = useAssistantStore((s) => s.dismissToolCall);
@@ -36,10 +32,6 @@ function AssistantRow({ message, isStreaming }: { message: ChatMessage; isStream
 
   const lastAssistantId = findLastAssistantId(messages);
   const canRegenerate = status === "idle" && lastAssistantId === message.id;
-
-  const pendingCreates = (message.actions ?? []).filter(
-    (action) => action.status === "pending" && action.type === "create_task"
-  );
 
   async function copy() {
     try {
@@ -75,34 +67,6 @@ function AssistantRow({ message, isStreaming }: { message: ChatMessage; isStream
 
         {message.stopped ? (
           <p className="text-xs text-muted-foreground">Stopped</p>
-        ) : null}
-
-        {message.actions && message.actions.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            {pendingCreates.length >= 2 ? (
-              <div className="flex items-center justify-between px-1">
-                <span className="text-xs font-medium text-muted-foreground">
-                  Proposed plan — {pendingCreates.length} tasks
-                </span>
-                <button
-                  type="button"
-                  onClick={() => void applyAll(message.id)}
-                  className="text-xs font-medium text-primary hover:underline"
-                >
-                  Approve all
-                </button>
-              </div>
-            ) : null}
-            {message.actions.map((action) => (
-              <ActionCard
-                key={action.id}
-                messageId={message.id}
-                action={action}
-                onApply={() => void applyAction(message.id, action.id)}
-                onDismiss={() => dismissAction(message.id, action.id)}
-              />
-            ))}
-          </div>
         ) : null}
 
         {message.toolCalls && message.toolCalls.length > 0 ? (

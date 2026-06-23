@@ -1,4 +1,4 @@
-import type { CreateTaskInput, TaskPriority, TaskStatus, UpdateTaskInput } from "../../../types";
+import type { TaskPriority, TaskStatus } from "../../../types";
 import type { ChatRole } from "../providers";
 import type { RetrospectiveInsights } from "../../retrospect/types";
 import type { DayBriefing } from "./dayBriefing";
@@ -6,31 +6,6 @@ import type { PermissionLevel, ToolCallRecord } from "./agentTools/types";
 import type { MemoryEntry } from "./memory/types";
 
 export type { ChatRole };
-
-/** The six v1 capabilities. Extend here + add a registry entry in actions.ts. */
-export type AssistantActionType =
-  | "create_task"
-  | "update_task"
-  | "reschedule_task"
-  | "move_to_backlog"
-  | "drop_task"
-  | "complete_task"
-  | "start_task";
-
-export type ActionResult = { ok: true } | { ok: false; message: string };
-
-/** Minimal slice of taskStore an action may call. The real store satisfies it
- *  structurally, and tests can pass a mock. */
-export interface AssistantTaskStore {
-  createTask(input: CreateTaskInput): Promise<ActionResult>;
-  updateTask(taskId: string, input: UpdateTaskInput): Promise<ActionResult>;
-  rescheduleTask(taskId: string, dueDate: string): Promise<ActionResult>;
-  moveTaskToBacklog(taskId: string): Promise<ActionResult>;
-  dropTask(taskId: string): Promise<ActionResult>;
-  completeTask(taskId: string, note?: string): Promise<ActionResult>;
-  startTask(taskId: string): Promise<"started" | "failed">;
-  ensureCategory(name: string): Promise<string>; // returns category id, creating if absent
-}
 
 /** Compact task shape handed to the model. Intentionally camelCase (mapped from
  *  the snake_case Task model) — keep in sync with the context builder. */
@@ -61,31 +36,12 @@ export type AssistantContext = {
   permissionLevel?: PermissionLevel;
 };
 
-/** One proposed change, rendered as a confirm card. `params` is validated. */
-export type ActionStatus = "pending" | "applied" | "dismissed" | "failed";
-
-export type ProposedAction = {
-  id: string;
-  type: AssistantActionType;
-  params: unknown; // narrowed per-action; opaque at the store boundary
-  summary: string; // human label from describe()
-  destructive: boolean;
-  status: ActionStatus;
-  error?: string;
-};
-
 export type ChatMessage = {
   id: string;
   role: ChatRole;
   content: string; // user text (as displayed), or assistant reply (markdown)
   modelContent?: string; // what to send to the model when it differs from `content` (e.g. Plan-mode wrapping); transient, not persisted
   createdAt: string; // ISO
-  actions?: ProposedAction[]; // assistant turns only
-  toolCalls?: ToolCallRecord[]; // new tool-calling turns; legacy messages keep actions
+  toolCalls?: ToolCallRecord[];
   stopped?: boolean; // true when a stream was aborted by the user (transient; not persisted)
-};
-
-export type AssistantTurnResult = {
-  reply: string;
-  actions: ProposedAction[];
 };
