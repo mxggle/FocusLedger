@@ -342,6 +342,84 @@ describe("assistantStore tool calls", () => {
     expect(taskState.refresh).toHaveBeenCalled();
     expect(useAssistantStore.getState().messages[0].toolCalls?.[0].status).toBe("reverted");
   });
+
+  it("can re-apply a reverted write tool call", async () => {
+    taskState.allTasks = [taskFixture({ planned_start_time: null })];
+    useAssistantStore.setState({
+      messages: [
+        {
+          id: "m1",
+          role: "assistant",
+          content: "ok",
+          createdAt: "2026-06-20T10:00:00Z",
+          toolCalls: [
+            {
+              id: "tc1",
+              name: "update_task",
+              args: { task_id: "t1", planned_start_time: "09:30" },
+              category: "write",
+              destructive: false,
+              summary: "Move Report",
+              status: "reverted",
+              undo: {
+                kind: "restore_task",
+                taskId: "t1",
+                before: {
+                  title: "Report",
+                  description: null,
+                  category_id: null,
+                  priority: "medium",
+                  estimated_minutes: null,
+                  due_date: "2026-06-20",
+                  planned_start_time: null,
+                  planned_end_time: null,
+                  status: "todo",
+                  updated_at: "u0"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      status: "idle"
+    });
+
+    await useAssistantStore.getState().applyToolCall("m1", "tc1");
+
+    expect(taskState.updateTask).toHaveBeenCalledWith("t1", expect.objectContaining({ planned_start_time: "09:30" }));
+    expect(useAssistantStore.getState().messages[0].toolCalls?.[0].status).toBe("executed");
+  });
+
+  it("can apply a dismissed write tool call", async () => {
+    taskState.allTasks = [taskFixture()];
+    useAssistantStore.setState({
+      messages: [
+        {
+          id: "m1",
+          role: "assistant",
+          content: "ok",
+          createdAt: "2026-06-20T10:00:00Z",
+          toolCalls: [
+            {
+              id: "tc1",
+              name: "update_task",
+              args: { task_id: "t1", planned_start_time: "09:30" },
+              category: "write",
+              destructive: false,
+              summary: "Move Report",
+              status: "dismissed"
+            }
+          ]
+        }
+      ],
+      status: "idle"
+    });
+
+    await useAssistantStore.getState().applyToolCall("m1", "tc1");
+
+    expect(taskState.updateTask).toHaveBeenCalledWith("t1", expect.objectContaining({ planned_start_time: "09:30" }));
+    expect(useAssistantStore.getState().messages[0].toolCalls?.[0].status).toBe("executed");
+  });
 });
 
 describe("assistantStore regenerateLast / editUserMessage", () => {

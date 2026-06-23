@@ -232,6 +232,42 @@ describe("MessageRow — assistant", () => {
     fireClick(byLabel(container, "Revert tool call"));
     expect(mockAssistant.revertToolCall).toHaveBeenCalledWith("a1", "tc1");
   });
+
+  it("renders apply actions for reverted and dismissed tool calls", () => {
+    const message = assistantMessage({
+      toolCalls: [
+        {
+          id: "tc1",
+          name: "update_task",
+          args: { task_id: "t1", planned_start_time: "09:30" },
+          category: "write",
+          destructive: false,
+          summary: "Move Report",
+          status: "reverted"
+        },
+        {
+          id: "tc2",
+          name: "update_task",
+          args: { task_id: "t1", planned_start_time: "10:00" },
+          category: "write",
+          destructive: false,
+          summary: "Move Report later",
+          status: "dismissed"
+        }
+      ]
+    });
+    mockAssistant.messages = [message];
+    const container = render(<MessageRow message={message} isStreaming={false} />);
+    const applyButtons = Array.from(container.querySelectorAll("button")).filter((button) =>
+      button.textContent?.includes("Apply")
+    );
+
+    expect(applyButtons).toHaveLength(2);
+    fireClick(applyButtons[0]);
+    fireClick(applyButtons[1]);
+    expect(mockAssistant.applyToolCall).toHaveBeenCalledWith("a1", "tc1");
+    expect(mockAssistant.applyToolCall).toHaveBeenCalledWith("a1", "tc2");
+  });
 });
 
 describe("MessageRow — user", () => {

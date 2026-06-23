@@ -138,6 +138,10 @@ function expectedUpdatedAtFor(call: Pick<ToolCallRecord, "undo">): string | unde
   return useTaskStore.getState().allTasks.find((task) => task.id === call.undo?.taskId)?.updated_at;
 }
 
+function canApplyToolCall(status: ToolCallRecord["status"]): boolean {
+  return status === "pending" || status === "dismissed" || status === "reverted" || status === "failed";
+}
+
 export const useAssistantStore = create<AssistantState>((set, get) => ({
   messages: [],
   status: "idle",
@@ -223,7 +227,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
   applyToolCall: async (messageId, toolCallId) => {
     const message = get().messages.find((entry) => entry.id === messageId);
     const call = message?.toolCalls?.find((entry) => entry.id === toolCallId);
-    if (!call || call.status !== "pending") return;
+    if (!call || !canApplyToolCall(call.status)) return;
 
     const tool = toolByName(call.name);
     if (!tool || tool.category !== "write") {

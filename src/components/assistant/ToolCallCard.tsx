@@ -34,6 +34,9 @@ export function ToolCallCard({ call, onApply, onDismiss, onRevert }: ToolCallCar
   const allTasks = useTaskStore((s) => s.allTasks);
   const display = toolCallDisplay(call, allTasks);
   const pending = call.status === "pending";
+  const canApply =
+    call.status === "pending" || call.status === "dismissed" || call.status === "reverted" || call.status === "failed";
+  const canRevert = call.status === "executed" && Boolean(call.undo);
 
   if (!pending) {
     return (
@@ -59,10 +62,21 @@ export function ToolCallCard({ call, onApply, onDismiss, onRevert }: ToolCallCar
             <p className="truncate text-xs text-destructive">{call.error}</p>
           ) : null}
         </div>
-        {call.status === "executed" && call.undo ? (
+        {canRevert ? (
           <Button size="sm" variant="ghost" onClick={onRevert} aria-label="Revert tool call">
             <RotateCcw className="h-3.5 w-3.5" />
             Revert
+          </Button>
+        ) : null}
+        {canApply ? (
+          <Button
+            size="sm"
+            variant={call.destructive ? "danger" : "ghost"}
+            onClick={onApply}
+            aria-label="Apply tool call"
+          >
+            <Check className="h-3.5 w-3.5" />
+            {call.status === "failed" ? "Retry" : "Apply"}
           </Button>
         ) : null}
         <ToolStatusBadge status={call.status} />
