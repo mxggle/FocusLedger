@@ -96,6 +96,19 @@ const SCHEMA_STATEMENTS = [
     created_at TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_assistant_messages_created ON assistant_messages(created_at)`,
+  `CREATE TABLE IF NOT EXISTS assistant_memory (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    text TEXT NOT NULL,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active',
+    source_message_id TEXT,
+    use_count INTEGER NOT NULL DEFAULT 0,
+    last_used_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_assistant_memory_status ON assistant_memory(status)`,
   `CREATE INDEX IF NOT EXISTS idx_tasks_due_status ON tasks(due_date, status)`,
   `CREATE INDEX IF NOT EXISTS idx_task_templates_enabled ON task_templates(enabled)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_template_occurrences_date
