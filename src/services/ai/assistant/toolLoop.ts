@@ -5,6 +5,7 @@ import { nativeToolSpecs, toolByName } from "./agentTools/registry";
 import type { AgentToolDeps, PermissionLevel, ToolCallRecord } from "./agentTools/types";
 import { parseToolCalls } from "./responseParser";
 import { createId } from "../../../utils/id";
+import { describeToolCallForDisplay } from "./toolDisplay";
 
 export const TOOL_TEMPERATURE = 0.3;
 export const MAX_STEPS = 12;
@@ -67,13 +68,15 @@ export async function runToolLoop(
         continue;
       }
 
+      const display = describeToolCallForDisplay(call.name, parsed.data, input.deps.store.getAllTasks());
       const base: ToolCallRecord = {
         id: createId("tc"),
         name: call.name,
         args: call.args,
         category: "write",
         destructive: tool.destructive,
-        summary: call.name,
+        summary: display.summary,
+        targetTitle: display.targetTitle,
         status: "pending"
       };
 

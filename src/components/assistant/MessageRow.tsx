@@ -1,8 +1,10 @@
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Copy, Pencil, RotateCcw, Sparkles } from "lucide-react";
 import { useState } from "react";
+import { formatAssistantContentForDisplay } from "../../services/ai/assistant/toolDisplay";
 import type { ChatMessage } from "../../services/ai/assistant/types";
 import { useAssistantStore } from "../../stores/assistantStore";
+import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
 import { Markdown } from "../ui/Markdown";
 import { IconButton } from "../ui/IconButton";
@@ -28,14 +30,16 @@ function AssistantRow({ message, isStreaming }: { message: ChatMessage; isStream
   const applyToolCall = useAssistantStore((s) => s.applyToolCall);
   const revertToolCall = useAssistantStore((s) => s.revertToolCall);
   const dismissToolCall = useAssistantStore((s) => s.dismissToolCall);
+  const allTasks = useTaskStore((s) => s.allTasks);
   const addToast = useUiStore((s) => s.addToast);
 
   const lastAssistantId = findLastAssistantId(messages);
   const canRegenerate = status === "idle" && lastAssistantId === message.id;
+  const displayContent = formatAssistantContentForDisplay(message.content, message.toolCalls ?? [], allTasks);
 
   async function copy() {
     try {
-      await writeText(message.content);
+      await writeText(displayContent);
       addToast({ kind: "success", title: "Copied" });
     } catch {
       addToast({ kind: "error", title: "Could not copy" });
@@ -55,7 +59,7 @@ function AssistantRow({ message, isStreaming }: { message: ChatMessage; isStream
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="text-sm leading-relaxed text-foreground">
-          <Markdown content={message.content} />
+          <Markdown content={displayContent} />
           {isStreaming ? (
             <span
               data-streaming-caret

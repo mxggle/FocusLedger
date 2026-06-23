@@ -105,6 +105,28 @@ describe("runToolLoop", () => {
     expect(res.toolCalls.find((call) => call.name === "update_task")?.status).toBe("pending");
   });
 
+  it("labels queued task updates with the task title instead of the raw tool name", async () => {
+    const replies = [
+      '{"tool_calls":[{"name":"update_task","args":{"task_id":"t1","planned_start_time":"09:30","planned_end_time":"10:00"}}]}',
+      "Proposed."
+    ];
+    let i = 0;
+    const res = await runToolLoop(
+      {
+        system: "s",
+        messages: [{ role: "user", content: "shift report" }],
+        level: "ask",
+        deps: depsWith()
+      },
+      { generateChat: vi.fn(async () => replies[i++]) }
+    );
+
+    const pending = res.toolCalls.find((call) => call.name === "update_task");
+    expect(pending?.summary).toContain("Report");
+    expect(pending?.summary).toContain("09:30-10:00");
+    expect(pending?.summary).not.toBe("update_task");
+  });
+
   it("passes native tool specs to the provider call", async () => {
     const generateChat = vi.fn(async () => "Done.");
 

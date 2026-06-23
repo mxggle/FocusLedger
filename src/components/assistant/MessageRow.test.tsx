@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AssistantStatus } from "../../stores/assistantStore";
 import type { ChatMessage } from "../../services/ai/assistant/types";
+import type { Task } from "../../types";
 import { MessageRow } from "./MessageRow";
 import { fireClick, fireInput, flush, render } from "./_render";
 
@@ -36,6 +37,37 @@ vi.mock("../../stores/uiStore", () => ({
   useUiStore: Object.assign(
     (selector: (s: typeof mockUi) => unknown) => selector(mockUi),
     { getState: () => mockUi }
+  )
+}));
+
+const { mockTaskStore } = vi.hoisted(() => ({
+  mockTaskStore: {
+    allTasks: [
+      {
+        id: "taske5f24bfb-5b67-49a7-be01-8c4090dc3388",
+        title: "30-minute buffer before starting tasks",
+        description: null,
+        status: "todo",
+        priority: "medium",
+        category_id: null,
+        estimated_minutes: null,
+        due_date: "2026-06-23",
+        planned_start_time: "19:30",
+        planned_end_time: "20:05",
+        sort_order: null,
+        template_id: null,
+        created_at: "2026-06-23T09:00:00Z",
+        updated_at: "u0",
+        completed_at: null,
+        dropped_at: null
+      } as Task
+    ]
+  }
+}));
+vi.mock("../../stores/taskStore", () => ({
+  useTaskStore: Object.assign(
+    (selector: (s: typeof mockTaskStore) => unknown) => selector(mockTaskStore),
+    { getState: () => mockTaskStore }
   )
 }));
 
@@ -137,6 +169,30 @@ describe("MessageRow — assistant", () => {
     expect(mockAssistant.applyToolCall).toHaveBeenCalledWith("a1", "tc1");
     fireClick(byLabel(container, "Dismiss tool call"));
     expect(mockAssistant.dismissToolCall).toHaveBeenCalledWith("a1", "tc1");
+  });
+
+  it("hides task ids in assistant prose and highlights known affected task names", () => {
+    const taskId = "taske5f24bfb-5b67-49a7-be01-8c4090dc3388";
+    const message = assistantMessage({
+      content: `I've adjusted "${mockTaskStore.allTasks[0].title}" [${taskId}] to 19:40-20:15.`,
+      toolCalls: [
+        {
+          id: "tc1",
+          name: "update_task",
+          args: { task_id: taskId, planned_start_time: "19:40", planned_end_time: "20:15" },
+          category: "write",
+          destructive: false,
+          summary: "update_task",
+          status: "pending"
+        }
+      ]
+    });
+    mockAssistant.messages = [message];
+    const container = render(<MessageRow message={message} isStreaming={false} />);
+
+    expect(container.textContent).not.toContain(taskId);
+    const highlighted = Array.from(container.querySelectorAll("strong")).map((el) => el.textContent);
+    expect(highlighted).toContain("30-minute buffer before starting tasks");
   });
 
   it("renders an executed tool call with a revert action", () => {

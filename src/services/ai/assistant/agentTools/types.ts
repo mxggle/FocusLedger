@@ -72,6 +72,7 @@ export type ToolCallRecord = {
   category: ToolCategory;
   destructive: boolean;
   summary: string;
+  targetTitle?: string;
   status: ToolCallStatus;
   result?: string;
   error?: string;

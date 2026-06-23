@@ -1,6 +1,8 @@
 import { AlertCircle, Check, Pencil, Play, CalendarClock, Inbox, RotateCcw, Search, Trash2, X } from "lucide-react";
 import type { ComponentType } from "react";
 import type { ToolCallRecord } from "../../services/ai/assistant/agentTools/types";
+import { toolCallDisplay } from "../../services/ai/assistant/toolDisplay";
+import { useTaskStore } from "../../stores/taskStore";
 import { Button } from "../ui/Button";
 
 const ICONS: Record<string, ComponentType<{ className?: string }>> = {
@@ -29,6 +31,8 @@ type ToolCallCardProps = {
 
 export function ToolCallCard({ call, onApply, onDismiss, onRevert }: ToolCallCardProps) {
   const Icon = ICONS[call.name] ?? Search;
+  const allTasks = useTaskStore((s) => s.allTasks);
+  const display = toolCallDisplay(call, allTasks);
   const pending = call.status === "pending";
 
   if (!pending) {
@@ -50,7 +54,7 @@ export function ToolCallCard({ call, onApply, onDismiss, onRevert }: ToolCallCar
           }
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-muted-foreground">{call.summary}</p>
+          <p className="truncate text-muted-foreground">{display.summary}</p>
           {call.status === "failed" && call.error ? (
             <p className="truncate text-xs text-destructive">{call.error}</p>
           ) : null}
@@ -71,8 +75,17 @@ export function ToolCallCard({ call, onApply, onDismiss, onRevert }: ToolCallCar
       <div className="flex items-center gap-2.5">
         <Icon className={"h-4 w-4 shrink-0 " + (call.destructive ? "text-destructive" : "text-primary")} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-foreground">{call.summary}</p>
-          <p className="truncate text-xs text-muted-foreground">{call.name}</p>
+          <p className="truncate text-foreground">
+            {display.targetTitle ? (
+              <>
+                <span className="text-muted-foreground">{display.action}</span>{" "}
+                <span className="font-semibold text-foreground">{display.targetTitle}</span>
+              </>
+            ) : (
+              display.summary
+            )}
+          </p>
+          <p className="truncate text-xs text-muted-foreground">{display.detail ?? display.summary}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Button size="sm" variant="ghost" onClick={onDismiss} aria-label="Dismiss tool call">
