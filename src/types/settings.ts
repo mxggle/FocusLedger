@@ -35,6 +35,10 @@ export type AppSettings = {
   assistantName: string;
   /** Markdown SOUL.md-style identity block. Blank → the shipped DEFAULT_SOUL is used. */
   assistantSoul: string;
+  /** Master switch for self-curated memory (background review + recall). */
+  assistantMemoryEnabled: boolean;
+  /** Optional cheaper model for the background memory review; empty → reuse aiModel. */
+  assistantMemoryModel: string;
   /** Generate the daily debrief automatically at `debriefAutoTime`. */
   debriefAutoEnabled: boolean;
   /** Local time of day (`HH:mm`) for the automatic debrief. */
@@ -60,6 +64,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   assistantProfile: "",
   assistantName: "Yolo Assistant",
   assistantSoul: "",
+  assistantMemoryEnabled: true,
+  assistantMemoryModel: "",
   debriefAutoEnabled: false,
   debriefAutoTime: "23:00"
 };
