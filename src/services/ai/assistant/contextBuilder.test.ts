@@ -52,6 +52,14 @@ describe("buildAssistantContext", () => {
     expect(ctx.tasks[0]).toMatchObject({ id: "t1", title: "Write report", estimatedMinutes: 60 });
   });
 
+  it("passes planned start/end times through to context tasks", () => {
+    const ctx = buildAssistantContext({
+      ...snapshot,
+      tasks: [task({ planned_start_time: "09:00", planned_end_time: "10:00" })]
+    });
+    expect(ctx.tasks[0]).toMatchObject({ plannedStartTime: "09:00", plannedEndTime: "10:00" });
+  });
+
   it("caps backlog to 30 items", () => {
     const big = Array.from({ length: 50 }, (_, i) => task({ id: `b${i}`, due_date: null }));
     const ctx = buildAssistantContext({ ...snapshot, backlogTasks: big });

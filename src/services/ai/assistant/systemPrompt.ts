@@ -1,8 +1,8 @@
-import { actionPromptSpecs } from "./actions";
 import { buildSoulBlock } from "./soul";
 import { renderMemoryBlock } from "./memory/injectMemory";
-import { toolCatalog } from "./tools";
 import type { AssistantContext, ContextTask } from "./types";
+import { renderToolCatalog } from "./agentTools/registry";
+import type { PermissionLevel } from "./agentTools/types";
 import type {
   CalibrationStat,
   EstimationCalibration,
@@ -13,7 +13,15 @@ import type {
 
 function describeTask(task: ContextTask): string {
   const estimate = task.estimatedMinutes != null ? `, est ${task.estimatedMinutes}m` : "";
-  return `- [${task.id}] "${task.title}" (${task.status}, ${task.priority}${estimate})`;
+  const time =
+    task.plannedStartTime && task.plannedEndTime
+      ? `${task.plannedStartTime}-${task.plannedEndTime}`
+      : task.plannedStartTime
+        ? `${task.plannedStartTime}-?`
+        : task.plannedEndTime
+          ? `?-${task.plannedEndTime}`
+          : "no time";
+  return `- [${task.id}] "${task.title}" (${task.status}, ${task.priority}, ${time}${estimate})`;
 }
 
 function renderContext(ctx: AssistantContext): string {
@@ -40,12 +48,6 @@ function renderContext(ctx: AssistantContext): string {
   }
 
   return lines.join("\n");
-}
-
-function renderActionCatalog(): string {
-  return actionPromptSpecs()
-    .map((spec) => `- ${spec.name}: use when ${spec.when}. params: ${spec.params}`)
-    .join("\n");
 }
 
 function describeCalibrationStat(stat: CalibrationStat): string {
@@ -101,19 +103,26 @@ function renderRetro(retro: RetrospectiveInsights): string {
   ].join("\n");
 }
 
+const MODE_LINE: Record<PermissionLevel, string> = {
+  plan:
+    "Permission: PLAN. Do not apply changes - explore with read tools and present a plan; your proposed changes are shown to the user for approval.",
+  ask: "Permission: ASK. You may call write tools, but every change is confirmed by the user before it applies.",
+  auto: "Permission: AUTO. Reversible changes apply immediately; destructive ones (drop_task) are confirmed."
+};
+
 const TOOL_PROTOCOL = [
-  "Gathering facts before you answer (optional, up to a few rounds):",
-  "- Before proposing changes you may look things up. To do so, respond with ONLY a JSON object of the form:",
-  '  { "lookups": [ { "tool": "search_tasks", "query": "..." } ] }',
-    "- You will then receive the results as the next message and can look up more or give your final answer.",
-    "- When you are ready, give your final answer: Markdown reply followed by the fenced ```json actions block. Do not mix lookups and a final answer in the same message.",
-  "- Before creating any task, use search_tasks to check it does not already exist; if a close duplicate exists, do not recreate it — mention the existing task id in your reply instead.",
-  "- Before setting estimated_minutes, you may use get_calibration to size the estimate from real history.",
-  "- When the user asks about past work, what happened, lessons learned, or recurring blockers, use recall to pull relevant notes from their logged history before answering.",
-  "- To act on many tasks at once (e.g. \"categorize everything\", \"re-prioritize my backlog\"), use list_tasks to fetch the set, then propose one update_task per task. If more than ~20 tasks would change, propose the first batch and ask before continuing.",
+  "Tool-calling protocol:",
+  '- To use tools, respond with ONLY a JSON object: { "tool_calls": [ { "name": "list_tasks", "args": { "scope": "today" } } ] }',
+  "- You will receive tool results as the next message. Continue with more tool_calls if needed, or give your final answer.",
+  "- Final answers are plain Markdown. Do not append legacy actions JSON or wrap the reply in JSON.",
+  "- Reads can gather facts. Writes may execute or be queued depending on the permission level below.",
+  "- create_task is ONLY for genuinely new work the user wants tracked. If a request cannot be done with the available tools, say so plainly and suggest the closest supported action - never invent a task to fake completion.",
+  "- Before changing many tasks, call list_tasks to fetch exact ids and current schedule times, then call update_task per affected task.",
+  "- Before setting estimated_minutes, you may call get_calibration so estimates reflect deterministic history.",
+  "- When the user asks about past work, what happened, lessons learned, or recurring blockers, call recall before answering.",
   "",
-  "Read tools available:",
-  toolCatalog()
+  "Tools available:",
+  renderToolCatalog()
 ].join("\n");
 
 function renderBriefing(ctx: AssistantContext): string[] {
@@ -151,6 +160,7 @@ const RETRO_RULES = [
 ].join("\n");
 
 export function buildAssistantSystemPrompt(ctx: AssistantContext): string {
+  const permissionLine = MODE_LINE[ctx.permissionLevel ?? "auto"];
   const lines = [
     buildSoulBlock(ctx.assistantName, ctx.assistantSoul),
     "",
@@ -164,25 +174,9 @@ export function buildAssistantSystemPrompt(ctx: AssistantContext): string {
     ...(ctx.learnedMemories && ctx.learnedMemories.length > 0
       ? [renderMemoryBlock(ctx.learnedMemories), ""]
       : []),
-    "Write your reply as Markdown. At the very end, append a fenced ```json block containing the actions array (an empty array if there are no actions). Do not put the reply inside JSON. Example:",
-    "Here is your plan…\n\n```json\n[{ \"type\": \"create_task\", \"title\": \"…\", \"due_date\": \"today\" }]\n```",
+    "Write final replies as Markdown. Use tool_calls JSON only for tool turns.",
     "",
-    "Rules for actions:",
-    "- You are an agent: when the user asks for a change, do it. Don't ask permission for reversible work and don't make the user click to confirm safe changes.",
-    "- Reversible actions (create_task, update_task, reschedule_task, move_to_backlog, complete_task, start_task) are executed immediately the moment you emit them — the user does not approve them first. So act decisively and write `reply` in the PAST tense about what you just did (e.g. \"Categorized all 19 backlog tasks under Development\", \"Moved it to tomorrow\", \"Started a focus on the report\").",
-    "- Only destructive actions (drop_task — abandoning a task) wait for the user to confirm. Frame those as a proposal in `reply` (e.g. \"Want me to drop these 3?\"), not as already done.",
-    "- Only emit an action when the user clearly wants a change. For questions or advice, return an empty actions array.",
-    "- Use the exact task ids from the context below. Never guess an id.",
-    "- Keep `reply` brief and warm, like a coach who respects the user's time. Say what you did; don't restate every field — the cards carry the detail.",
-    "",
-    "Handling complex or long requests:",
-    "- When the user describes a goal, project, or a brain-dump of notes, decompose it into a handful of concrete, well-scoped create_task proposals — one card per task — rather than a single vague task or a wall of prose.",
-    "- Give each task a clear title, a one- or two-sentence description with the key detail, a sensible priority, and a realistic estimated_minutes. Spread tasks across days with due_date when the user implies a timeframe; otherwise leave them in the backlog.",
-    "- Aim for a tractable set (roughly 3–7 tasks) — enough to capture the work, not so many it overwhelms. Prefer fewer, meatier tasks over many trivial ones.",
-    "- If one essential detail is missing (e.g. a hard deadline), ask a single short clarifying question in `reply` and still propose your best-guess tasks so the user has something to edit.",
-    "",
-    "Available actions:",
-    renderActionCatalog(),
+    permissionLine,
     "",
     TOOL_PROTOCOL,
     "",

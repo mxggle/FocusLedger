@@ -2,6 +2,7 @@ import type { CreateTaskInput, TaskPriority, TaskStatus, UpdateTaskInput } from 
 import type { ChatRole } from "../providers";
 import type { RetrospectiveInsights } from "../../retrospect/types";
 import type { DayBriefing } from "./dayBriefing";
+import type { PermissionLevel, ToolCallRecord } from "./agentTools/types";
 import type { MemoryEntry } from "./memory/types";
 
 export type { ChatRole };
@@ -40,6 +41,8 @@ export type ContextTask = {
   priority: TaskPriority;
   estimatedMinutes: number | null;
   categoryId: string | null;
+  plannedStartTime: string | null;
+  plannedEndTime: string | null;
 };
 
 export type AssistantContext = {
@@ -55,6 +58,7 @@ export type AssistantContext = {
   briefing?: DayBriefing; // deterministic snapshot of today's load
   retro?: RetrospectiveInsights; // present only when there is history to report
   learnedMemories?: MemoryEntry[]; // ranked top-K for this turn (empty/absent → no block)
+  permissionLevel?: PermissionLevel;
 };
 
 /** One proposed change, rendered as a confirm card. `params` is validated. */
@@ -77,6 +81,7 @@ export type ChatMessage = {
   modelContent?: string; // what to send to the model when it differs from `content` (e.g. Plan-mode wrapping); transient, not persisted
   createdAt: string; // ISO
   actions?: ProposedAction[]; // assistant turns only
+  toolCalls?: ToolCallRecord[]; // new tool-calling turns; legacy messages keep actions
   stopped?: boolean; // true when a stream was aborted by the user (transient; not persisted)
 };
 

@@ -3,6 +3,7 @@ import type { AssistantContext, ContextTask } from "./types";
 import type { RetrospectiveInsights } from "../../retrospect/types";
 import type { MemoryEntry } from "./memory/types";
 import { computeDayBriefing } from "./dayBriefing";
+import type { PermissionLevel } from "./agentTools/types";
 
 const BACKLOG_CAP = 30;
 
@@ -18,6 +19,7 @@ export type AssistantStoreSnapshot = {
   assistantName?: string;
   assistantSoul?: string;
   learnedMemories?: MemoryEntry[];
+  permissionLevel?: PermissionLevel;
 };
 
 function toContextTask(task: Task): ContextTask {
@@ -27,7 +29,9 @@ function toContextTask(task: Task): ContextTask {
     status: task.status,
     priority: task.priority,
     estimatedMinutes: task.estimated_minutes,
-    categoryId: task.category_id
+    categoryId: task.category_id,
+    plannedStartTime: task.planned_start_time,
+    plannedEndTime: task.planned_end_time
   };
 }
 
@@ -53,6 +57,7 @@ export function buildAssistantContext(
     ...(insights && insights.hasData ? { retro: insights } : {}),
     ...(snapshot.learnedMemories && snapshot.learnedMemories.length > 0
       ? { learnedMemories: snapshot.learnedMemories }
-      : {})
+      : {}),
+    ...(snapshot.permissionLevel ? { permissionLevel: snapshot.permissionLevel } : {})
   };
 }

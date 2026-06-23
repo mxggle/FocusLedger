@@ -25,23 +25,23 @@ const ctx = makeCtx({
 });
 
 describe("buildAssistantSystemPrompt", () => {
-  it("includes persona, the fenced-actions contract, every action name, and the context", () => {
+  it("includes persona, the tool-call contract, key tools, and the context", () => {
     const prompt = buildAssistantSystemPrompt(ctx);
     expect(prompt).toContain("Yolo");
-    expect(prompt).toContain("```json");
-    expect(prompt).toContain("actions array");
+    expect(prompt).toContain("tool_calls");
     expect(prompt).toContain("create_task");
-    expect(prompt).toContain("reschedule_task");
+    expect(prompt).toContain("update_task");
     expect(prompt).toContain("Write report");
     expect(prompt).toContain("2026-06-18");
     expect(prompt).toContain("t1");
   });
 
-  it("instructs the model to write markdown with a trailing fenced actions block", () => {
+  it("instructs the model to give final answers as markdown, not legacy action JSON", () => {
     const prompt = buildAssistantSystemPrompt(ctx);
     expect(prompt.toLowerCase()).toContain("markdown");
-    expect(prompt).toContain("fenced ```json");
+    expect(prompt).toContain("tool_calls");
     expect(prompt).not.toContain("SINGLE JSON object");
+    expect(prompt).not.toContain("fenced ```json");
   });
 
   it("notes when there are no tasks", () => {
@@ -59,6 +59,26 @@ describe("buildAssistantSystemPrompt", () => {
   it("uses a custom soul verbatim when provided", () => {
     const prompt = buildAssistantSystemPrompt(makeCtx({ assistantSoul: "## Identity\nI am a pirate." }));
     expect(prompt).toContain("I am a pirate.");
+  });
+
+  it("renders planned task times in context", () => {
+    const prompt = buildAssistantSystemPrompt(
+      makeCtx({
+        tasks: [
+          {
+            id: "t1",
+            title: "Write report",
+            status: "todo",
+            priority: "high",
+            estimatedMinutes: 60,
+            categoryId: "c1",
+            plannedStartTime: "09:00",
+            plannedEndTime: "10:00"
+          } as any
+        ]
+      })
+    );
+    expect(prompt).toContain("09:00-10:00");
   });
 });
 
@@ -134,16 +154,18 @@ describe("buildAssistantSystemPrompt — retrospective", () => {
 describe("buildAssistantSystemPrompt — agent loop", () => {
   const ctxTools = makeCtx({ allTasksCount: 12 });
 
-  it("documents the lookup protocol and read tools", () => {
+  it("documents the tool-call protocol and unified tool catalog", () => {
     const prompt = buildAssistantSystemPrompt(ctxTools);
-    expect(prompt).toContain("lookups");
+    expect(prompt).toContain("tool_calls");
     expect(prompt).toContain("search_tasks");
     expect(prompt).toContain("get_calibration");
+    expect(prompt).toContain("update_task");
   });
 
-  it("instructs dedup before creating tasks", () => {
+  it("includes the create_task honesty rule and removes brain-dump decomposition framing", () => {
     const prompt = buildAssistantSystemPrompt(ctxTools);
-    expect(prompt.toLowerCase()).toContain("duplicate");
+    expect(prompt).toContain("create_task is ONLY for genuinely new work");
+    expect(prompt.toLowerCase()).not.toContain("decompose");
   });
 
   it("documents recall for questions about past work", () => {
@@ -154,6 +176,12 @@ describe("buildAssistantSystemPrompt — agent loop", () => {
 
   it("mentions the searchable task count when tasks exist", () => {
     expect(buildAssistantSystemPrompt(ctxTools)).toContain("12");
+  });
+
+  it("renders permission framing from the context", () => {
+    expect(buildAssistantSystemPrompt({ ...ctxTools, permissionLevel: "plan" })).toContain("Permission: PLAN");
+    expect(buildAssistantSystemPrompt({ ...ctxTools, permissionLevel: "ask" })).toContain("Permission: ASK");
+    expect(buildAssistantSystemPrompt({ ...ctxTools, permissionLevel: "auto" })).toContain("Permission: AUTO");
   });
 });
 
