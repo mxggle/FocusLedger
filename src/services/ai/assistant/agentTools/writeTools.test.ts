@@ -115,4 +115,56 @@ describe("write tools", () => {
     const res = await completeTaskTool.execute({ task_id: "ghost" }, d);
     expect(res.ok).toBe(false);
   });
+
+  it("create_task supports backlog, category creation, and planned times (AI-TOOL-08)", async () => {
+    const d = deps([]);
+    const create = vi.fn(async () => ({ ok: true, id: "new1" }));
+    d.store.createTask = create;
+
+    const backlog = await createTaskTool.execute({ title: "Someday", due_date: null }, d);
+    if (backlog.ok) expect(backlog.summary).toContain("in backlog");
+    expect(create).toHaveBeenLastCalledWith(expect.objectContaining({ title: "Someday", due_date: null }));
+
+    const withCategory = await createTaskTool.execute({ title: "Categorized", category: "NewCat" }, d);
+    expect(d.store.ensureCategory).toHaveBeenCalledWith("NewCat");
+    expect(create).toHaveBeenLastCalledWith(expect.objectContaining({ category_id: "c2" }));
+    if (withCategory.ok) expect(withCategory.undo).toEqual({ kind: "delete_task", taskId: "new1" });
+
+    const withTimes = await createTaskTool.execute(
+      { title: "Timed", planned_start_time: "09:00", planned_end_time: "10:00", due_date: "today" },
+      d
+    );
+    expect(create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ planned_start_time: "09:00", planned_end_time: "10:00", due_date: "2026-06-23" })
+    );
+    if (withTimes.ok) expect(withTimes.summary).toContain("for 2026-06-23");
+  });
+
+  it("start_task rejects unknown ids and surfaces a store failure (AI-TOOL-10)", async () => {
+    const unknown = await startTaskTool.execute({ task_id: "ghost" }, deps([]));
+    expect(unknown.ok).toBe(false);
+
+    const d = deps([task({ id: "t1", status: "paused" })]);
+    d.store.startTask = vi.fn(async () => "failed" as const);
+    const failed = await startTaskTool.execute({ task_id: "t1" }, d);
+    expect(failed.ok).toBe(false);
+  });
+
+  it("pause_task reports no running task and omits undo (AI-TOOL-11)", async () => {
+    const d = deps([]);
+    const res = await pauseTaskTool.execute({}, d);
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.summary).toContain("No running task to pause");
+      expect(res.undo).toBeUndefined();
+    }
+  });
+
+  it("complete_task works without a note (AI-TOOL-12)", async () => {
+    const t = task({ id: "t1", status: "doing" });
+    const d = deps([t]);
+    const res = await completeTaskTool.execute({ task_id: "t1" }, d);
+    expect(d.store.completeTask).toHaveBeenCalledWith("t1", undefined);
+    if (res.ok) expect(res.summary).toContain('"Report"');
+  });
 });

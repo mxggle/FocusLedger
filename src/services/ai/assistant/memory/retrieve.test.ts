@@ -47,4 +47,25 @@ describe("rankMemories", () => {
   it("exports a sensible default K", () => {
     expect(MEMORY_INJECT_K).toBe(8);
   });
+
+  it("AI-MEM-08: is deterministic — identical inputs produce identical rankings", () => {
+    const all = [
+      mem({ id: "a", text: "Prefers deep work in the morning", useCount: 2 }),
+      mem({ id: "b", text: "Likes spicy food", useCount: 1 }),
+      mem({ id: "c", text: "Morning routine includes exercise", useCount: 0, pinned: true }),
+      mem({ id: "d", text: "Uses VS Code for frontend work", useCount: 3 })
+    ];
+    const first = rankMemories(all, "plan my morning work block", 5);
+    const second = rankMemories(all, "plan my morning work block", 5);
+    expect(second).toEqual(first);
+  });
+
+  it("AI-MEM-08: breaks score ties stably by preserving input order", () => {
+    const all = [
+      mem({ id: "first", text: "planning task A", useCount: 0 }),
+      mem({ id: "second", text: "planning task B", useCount: 0 })
+    ];
+    const ranked = rankMemories(all, "planning", 5);
+    expect(ranked.map((m) => m.id)).toEqual(["first", "second"]);
+  });
 });

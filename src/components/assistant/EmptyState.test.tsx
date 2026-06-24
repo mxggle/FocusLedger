@@ -32,4 +32,20 @@ describe("AssistantEmptyState", () => {
       "Reschedule what I didn't finish to tomorrow"
     ]);
   });
+
+  it("AI-UI-02: every intent card sends a non-empty, distinct, documented prompt", () => {
+    const onPick = vi.fn();
+    const container = render(<AssistantEmptyState name="Yolo" onPick={onPick} />);
+    const cards = Array.from(container.querySelectorAll("button"));
+    cards.forEach((card) => fireClick(card));
+
+    const prompts = onPick.mock.calls.map((c) => c[0] as string);
+    expect(prompts).toHaveLength(4);
+    expect(prompts.every((prompt) => prompt.trim().length > 0)).toBe(true);
+    expect(new Set(prompts).size).toBe(4);
+    expect(prompts).toContain("Plan my day");
+    expect(prompts).toContain("How is today looking?");
+    expect(prompts.some((prompt) => prompt.startsWith("Break down:"))).toBe(true);
+    expect(prompts.some((prompt) => /reschedule/i.test(prompt))).toBe(true);
+  });
 });

@@ -57,4 +57,24 @@ describe("runMemoryReview", () => {
     await runMemoryReview({ settings, userText: "that is no longer true, please forget it", assistantText: "ok", existing }, d);
     expect(d.repo.archive).toHaveBeenCalledWith("m1", "2026-06-23T12:00:00.000Z");
   });
+
+  it("AI-MEM-07: drops non-JSON model output without throwing or persisting", async () => {
+    const generateChat = vi.fn(async () => "I don't think there's anything to remember here.");
+    const d = deps(generateChat);
+    await expect(
+      runMemoryReview({ settings, userText: "I prefer afternoons always", assistantText: "ok", existing: [] }, d)
+    ).resolves.toBeUndefined();
+    expect(d.repo.add).not.toHaveBeenCalled();
+    expect(d.repo.archive).not.toHaveBeenCalled();
+  });
+
+  it("AI-MEM-07: drops malformed JSON without throwing or persisting", async () => {
+    const generateChat = vi.fn(async () => "[{op: add, kind: preference, text: x}]");
+    const d = deps(generateChat);
+    await expect(
+      runMemoryReview({ settings, userText: "I prefer afternoons always", assistantText: "ok", existing: [] }, d)
+    ).resolves.toBeUndefined();
+    expect(d.repo.add).not.toHaveBeenCalled();
+    expect(d.repo.updateText).not.toHaveBeenCalled();
+  });
 });

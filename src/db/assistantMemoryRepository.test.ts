@@ -50,4 +50,26 @@ describe("assistantMemoryRepository", () => {
     await assistantMemoryRepository.setPinned("m1", true, "2026-06-23T01:00:00.000Z");
     expect(mocks.execute.mock.calls[0][1]).toEqual([1, "2026-06-23T01:00:00.000Z", "m1"]);
   });
+
+  it("AI-MEM-09: restore flips status back to active", async () => {
+    await assistantMemoryRepository.restore("m1", "2026-06-23T01:00:00.000Z");
+    const [sql, params] = mocks.execute.mock.calls[0];
+    expect(sql).toContain("UPDATE assistant_memory SET status = 'active'");
+    expect(params).toEqual(["2026-06-23T01:00:00.000Z", "m1"]);
+  });
+
+  it("AI-MEM-09: getAll selects every row regardless of status", async () => {
+    mocks.select.mockResolvedValue([
+      { id: "m1", kind: "fact", text: "x", pinned: 0, status: "active",
+        source_message_id: null, use_count: 0, last_used_at: null,
+        created_at: "2026-06-23T00:00:00.000Z", updated_at: "2026-06-23T00:00:00.000Z" },
+      { id: "m2", kind: "fact", text: "y", pinned: 1, status: "archived",
+        source_message_id: null, use_count: 0, last_used_at: null,
+        created_at: "2026-06-23T00:00:00.000Z", updated_at: "2026-06-23T00:00:00.000Z" }
+    ]);
+    const result = await assistantMemoryRepository.getAll();
+    expect(mocks.select.mock.calls[0][0]).not.toContain("WHERE");
+    expect(result).toHaveLength(2);
+    expect(result[1].status).toBe("archived");
+  });
 });

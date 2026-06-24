@@ -127,4 +127,37 @@ describe("Composer", () => {
     expect(mockAssistant.clear).toHaveBeenCalledTimes(1);
     expect(mockUi.addToast).toHaveBeenCalled();
   });
+
+  it("AI-UI-03: shows the Enter/Shift+Enter keyboard hints and a live char count", () => {
+    mockAssistant.status = "idle";
+    const container = render(<Composer />);
+    expect(container.textContent).toContain("to send");
+    expect(container.textContent).toContain("for a new line");
+    fireInput(textarea(container), "hi");
+    expect(container.textContent).toContain("· 2");
+  });
+
+  it("AI-UI-03: Enter does not send when the input is empty", () => {
+    mockAssistant.status = "idle";
+    const container = render(<Composer />);
+    fireKey(textarea(container), "Enter");
+    expect(mockAssistant.send).not.toHaveBeenCalled();
+  });
+
+  it("AI-UI-05: Enter does not send a second turn while the assistant is busy", () => {
+    mockAssistant.status = "streaming";
+    const container = render(<Composer />);
+    fireInput(textarea(container), "another");
+    fireKey(textarea(container), "Enter");
+    expect(mockAssistant.send).not.toHaveBeenCalled();
+  });
+
+  it("AI-UI-06: shows a Stop button that calls stop while thinking", () => {
+    mockAssistant.status = "thinking";
+    const container = render(<Composer />);
+    const stop = container.querySelector('[aria-label="Stop"]');
+    expect(stop).not.toBeNull();
+    fireClick(stop!);
+    expect(mockAssistant.stop).toHaveBeenCalledTimes(1);
+  });
 });

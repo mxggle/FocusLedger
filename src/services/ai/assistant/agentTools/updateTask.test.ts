@@ -5,22 +5,22 @@ import type { AgentToolDeps } from "./types";
 
 function task(p: Partial<Task> & { id: string }): Task {
   return {
-    id: p.id,
-    title: p.title ?? "Report",
+    title: "Report",
     description: null,
     category_id: null,
-    status: p.status ?? "todo",
-    priority: p.priority ?? "medium",
+    status: "todo",
+    priority: "medium",
     estimated_minutes: null,
     due_date: null,
     template_id: null,
-    planned_start_time: p.planned_start_time ?? null,
-    planned_end_time: p.planned_end_time ?? null,
+    planned_start_time: null,
+    planned_end_time: null,
     sort_order: null,
     created_at: "x",
-    updated_at: p.updated_at ?? "u0",
+    updated_at: "u0",
     completed_at: null,
-    dropped_at: null
+    dropped_at: null,
+    ...p
   };
 }
 
@@ -71,5 +71,69 @@ describe("update_task tool", () => {
   it("rejects a bad time format", async () => {
     const res = await updateTaskTool.execute({ task_id: "t1", planned_start_time: "9am" }, deps([task({ id: "t1" })]));
     expect(res.ok).toBe(false);
+  });
+
+  it("updates every editable field and captures the prior snapshot (AI-TOOL-09)", async () => {
+    const t = task({
+      id: "t1",
+      title: "Old",
+      description: "old desc",
+      category_id: "c1",
+      priority: "low",
+      estimated_minutes: 30,
+      due_date: "2026-06-23",
+      planned_start_time: "09:00",
+      planned_end_time: "10:00",
+      status: "todo",
+      updated_at: "u0"
+    });
+    const update = vi.fn(async () => ({ ok: true }));
+    const res = await updateTaskTool.execute(
+      {
+        task_id: "t1",
+        title: "New",
+        description: "new desc",
+        category: "Dev",
+        priority: "high",
+        estimated_minutes: 60,
+        due_date: "2026-06-24",
+        planned_start_time: "10:00",
+        planned_end_time: "11:00",
+        status: "doing"
+      },
+      deps([t], update)
+    );
+    expect(res.ok).toBe(true);
+    expect(update).toHaveBeenCalledWith(
+      "t1",
+      expect.objectContaining({
+        title: "New",
+        description: "new desc",
+        category_id: "c1",
+        priority: "high",
+        estimated_minutes: 60,
+        due_date: "2026-06-24",
+        planned_start_time: "10:00",
+        planned_end_time: "11:00",
+        status: "doing"
+      })
+    );
+    if (res.ok) {
+      expect(res.undo).toEqual({
+        kind: "restore_task",
+        taskId: "t1",
+        before: expect.objectContaining({
+          title: "Old",
+          description: "old desc",
+          category_id: "c1",
+          priority: "low",
+          estimated_minutes: 30,
+          due_date: "2026-06-23",
+          planned_start_time: "09:00",
+          planned_end_time: "10:00",
+          status: "todo"
+        })
+      });
+    }
   });
 });

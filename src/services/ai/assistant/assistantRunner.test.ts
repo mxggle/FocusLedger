@@ -154,4 +154,64 @@ describe("runAssistantToolTurn", () => {
     expect(capturedSystem).toContain("Current local time");
     expect(capturedSystem).toContain("22:49");
   });
+
+  it("AI-CTX-02: includes the full local timestamp in the prompt", async () => {
+    const now = "2026-06-23T22:49:13.456+09:00";
+    let capturedSystem = "";
+    const generateChat = vi.fn(async (_settings, input) => {
+      capturedSystem = input.system;
+      return "ok";
+    });
+
+    await runAssistantToolTurn(
+      {
+        settings,
+        snapshot,
+        messages: [{ role: "user", content: "from now" }]
+      },
+      { generateChat, store: storeWith([]), now: () => now }
+    );
+
+    expect(capturedSystem).toContain(`(${now})`);
+  });
+
+  it("AI-RETRO-01: prompt is byte-identical whether retro is absent or hasData=false (model hedges)", async () => {
+    const noDataInsights: RetrospectiveInsights = {
+      windowDays: 30,
+      hasData: false,
+      calibration: { overall: null, byCategory: [] },
+      slips: { items: [], moreCount: 0, blockerThemes: [] },
+      weekly: {
+        thisWeekMinutes: 0,
+        lastWeekMinutes: 0,
+        deltaMinutes: 0,
+        categoryDeltas: [],
+        completedCount: 0,
+        droppedCount: 0
+      }
+    };
+    const capture = async (insights?: RetrospectiveInsights | null) => {
+      let capturedSystem = "";
+      const generateChat = vi.fn(async (_settings, input) => {
+        capturedSystem = input.system;
+        return "ok";
+      });
+      await runAssistantToolTurn(
+        {
+          settings,
+          snapshot,
+          messages: [{ role: "user", content: "how is today?" }],
+          insights
+        },
+        { generateChat, store: storeWith([]), now: () => "2026-06-23T22:49:00.000+09:00" }
+      );
+      return capturedSystem;
+    };
+
+    const withoutRetro = await capture(undefined);
+    const withNoData = await capture(noDataInsights);
+    expect(withNoData).toBe(withoutRetro);
+    expect(withNoData).not.toContain("History & patterns");
+    expect(withNoData).not.toContain("low confidence");
+  });
 });

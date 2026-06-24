@@ -139,6 +139,8 @@ describe("parseAiResponse", () => {
   it("throws on empty responses", () => {
     expect(() => parseAiResponse("openai", { choices: [] })).toThrow(/empty/i);
     expect(() => parseAiResponse("anthropic", {})).toThrow(/empty/i);
+    expect(() => parseAiResponse("gemini", { candidates: [] })).toThrow(/empty/i);
+    expect(() => parseAiResponse("gemini", { candidates: [{ content: { parts: [] } }] })).toThrow(/empty/i);
   });
 });
 
@@ -168,6 +170,7 @@ describe("buildChatRequest", () => {
     expect(req.url).toBe("https://api.anthropic.com/v1/messages");
     expect(req.body.system).toBe("You are a planner.");
     expect(req.body.messages).toEqual(chatInput.messages);
+    expect(req.body.model).toBe("claude-opus-4-8");
     expect(req.headers["x-api-key"]).toBe("test-key");
   });
 
@@ -177,6 +180,11 @@ describe("buildChatRequest", () => {
     const msgs = req.body.messages as Array<{ role: string; content: string }>;
     expect(msgs[0]).toEqual({ role: "system", content: "You are a planner." });
     expect(msgs).toHaveLength(4);
+  });
+
+  it("openai: honors a user model override", () => {
+    const req = buildChatRequest(settings({ aiProvider: "openai", aiModel: "gpt-4o-mini" }), chatInput);
+    expect(req.body.model).toBe("gpt-4o-mini");
   });
 
   it("gemini: assistant role mapped to model, system as instruction", () => {
@@ -224,6 +232,10 @@ describe("buildChatRequest", () => {
       chatInput
     );
     expect(req.url).toBe("http://localhost:11434/v1/chat/completions");
+  });
+
+  it("custom: rejects a chat request without a base URL", () => {
+    expect(() => buildChatRequest(settings({ aiProvider: "custom" }), chatInput)).toThrow(/base URL/i);
   });
 
   it("stream: true adds stream to the body and switches Gemini to the SSE endpoint", () => {

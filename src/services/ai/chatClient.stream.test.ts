@@ -161,6 +161,34 @@ describe("streamChat", () => {
     await expect(streamChat(settings(), chatInput, {})).rejects.toThrow(/api key/i);
   });
 
+  it("throws a rate-limit message on a 429", async () => {
+    fetch.mockResolvedValue({
+      ok: false,
+      status: 429,
+      body: undefined,
+      json: async () => ({})
+    });
+    await expect(streamChat(settings(), chatInput, {})).rejects.toThrow(/rate-limit/i);
+  });
+
+  it("reassembles a delta chunk split across two reads", async () => {
+    const enc = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(enc.encode('data: {"choices":[{"delta":{"content":"Hel'));
+        controller.enqueue(enc.encode('lo"}}]}\n\n'));
+        controller.close();
+      }
+    });
+    fetch.mockResolvedValue(new Response(stream, { status: 200 }));
+
+    const tokens: string[] = [];
+    const result = await streamChat(settings(), chatInput, { onToken: (c) => tokens.push(c) });
+
+    expect(result).toBe("Hello");
+    expect(tokens).toEqual(["Hello"]);
+  });
+
   it("throws when no API key is configured", async () => {
     await expect(
       streamChat(settings({ aiApiKey: "" }), chatInput, {})

@@ -273,3 +273,251 @@ describe("buildAssistantSystemPrompt — learned memory", () => {
     expect(buildAssistantSystemPrompt(makeCtx())).not.toContain("learned about the user over time");
   });
 });
+
+describe("buildAssistantSystemPrompt — context matrix (AI-CTX-*)", () => {
+  it("AI-CTX-01: labels the selected date as the current date the user is viewing", () => {
+    const prompt = buildAssistantSystemPrompt(makeCtx({ today: "2031-01-02" }));
+    expect(prompt).toContain("Current date (the day the user is viewing): 2031-01-02");
+    expect(prompt).not.toMatch(/T\d{2}:\d{2}/);
+  });
+
+  it("AI-CTX-02: includes both HH:mm and the full local timestamp", () => {
+    const now = "2026-06-23T22:49:13.456+09:00";
+    const prompt = buildAssistantSystemPrompt(makeCtx({ currentTime: now } as never));
+    expect(prompt).toContain("Current local time: 22:49");
+    expect(prompt).toContain(`(${now})`);
+  });
+
+  it("AI-CTX-03: renders start-only and end-only planned task times", () => {
+    const prompt = buildAssistantSystemPrompt(
+      makeCtx({
+        tasks: [
+          {
+            id: "t1",
+            title: "Standup",
+            status: "todo",
+            priority: "medium",
+            estimatedMinutes: 15,
+            categoryId: null,
+            plannedStartTime: "09:00",
+            plannedEndTime: null
+          },
+          {
+            id: "t2",
+            title: "Wrap",
+            status: "todo",
+            priority: "low",
+            estimatedMinutes: 10,
+            categoryId: null,
+            plannedStartTime: null,
+            plannedEndTime: "10:00"
+          }
+        ]
+      })
+    );
+    expect(prompt).toContain("09:00-?");
+    expect(prompt).toContain("?-10:00");
+  });
+
+  it("AI-CTX-04: empty day says no tasks scheduled and renders a deterministic briefing", () => {
+    const base = makeCtx({
+      tasks: [],
+      briefing: {
+        scheduledMinutes: 0,
+        targetMinutes: 240,
+        overcommitMinutes: 0,
+        openCount: 0,
+        doneCount: 0,
+        backlogCount: 4,
+        status: "empty"
+      }
+    });
+    const prompt = buildAssistantSystemPrompt(base);
+    expect(prompt).toContain("Today's tasks: none — the user has no tasks scheduled today.");
+    expect(prompt).toContain("Today at a glance");
+    expect(prompt).toContain("nothing scheduled yet");
+    expect(buildAssistantSystemPrompt(base)).toBe(prompt);
+  });
+
+  it("AI-CTX-05: renders the backlog slice with titles and schedule metadata", () => {
+    const prompt = buildAssistantSystemPrompt(
+      makeCtx({
+        backlog: [
+          {
+            id: "b1",
+            title: "Trim inbox",
+            status: "todo",
+            priority: "low",
+            estimatedMinutes: 20,
+            categoryId: null,
+            plannedStartTime: "14:00",
+            plannedEndTime: "14:30"
+          }
+        ]
+      })
+    );
+    expect(prompt).toContain("Backlog (unscheduled):");
+    expect(prompt).toContain("Trim inbox");
+    expect(prompt).toContain("14:00-14:30");
+  });
+
+  it("AI-CTX-08: injects each ranked learned memory with its kind tag", () => {
+    const prompt = buildAssistantSystemPrompt(
+      makeCtx({
+        learnedMemories: [
+          {
+            id: "m1",
+            kind: "preference",
+            text: "Admin on Friday afternoons",
+            pinned: false,
+            status: "active",
+            sourceMessageId: null,
+            useCount: 0,
+            lastUsedAt: null,
+            createdAt: "2026-06-01T00:00:00.000Z",
+            updatedAt: "2026-06-01T00:00:00.000Z"
+          },
+          {
+            id: "m2",
+            kind: "workstyle",
+            text: "Deep work before noon",
+            pinned: true,
+            status: "active",
+            sourceMessageId: null,
+            useCount: 0,
+            lastUsedAt: null,
+            createdAt: "2026-06-02T00:00:00.000Z",
+            updatedAt: "2026-06-02T00:00:00.000Z"
+          }
+        ]
+      })
+    );
+    expect(prompt).toContain("(preference) Admin on Friday afternoons");
+    expect(prompt).toContain("(workstyle) Deep work before noon");
+  });
+
+  it("AI-CTX-10: forbids internal ids and tool names in final replies", () => {
+    const prompt = buildAssistantSystemPrompt(makeCtx());
+    expect(prompt).toContain("Never show internal task ids");
+    expect(prompt).toContain("tool names");
+  });
+});
+
+describe("buildAssistantSystemPrompt — retrospective matrix (AI-RETRO-*)", () => {
+  const retroBase = makeCtx({ today: "2026-06-19" });
+
+  it("AI-RETRO-02: includes the overall calibration ratio (deterministic)", () => {
+    const overall: RetrospectiveInsights = {
+      windowDays: 30,
+      hasData: true,
+      calibration: {
+        overall: {
+          scope: "overall",
+          estimatedMinutes: 100,
+          actualMinutes: 150,
+          ratio: 1.5,
+          sampleSize: 8,
+          confidence: "ok"
+        },
+        byCategory: []
+      },
+      slips: { items: [], moreCount: 0, blockerThemes: [] },
+      weekly: {
+        thisWeekMinutes: 0,
+        lastWeekMinutes: 0,
+        deltaMinutes: 0,
+        categoryDeltas: [],
+        completedCount: 0,
+        droppedCount: 0
+      }
+    };
+    const prompt = buildAssistantSystemPrompt({ ...retroBase, retro: overall });
+    expect(prompt).toContain("History & patterns");
+    expect(prompt).toMatch(/overall: actual is 150% of estimate \(ratio 1\.50, 8 tasks\)/);
+    expect(buildAssistantSystemPrompt({ ...retroBase, retro: overall })).toBe(prompt);
+  });
+
+  it("AI-RETRO-03: includes a category-specific calibration ratio distinct from overall", () => {
+    const withCat: RetrospectiveInsights = {
+      windowDays: 30,
+      hasData: true,
+      calibration: {
+        overall: {
+          scope: "overall",
+          estimatedMinutes: 100,
+          actualMinutes: 150,
+          ratio: 1.5,
+          sampleSize: 8,
+          confidence: "ok"
+        },
+        byCategory: [
+          {
+            scope: "Japanese",
+            estimatedMinutes: 40,
+            actualMinutes: 100,
+            ratio: 2.5,
+            sampleSize: 5,
+            confidence: "ok"
+          }
+        ]
+      },
+      slips: { items: [], moreCount: 0, blockerThemes: [] },
+      weekly: {
+        thisWeekMinutes: 0,
+        lastWeekMinutes: 0,
+        deltaMinutes: 0,
+        categoryDeltas: [],
+        completedCount: 0,
+        droppedCount: 0
+      }
+    };
+    const prompt = buildAssistantSystemPrompt({ ...retroBase, retro: withCat });
+    expect(prompt).toMatch(/Japanese: actual is 250% of estimate \(ratio 2\.50, 5 tasks\)/);
+  });
+
+  it("AI-RETRO-05: surfaces slips and recurring blocker themes", () => {
+    const slipsInsights: RetrospectiveInsights = {
+      windowDays: 30,
+      hasData: true,
+      calibration: { overall: null, byCategory: [] },
+      slips: {
+        items: [{ taskId: "a", title: "Pay invoice", kind: "overdue", ageDays: 9 }],
+        moreCount: 2,
+        blockerThemes: [{ keyword: "design", count: 3 }]
+      },
+      weekly: {
+        thisWeekMinutes: 0,
+        lastWeekMinutes: 0,
+        deltaMinutes: 0,
+        categoryDeltas: [],
+        completedCount: 0,
+        droppedCount: 0
+      }
+    };
+    const prompt = buildAssistantSystemPrompt({ ...retroBase, retro: slipsInsights });
+    expect(prompt).toContain("Slips (stuck or abandoned work):");
+    expect(prompt).toContain('"Pay invoice" — overdue, 9d old');
+    expect(prompt).toContain("and 2 more");
+    expect(prompt).toContain("Recurring blockers: design (3)");
+  });
+
+  it("AI-RETRO-06: renders the weekly review with minutes, completed, dropped, and category deltas", () => {
+    const weeklyInsights: RetrospectiveInsights = {
+      windowDays: 30,
+      hasData: true,
+      calibration: { overall: null, byCategory: [] },
+      slips: { items: [], moreCount: 0, blockerThemes: [] },
+      weekly: {
+        thisWeekMinutes: 600,
+        lastWeekMinutes: 480,
+        deltaMinutes: 120,
+        categoryDeltas: [{ category: "Deep Work", thisWeekMinutes: 300, lastWeekMinutes: 180, deltaMinutes: 120 }],
+        completedCount: 7,
+        droppedCount: 1
+      }
+    };
+    const prompt = buildAssistantSystemPrompt({ ...retroBase, retro: weeklyInsights });
+    expect(prompt).toContain("This week vs last week: 600m vs 480m (+120m), completed 7, dropped 1");
+    expect(prompt).toContain("• Deep Work: 300m (+120m)");
+  });
+});

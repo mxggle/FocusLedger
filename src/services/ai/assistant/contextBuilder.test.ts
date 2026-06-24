@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildAssistantContext, type AssistantStoreSnapshot } from "./contextBuilder";
 import type { Category, Task } from "../../../types";
 import type { RetrospectiveInsights } from "../../retrospect/types";
+import type { MemoryEntry } from "./memory/types";
 
 function task(overrides: Partial<Task>): Task {
   return {
@@ -100,6 +101,26 @@ describe("buildAssistantContext", () => {
     );
     expect(buildAssistantContext({ ...snapshot, profile: "   " }).profile).toBeUndefined();
     expect(buildAssistantContext(snapshot).profile).toBeUndefined();
+  });
+
+  it("AI-CTX-08: passes learned memories through when present and omits when empty", () => {
+    const memories: MemoryEntry[] = [
+      {
+        id: "m1",
+        kind: "preference",
+        text: "Admin on Fridays",
+        pinned: false,
+        status: "active",
+        sourceMessageId: null,
+        useCount: 0,
+        lastUsedAt: null,
+        createdAt: "2026-06-01T00:00:00.000Z",
+        updatedAt: "2026-06-01T00:00:00.000Z"
+      }
+    ];
+    expect(buildAssistantContext({ ...snapshot, learnedMemories: memories }).learnedMemories).toBe(memories);
+    expect(buildAssistantContext({ ...snapshot, learnedMemories: [] }).learnedMemories).toBeUndefined();
+    expect(buildAssistantContext(snapshot).learnedMemories).toBeUndefined();
   });
 
   it("threads assistantName, assistantSoul, and an all-task index", () => {

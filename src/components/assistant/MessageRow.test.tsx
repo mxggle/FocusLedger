@@ -140,6 +140,36 @@ describe("MessageRow — assistant", () => {
     expect(mockUi.addToast).toHaveBeenCalled();
   });
 
+  it("AI-UI-07: copied reply is sanitized — no internal task ids leak to the clipboard", async () => {
+    const taskId = "task-aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+    const originalAllTasks = mockTaskStore.allTasks;
+    mockTaskStore.allTasks = [{ ...mockTaskStore.allTasks[0], id: taskId, title: "Write launch deck" }];
+    const message = assistantMessage({
+      content: `I moved "Write launch deck" [${taskId}] to 09:30.`,
+      toolCalls: [
+        {
+          id: "tc1",
+          name: "update_task",
+          args: { task_id: taskId, planned_start_time: "09:30" },
+          category: "write",
+          destructive: false,
+          summary: "Reschedule Write launch deck",
+          status: "executed",
+          undo: { kind: "restore_task", taskId, before: { title: "Write launch deck" } as never }
+        }
+      ]
+    });
+    mockAssistant.messages = [message];
+    const container = render(<MessageRow message={message} isStreaming={false} />);
+    fireClick(byLabel(container, "Copy"));
+    await flush();
+    const copied = writeText.mock.calls.at(-1)?.[0] as string;
+    expect(copied).toContain("Write launch deck");
+    expect(copied).not.toContain(taskId);
+    expect(copied).not.toMatch(/\[(?:task[_-]?)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\]/i);
+    mockTaskStore.allTasks = originalAllTasks;
+  });
+
   it("calls regenerateLast when Regenerate is clicked", () => {
     const message = assistantMessage();
     mockAssistant.messages = [message];

@@ -32,4 +32,14 @@ describe("buildSoulBlock", () => {
     expect(block).toContain("Use task ids only inside tool calls");
     expect(block).not.toContain("Reference existing tasks by the id shown");
   });
+
+  it("AI-CTX-07: a custom Soul replaces the default body but keeps the product guardrails", () => {
+    const block = buildSoulBlock("Hermes", "## Identity\nI am a blunt coach.");
+    expect(block).toContain("I am a blunt coach.");
+    expect(block).not.toContain(DEFAULT_SOUL);
+    expect(block.toLowerCase()).toContain("applied immediately");
+    expect(block.toLowerCase()).toContain("destructive");
+    expect(block).toContain("Use task ids only inside tool calls");
+    expect(block).toContain("Hermes");
+  });
 });

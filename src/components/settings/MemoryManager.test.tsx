@@ -55,4 +55,24 @@ describe("MemoryManager", () => {
     await flush();
     expect(c.textContent).toMatch(/hasn't learned anything/i);
   });
+
+  it("AI-MEM-09: pins a memory and persists via setPinned", async () => {
+    repo.getAll.mockResolvedValue([entry({ id: "a", text: "Prefers mornings" })]);
+    const c = render(<MemoryManager />);
+    await flush();
+    await flush();
+    fireClick(findButton(c, /pin/i));
+    await flush();
+    expect(repo.setPinned).toHaveBeenCalledWith("a", true, expect.any(String));
+  });
+
+  it("AI-MEM-09: restores a forgotten (archived) memory and persists via restore", async () => {
+    repo.getAll.mockResolvedValue([entry({ id: "a", text: "Old project", status: "archived" })]);
+    const c = render(<MemoryManager />);
+    await flush();
+    await flush();
+    fireClick(findButton(c, /restore/i));
+    await flush();
+    expect(repo.restore).toHaveBeenCalledWith("a", expect.any(String));
+  });
 });

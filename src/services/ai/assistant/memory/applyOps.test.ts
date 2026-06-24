@@ -56,4 +56,22 @@ describe("applyMemoryOps", () => {
     const { writes } = applyMemoryOps([], [{ op: "archive", id: "ghost" }], NOW, makeId);
     expect(writes).toEqual([]);
   });
+
+  it("AI-MEM-05: resolves a contradiction by archiving the outdated memory and adding the corrected one", () => {
+    counter = 0;
+    const existing = [mem({ id: "m1", text: "Prefers mornings", useCount: 1 })];
+    const { writes } = applyMemoryOps(
+      existing,
+      [
+        { op: "archive", id: "m1" },
+        { op: "add", kind: "preference", text: "Prefers afternoons" }
+      ],
+      NOW,
+      makeId
+    );
+    expect(writes).toEqual([
+      { kind: "archive", id: "m1", updatedAt: NOW },
+      { kind: "add", entry: expect.objectContaining({ id: "gen0", text: "Prefers afternoons", kind: "preference" }) }
+    ]);
+  });
 });
