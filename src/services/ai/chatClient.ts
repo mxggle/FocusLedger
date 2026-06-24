@@ -58,7 +58,8 @@ export async function generateChat(
     throw new Error(detail ?? `The AI provider returned an error (HTTP ${response.status})`);
   }
 
-  return parseAiResponse(settings.aiProvider, payload);
+  const { text } = parseAiResponse(settings.aiProvider, payload);
+  return text;
 }
 
 function isAbortError(error: unknown): boolean {
@@ -154,7 +155,8 @@ export async function streamChat(
   if (!body || typeof body.getReader !== "function") {
     // Fallback: no usable stream — read the whole body once and emit it.
     const text = await response.text();
-    const full = parseAiResponse(settings.aiProvider, JSON.parse(text));
+    const parsed = parseAiResponse(settings.aiProvider, JSON.parse(text));
+    const full = parsed.text;
     cb.onToken?.(full);
     return full;
   }

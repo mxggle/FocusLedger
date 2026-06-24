@@ -53,5 +53,6 @@ export async function generateText(settings: AiSettings, input: GenerateInput): 
     throw new Error(detail ?? `The AI provider returned an error (HTTP ${response.status})`);
   }
 
-  return parseAiResponse(settings.aiProvider, payload);
+  const { text } = parseAiResponse(settings.aiProvider, payload);
+  return text;
 }

@@ -1,4 +1,5 @@
 import type { AiProvider, AppSettings } from "../../types";
+import type { ParsedToolCall } from "./assistant/responseParser";
 
 export type AiRequest = {
   url: string;
@@ -159,7 +160,20 @@ function buildOpenAiCompatibleChatRequest(
         ...input.messages
       ],
       ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
-      ...(input.stream ? { stream: true } : {})
+      ...(input.stream ? { stream: true } : {}),
+      ...(input.tools && input.tools.length > 0
+        ? {
+            tools: input.tools.map((t) => ({
+              type: "function",
+              function: {
+                name: t.name,
+                description: t.description,
+                parameters: t.parameters ?? { type: "object", properties: {} }
+              }
+            })),
+            tool_choice: "auto"
+          }
+        : {})
     }
   };
 }
@@ -180,7 +194,16 @@ export function buildChatRequest(settings: AiSettings, input: ChatInput): AiRequ
           system: input.system,
           messages: input.messages,
           ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
-          ...(input.stream ? { stream: true } : {})
+          ...(input.stream ? { stream: true } : {}),
+          ...(input.tools && input.tools.length > 0
+            ? {
+                tools: input.tools.map((t) => ({
+                  name: t.name,
+                  description: t.description,
+                  input_schema: t.parameters ?? { type: "object", properties: {} }
+                }))
+              }
+            : {})
         }
       };
     case "openai":
@@ -230,11 +253,23 @@ export function buildChatRequest(settings: AiSettings, input: ChatInput): AiRequ
 }
 
 type AnthropicResponse = {
-  content?: Array<{ type: string; text?: string }>;
+  content?: Array<{
+    type: string;
+    text?: string;
+    name?: string;
+    input?: Record<string, unknown>;
+  }>;
 };
 
 type OpenAiResponse = {
-  choices?: Array<{ message?: { content?: string | null } }>;
+  choices?: Array<{
+    message?: {
+      content?: string | null;
+      tool_calls?: Array<{
+        function?: { name?: string; arguments?: string };
+      }>;
+    };
+  }>;
 };
 
 type GeminiResponse = {
@@ -248,45 +283,72 @@ type GeminiResponse = {
   }>;
 };
 
-export function parseAiResponse(provider: AiProvider, payload: unknown): string {
+export function parseAiResponse(
+  provider: AiProvider,
+  payload: unknown
+): { text: string; toolCalls: ParsedToolCall[] } {
   let text = "";
+  const toolCalls: ParsedToolCall[] = [];
 
   switch (provider) {
     case "anthropic": {
       const response = payload as AnthropicResponse;
-      text = (response.content ?? [])
-        .filter((block) => block.type === "text")
-        .map((block) => block.text ?? "")
+      const blocks = response.content ?? [];
+      text = blocks
+        .filter((b) => b.type === "text")
+        .map((b) => b.text ?? "")
         .join("");
+      for (const b of blocks) {
+        if (b.type === "tool_use" && typeof b.name === "string") {
+          toolCalls.push({ name: b.name, args: b.input ?? {} });
+        }
+      }
       break;
     }
     case "openai":
     case "custom": {
       const response = payload as OpenAiResponse;
-      text = response.choices?.[0]?.message?.content ?? "";
+      const msg = response.choices?.[0]?.message;
+      text = msg?.content ?? "";
+      const calls = msg?.tool_calls;
+      if (Array.isArray(calls)) {
+        for (const c of calls) {
+          if (typeof c?.function?.name === "string") {
+            let args: Record<string, unknown> = {};
+            try {
+              args = c.function.arguments ? JSON.parse(c.function.arguments) : {};
+            } catch {
+              args = {};
+            }
+            toolCalls.push({ name: c.function.name, args });
+          }
+        }
+      }
       break;
     }
     case "gemini": {
       const response = payload as GeminiResponse;
       const parts = response.candidates?.[0]?.content?.parts ?? [];
-      const toolCalls = parts
-        .map((part) => part.functionCall)
-        .filter((call): call is { name: string; args?: Record<string, unknown> } => typeof call?.name === "string")
-        .map((call) => ({ name: call.name, args: call.args ?? {} }));
-      if (toolCalls.length > 0) {
-        text = JSON.stringify({ tool_calls: toolCalls });
+      const calls = parts
+        .map((p) => p.functionCall)
+        .filter(
+          (c): c is { name: string; args?: Record<string, unknown> } => typeof c?.name === "string"
+        )
+        .map((c) => ({ name: c.name, args: c.args ?? {} }));
+      if (calls.length > 0) {
+        toolCalls.push(...calls);
       } else {
-        text = parts.map((part) => part.text ?? "").join("");
+        text = parts.map((p) => p.text ?? "").join("");
       }
       break;
     }
   }
 
   const trimmed = text.trim();
-  if (trimmed.length === 0) {
+  if (trimmed.length === 0 && toolCalls.length === 0) {
     throw new Error("The AI provider returned an empty response");
   }
-  return trimmed;
+  return { text: trimmed, toolCalls };
 }
 
 /** Pulls a human-readable message out of a provider error payload, if any. */

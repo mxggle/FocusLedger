@@ -12,20 +12,30 @@ import {
 
 describe("provider payload fixtures", () => {
   it("anthropic text payload parses to the reply text", () => {
-    expect(parseAiResponse("anthropic", ANTHROPIC_TEXT_PAYLOAD)).toBe("Here is your plan for the day.");
+    expect(parseAiResponse("anthropic", ANTHROPIC_TEXT_PAYLOAD)).toEqual({
+      text: "Here is your plan for the day.",
+      toolCalls: []
+    });
   });
 
   it("openai text payload parses to the reply text", () => {
-    expect(parseAiResponse("openai", OPENAI_TEXT_PAYLOAD)).toBe("Here is your plan for the day.");
+    expect(parseAiResponse("openai", OPENAI_TEXT_PAYLOAD)).toEqual({
+      text: "Here is your plan for the day.",
+      toolCalls: []
+    });
   });
 
   it("gemini text payload parses to the reply text", () => {
-    expect(parseAiResponse("gemini", GEMINI_TEXT_PAYLOAD)).toBe("Here is your plan for the day.");
+    expect(parseAiResponse("gemini", GEMINI_TEXT_PAYLOAD)).toEqual({
+      text: "Here is your plan for the day.",
+      toolCalls: []
+    });
   });
 
-  it("gemini functionCall payload converts to provider-neutral tool-call JSON", () => {
-    expect(JSON.parse(parseAiResponse("gemini", GEMINI_FUNCTION_CALL_PAYLOAD))).toEqual({
-      tool_calls: [
+  it("gemini functionCall payload converts to structured tool calls", () => {
+    expect(parseAiResponse("gemini", GEMINI_FUNCTION_CALL_PAYLOAD)).toEqual({
+      text: "",
+      toolCalls: [
         { name: "list_tasks", args: { scope: "today" } },
         { name: "update_task", args: { task_id: "task-1", planned_start_time: "09:30" } }
       ]
