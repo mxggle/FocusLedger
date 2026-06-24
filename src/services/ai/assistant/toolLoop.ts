@@ -17,9 +17,10 @@ export type ToolLoopInput = {
   level: PermissionLevel;
   deps: AgentToolDeps;
   onStep?: (label: string) => void;
+  signal?: AbortSignal;
 };
 
-export type ToolLoopDeps = { generateChat: (settings: AiSettings, input: ChatInput) => Promise<string> };
+export type ToolLoopDeps = { generateChat: (settings: AiSettings, input: ChatInput, signal?: AbortSignal) => Promise<string> };
 
 export type ToolLoopResult = { reply: string; toolCalls: ToolCallRecord[] };
 
@@ -38,12 +39,15 @@ export async function runToolLoop(
   const records: ToolCallRecord[] = [];
 
   for (let step = 0; step < MAX_STEPS; step++) {
+    if (input.signal?.aborted) {
+      return { reply: "", toolCalls: records };
+    }
     const raw = await deps.generateChat(settings, {
       system: input.system,
       messages,
       temperature: TOOL_TEMPERATURE,
       tools: nativeToolSpecs()
-    });
+    }, input.signal);
     const calls = parseToolCalls(raw);
     if (!calls) return { reply: raw.trim(), toolCalls: records };
 
@@ -116,7 +120,7 @@ export async function runToolLoop(
       system: input.system,
       messages: [...messages, { role: "user", content: "Give your final answer now (plain text, no tool calls)." }],
       temperature: TOOL_TEMPERATURE
-    })
+    }, input.signal)
     .catch(() => "");
   return { reply: finalRaw.trim(), toolCalls: records };
 }

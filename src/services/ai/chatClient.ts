@@ -15,7 +15,11 @@ import type { AiProvider } from "../../types";
  * call (no streaming). Goes through the Tauri HTTP plugin so provider APIs that
  * reject browser-origin requests still work.
  */
-export async function generateChat(settings: AiSettings, input: ChatInput): Promise<string> {
+export async function generateChat(
+  settings: AiSettings,
+  input: ChatInput,
+  signal?: AbortSignal
+): Promise<string> {
   if (!hasAiKey(settings)) {
     throw new Error("Add an API key in Settings → AI to use the assistant");
   }
@@ -27,7 +31,8 @@ export async function generateChat(settings: AiSettings, input: ChatInput): Prom
     response = await fetch(request.url, {
       method: "POST",
       headers: request.headers,
-      body: JSON.stringify(request.body)
+      body: JSON.stringify(request.body),
+      signal
     });
   } catch (error) {
     if (isAbortError(error)) throw error;

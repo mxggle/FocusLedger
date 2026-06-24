@@ -411,7 +411,8 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
         messages: toChatTurns(history),
         insights: store.getState().insights,
         history: store.getState().history ?? [],
-        onStep
+        onStep,
+        signal
       },
       { store: adapter }
     );

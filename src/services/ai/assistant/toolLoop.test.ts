@@ -151,6 +151,24 @@ describe("runToolLoop", () => {
     );
   });
 
+  it("aborts before starting when the signal is already aborted", async () => {
+    const generateChat = vi.fn(async () => "Done.");
+    const controller = new AbortController();
+    controller.abort();
+    const res = await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "x" }],
+        level: "auto",
+        deps: depsWith(),
+        signal: controller.signal
+      },
+      { generateChat }
+    );
+    expect(generateChat).not.toHaveBeenCalled();
+    expect(res.reply.trim()).toBe("");
+  });
+
   it("regression: bulk schedule shifts update existing tasks instead of creating a junk task", async () => {
     const update = vi.fn(async () => ({ ok: true }));
     const create = vi.fn(async () => ({ ok: true, id: "junk" }));

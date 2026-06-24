@@ -14,6 +14,7 @@ export type RunAssistantTurnInput = {
   insights?: RetrospectiveInsights | null; // pre-computed retrospective facts
   history?: RecallEntry[]; // trailing window of logged reflections, for the recall tool
   onStep?: (label: string) => void; // live status as the tool loop runs
+  signal?: AbortSignal;
 };
 
 export type AssistantToolRunnerDeps = Partial<ToolLoopDeps> & {
@@ -59,7 +60,8 @@ export async function runAssistantToolTurn(
         history: input.history ?? [],
         now: () => turnTime
       },
-      onStep: input.onStep
+      onStep: input.onStep,
+      signal: input.signal
     },
     { generateChat: deps.generateChat ?? defaultGenerateChat }
   );
