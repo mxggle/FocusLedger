@@ -14,6 +14,8 @@ export type RunAssistantTurnInput = {
   insights?: RetrospectiveInsights | null; // pre-computed retrospective facts
   history?: RecallEntry[]; // trailing window of logged reflections, for the recall tool
   onStep?: (label: string) => void; // live status as the tool loop runs
+  onToken?: (chunk: string) => void; // live final-answer text deltas
+  onStreamStep?: (stepIndex: number, kind: "reasoning" | "final") => void; // phase signaling
   signal?: AbortSignal;
 };
 
@@ -61,8 +63,10 @@ export async function runAssistantToolTurn(
         now: () => turnTime
       },
       onStep: input.onStep,
+      onToken: input.onToken,
+      onStreamStep: input.onStreamStep,
       signal: input.signal
     },
-    { generateChat: deps.generateChat ?? defaultGenerateChat }
+    { generateChat: deps.generateChat ?? defaultGenerateChat, generateChatV2: deps.generateChatV2 }
   );
 }

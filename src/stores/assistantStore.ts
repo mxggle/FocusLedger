@@ -9,6 +9,7 @@ import { hasDrifted, revertToolCall as revertExecutedToolCall } from "../service
 import { toolByName } from "../services/ai/assistant/agentTools/registry";
 import type { ToolCallRecord } from "../services/ai/assistant/agentTools/types";
 import { runAssistantToolTurn } from "../services/ai/assistant/assistantRunner";
+import { streamChatV2 } from "../services/ai/chatClient";
 import { loadRecallEntries, type RecallEntry } from "../services/ai/assistant/recallHistory";
 import { buildAssistantContext, type AssistantStoreSnapshot } from "../services/ai/assistant/contextBuilder";
 import type { ChatMessage } from "../services/ai/assistant/types";
@@ -402,6 +403,57 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
 
   const onStep = (label: string) => store.setState((state) => ({ steps: [...state.steps, label] }));
 
+  // Live-streaming placeholder for the final assistant answer. Created on the
+  // first final-answer token (optimistically) and confirmed by onStreamStep
+  // "final"; discarded if a step turns out to be tool reasoning ("reasoning"),
+  // so tool-step text never leaks into the assistant bubble.
+  let streamingId: string | null = null;
+
+  function beginStreaming(): string {
+    const id = createId("msg");
+    streamingId = id;
+    store.setState((state) => ({
+      messages: [
+        ...state.messages,
+        { id, role: "assistant", content: "", createdAt: new Date().toISOString() }
+      ],
+      status: "streaming",
+      streamingMessageId: id
+    }));
+    return id;
+  }
+
+  const onToken = (chunk: string) => {
+    if (signal.aborted) return;
+    const id = streamingId ?? beginStreaming();
+    store.setState((state) => ({
+      messages: state.messages.map((m) => (m.id === id ? { ...m, content: m.content + chunk } : m))
+    }));
+  };
+
+  const onStreamStep = (_stepIndex: number, kind: "reasoning" | "final") => {
+    if (signal.aborted) return;
+    if (kind === "reasoning") {
+      // A tool step completed — any optimistically-created placeholder held
+      // tool-step text (e.g. the {tool_calls:...} JSON from the fallback path),
+      // not the final answer. Discard it and drop back to the folded reasoning
+      // view while the loop continues.
+      if (streamingId) {
+        const id = streamingId;
+        streamingId = null;
+        store.setState((state) => ({
+          messages: state.messages.filter((m) => m.id !== id),
+          status: "thinking",
+          streamingMessageId: null
+        }));
+      }
+    } else if (!streamingId) {
+      // Final-answer phase with no tokens emitted yet (e.g. an empty final) —
+      // create the placeholder so finalization can find it.
+      beginStreaming();
+    }
+  };
+
   try {
     const adapter = createAgentTaskStore();
     const result = await runAssistantToolTurn(
@@ -412,13 +464,22 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
         insights: store.getState().insights,
         history: store.getState().history ?? [],
         onStep,
+        onToken,
+        onStreamStep,
         signal
       },
-      { store: adapter }
+      { store: adapter, generateChatV2: streamChatV2 }
     );
 
     if (signal.aborted || currentAbort !== controller) {
-      store.setState({ status: "idle", streamingMessageId: null, steps: [] });
+      // Abort: drop any in-progress streaming placeholder; no assistant message.
+      const id = streamingId;
+      store.setState((state) => ({
+        messages: id ? state.messages.filter((m) => m.id !== id) : state.messages,
+        status: "idle",
+        streamingMessageId: null,
+        steps: []
+      }));
       if (currentAbort === controller) currentAbort = null;
       return;
     }
@@ -427,31 +488,63 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
       await adapter.refresh();
     }
 
-    const msg: ChatMessage = {
-      id: createId("msg"),
-      role: "assistant",
-      content: result.reply,
-      createdAt: new Date().toISOString(),
-      toolCalls: result.toolCalls
-    };
-    store.setState((state) => ({
-      messages: [...state.messages, msg],
-      status: "idle",
-      streamingMessageId: null,
-      steps: []
-    }));
-    void assistantMessageRepository.append(msg).catch(() => {});
-    if (result.reply.trim().length > 0) {
-      scheduleMemoryReview(lastUserText, result.reply);
+    const finalContent = result.reply;
+    if (streamingId) {
+      // Finalize the streaming placeholder in place with the authoritative reply.
+      const id = streamingId;
+      store.setState((state) => ({
+        messages: state.messages.map((m) =>
+          m.id === id
+            ? { ...m, content: finalContent.length > 0 ? finalContent : m.content, toolCalls: result.toolCalls }
+            : m
+        ),
+        status: "idle",
+        streamingMessageId: null,
+        steps: []
+      }));
+      const finalized = store.getState().messages.find((m) => m.id === id);
+      if (finalized) void assistantMessageRepository.append(finalized).catch(() => {});
+    } else {
+      // No streaming happened (text-fallback / no tokens) — append the assistant message.
+      const msg: ChatMessage = {
+        id: createId("msg"),
+        role: "assistant",
+        content: finalContent,
+        createdAt: new Date().toISOString(),
+        toolCalls: result.toolCalls
+      };
+      store.setState((state) => ({
+        messages: [...state.messages, msg],
+        status: "idle",
+        streamingMessageId: null,
+        steps: []
+      }));
+      void assistantMessageRepository.append(msg).catch(() => {});
+    }
+    if (finalContent.trim().length > 0) {
+      scheduleMemoryReview(lastUserText, finalContent);
     }
     currentAbort = null;
   } catch (error) {
     if (isAbortError(error) || signal.aborted || currentAbort !== controller) {
-      store.setState({ status: "idle", streamingMessageId: null, steps: [] });
+      const id = streamingId;
+      store.setState((state) => ({
+        messages: id ? state.messages.filter((m) => m.id !== id) : state.messages,
+        status: "idle",
+        streamingMessageId: null,
+        steps: []
+      }));
       if (currentAbort === controller) currentAbort = null;
     } else {
       const message = error instanceof Error ? error.message : "The assistant ran into a problem";
-      store.setState({ status: "error", error: message, steps: [], streamingMessageId: null });
+      const id = streamingId;
+      store.setState((state) => ({
+        messages: id ? state.messages.filter((m) => m.id !== id) : state.messages,
+        status: "error",
+        error: message,
+        steps: [],
+        streamingMessageId: null
+      }));
       useUiStore.getState().addToast({ kind: "error", title: "Assistant error", description: message });
       currentAbort = null;
     }

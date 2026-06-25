@@ -17,6 +17,8 @@ export type ToolLoopInput = {
   level: PermissionLevel;
   deps: AgentToolDeps;
   onStep?: (label: string) => void;
+  onToken?: (chunk: string) => void;
+  onStreamStep?: (stepIndex: number, kind: "reasoning" | "final") => void;
   signal?: AbortSignal;
 };
 
@@ -25,7 +27,7 @@ export type ToolLoopDeps = {
   generateChatV2?: (
     settings: AiSettings,
     input: ChatInput,
-    signal?: AbortSignal
+    cb: { onToken?: (chunk: string) => void; signal?: AbortSignal }
   ) => Promise<{ text: string; toolCalls: ParsedToolCall[] }>;
 };
 
@@ -58,7 +60,10 @@ export async function runToolLoop(
     let raw: string;
     let nativeCalls: ParsedToolCall[] | null = null;
     if (deps.generateChatV2) {
-      const { text, toolCalls } = await deps.generateChatV2(settings, genInput, input.signal);
+      const { text, toolCalls } = await deps.generateChatV2(settings, genInput, {
+        onToken: input.onToken,
+        signal: input.signal
+      });
       raw = text;
       nativeCalls = toolCalls && toolCalls.length > 0 ? toolCalls : null;
     } else {
@@ -67,7 +72,11 @@ export async function runToolLoop(
     }
 
     const calls = nativeCalls ?? parseToolCalls(raw);
-    if (!calls) return { reply: raw.trim(), toolCalls: records };
+    if (!calls) {
+      input.onStreamStep?.(step, "final");
+      return { reply: raw.trim(), toolCalls: records };
+    }
+    input.onStreamStep?.(step, "reasoning");
 
     const feedback: string[] = new Array(calls.length).fill("");
     const readIndices: number[] = [];
@@ -158,13 +167,15 @@ export async function runToolLoop(
     messages: [...messages, { role: "user", content: "Give your final answer now (plain text, no tool calls)." }],
     temperature: TOOL_TEMPERATURE
   };
-  const finalRaw = deps.generateChatV2
-    ? (
-        await deps.generateChatV2(settings, finalGenInput, input.signal).catch(() => ({
-          text: "",
-          toolCalls: [] as ParsedToolCall[]
-        }))
-      ).text
-    : await (deps.generateChat ?? defaultGenerateChat)(settings, finalGenInput, input.signal).catch(() => "");
+  let finalRaw: string;
+  if (deps.generateChatV2) {
+    const r = await deps
+      .generateChatV2(settings, finalGenInput, { onToken: input.onToken, signal: input.signal })
+      .catch(() => ({ text: "", toolCalls: [] as ParsedToolCall[] }));
+    finalRaw = r.text;
+  } else {
+    finalRaw = await (deps.generateChat ?? defaultGenerateChat)(settings, finalGenInput, input.signal).catch(() => "");
+  }
+  input.onStreamStep?.(MAX_STEPS, "final");
   return { reply: finalRaw.trim(), toolCalls: records };
 }

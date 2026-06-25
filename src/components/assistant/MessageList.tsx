@@ -102,6 +102,9 @@ export function MessageList() {
                 </div>
               </div>
             ) : null}
+            {status === "streaming" && steps.length > 0 ? (
+              <ReasoningPanel steps={steps} active={false} />
+            ) : null}
             {status === "error" && error ? (
               <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive-soft px-3 py-2 text-sm text-destructive">
                 <span>{error}</span>
