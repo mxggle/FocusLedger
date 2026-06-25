@@ -454,6 +454,60 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
     }
   };
 
+  function finalizeAbort(partialContent: string, toolCalls: ToolCallRecord[]): void {
+    const hasExecuted = toolCalls.some((call) => call.status === "executed");
+    const hasContent = partialContent.trim().length > 0;
+    const shouldPersist = hasContent || hasExecuted;
+    if (streamingId) {
+      const id = streamingId;
+      store.setState((state) => ({
+        messages: state.messages.map((m) =>
+          m.id === id
+            ? {
+                ...m,
+                content: partialContent,
+                stopped: true,
+                toolCalls: toolCalls.length > 0 ? toolCalls : m.toolCalls
+              }
+            : m
+        ),
+        status: "idle",
+        streamingMessageId: null,
+        steps: []
+      }));
+      if (shouldPersist) {
+        const finalized = store.getState().messages.find((m) => m.id === id);
+        if (finalized) void assistantMessageRepository.append(finalized).catch(() => {});
+      } else {
+        store.setState((state) => ({ messages: state.messages.filter((m) => m.id !== id) }));
+      }
+    } else if (shouldPersist) {
+      const msg: ChatMessage = {
+        id: createId("msg"),
+        role: "assistant",
+        content: partialContent,
+        createdAt: new Date().toISOString(),
+        toolCalls,
+        stopped: true
+      };
+      store.setState((state) => ({
+        messages: [...state.messages, msg],
+        status: "idle",
+        streamingMessageId: null,
+        steps: []
+      }));
+      void assistantMessageRepository.append(msg).catch(() => {});
+    } else {
+      store.setState({ status: "idle", streamingMessageId: null, steps: [] });
+    }
+    if (currentAbort === controller) currentAbort = null;
+  }
+
+  function currentPartialContent(): string {
+    if (!streamingId) return "";
+    return store.getState().messages.find((m) => m.id === streamingId)?.content ?? "";
+  }
+
   try {
     const adapter = createAgentTaskStore();
     const result = await runAssistantToolTurn(
@@ -472,15 +526,9 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
     );
 
     if (signal.aborted || currentAbort !== controller) {
-      // Abort: drop any in-progress streaming placeholder; no assistant message.
-      const id = streamingId;
-      store.setState((state) => ({
-        messages: id ? state.messages.filter((m) => m.id !== id) : state.messages,
-        status: "idle",
-        streamingMessageId: null,
-        steps: []
-      }));
-      if (currentAbort === controller) currentAbort = null;
+      // Abort: finalize the streaming placeholder as a stopped message,
+      // preserving any partial content and already-executed tool records.
+      finalizeAbort(currentPartialContent(), result.toolCalls);
       return;
     }
 
@@ -527,14 +575,11 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
     currentAbort = null;
   } catch (error) {
     if (isAbortError(error) || signal.aborted || currentAbort !== controller) {
-      const id = streamingId;
-      store.setState((state) => ({
-        messages: id ? state.messages.filter((m) => m.id !== id) : state.messages,
-        status: "idle",
-        streamingMessageId: null,
-        steps: []
-      }));
-      if (currentAbort === controller) currentAbort = null;
+      // Abort on a thrown error path: finalize the placeholder rather than
+      // silently dropping it. Executed tool records from earlier steps are
+      // not recoverable here (the loop threw) — content is preserved.
+      finalizeAbort(currentPartialContent(), []);
+      return;
     } else {
       const message = error instanceof Error ? error.message : "The assistant ran into a problem";
       const id = streamingId;
