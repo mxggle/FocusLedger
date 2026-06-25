@@ -291,7 +291,9 @@ export async function streamChatV2(
       parsed.text.length === 0 && parsed.toolCalls.length > 0
         ? JSON.stringify({ tool_calls: parsed.toolCalls })
         : parsed.text;
-    cb.onToken?.(full);
+    if (parsed.text.length > 0) {
+      cb.onToken?.(full);
+    }
     return { text: full, toolCalls: parsed.toolCalls };
   }
 

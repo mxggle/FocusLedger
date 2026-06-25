@@ -375,6 +375,37 @@ describe("streamChatV2", () => {
     expect(toolCalls).toEqual([]);
   });
 
+  it("does not emit onToken for a tool-only reply in the v2 fallback (no raw-JSON flash)", async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: undefined,
+      text: async () =>
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [{ functionCall: { name: "list_tasks", args: { scope: "today" } } }]
+              }
+            }
+          ]
+        })
+    });
+
+    const tokens: string[] = [];
+    const { text, toolCalls } = await streamChatV2(
+      settings({ aiProvider: "gemini" }),
+      chatInput,
+      { onToken: (c) => tokens.push(c) }
+    );
+
+    expect(tokens).toHaveLength(0);
+    expect(JSON.parse(text)).toEqual({
+      tool_calls: [{ name: "list_tasks", args: { scope: "today" } }]
+    });
+    expect(toolCalls).toEqual([{ name: "list_tasks", args: { scope: "today" } }]);
+  });
+
   it("throws when no API key is configured", async () => {
     await expect(
       streamChatV2(settings({ aiApiKey: "" }), chatInput, {})
