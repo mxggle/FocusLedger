@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Task } from "../../../types";
+import { toolByName } from "./agentTools/registry";
 import { runToolLoop } from "./toolLoop";
 
 function task(overrides: Partial<Task> = {}): Task {
@@ -209,10 +210,6 @@ describe("runToolLoop", () => {
 
   it("uses native toolCalls from generateChatV2 when provided", async () => {
     const list = vi.fn(async () => ({ ok: true, summary: "1 task" }));
-    const generateChatV2 = async () => ({
-      text: "",
-      toolCalls: [{ name: "list_tasks", args: { scope: "today" } }]
-    });
     let call = 0;
     const v2 = async () =>
       call++ === 0
@@ -231,10 +228,13 @@ describe("runToolLoop", () => {
   });
 
   it("executes parallel read tools concurrently", async () => {
+    const listTool = toolByName("list_tasks")!;
     let started = 0;
     let inFlight = 0;
-    const list = vi.fn(async () => {
+    let maxInFlight = 0;
+    const listExecute = vi.spyOn(listTool, "execute").mockImplementation(async () => {
       inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
       started += 1;
       await new Promise((r) => setTimeout(r, 10));
       inFlight -= 1;
@@ -247,21 +247,26 @@ describe("runToolLoop", () => {
         { name: "list_tasks", args: { scope: "backlog" } }
       ]
     });
-    const res = await runToolLoop(
-      {
-        system: "sys",
-        messages: [{ role: "user", content: "both scopes" }],
-        level: "auto",
-        deps: depsWith({ getAllTasks: list as never })
-      },
-      {
-        generateChatV2: async () => {
-          if (started === 0) return v2();
-          return { text: "got both.", toolCalls: [] };
+    try {
+      const res = await runToolLoop(
+        {
+          system: "sys",
+          messages: [{ role: "user", content: "both scopes" }],
+          level: "auto",
+          deps: depsWith()
+        },
+        {
+          generateChatV2: async () => {
+            if (started === 0) return v2();
+            return { text: "got both.", toolCalls: [] };
+          }
         }
-      }
-    );
-    expect(list).toHaveBeenCalledTimes(2);
-    expect(res.reply).toContain("got both");
+      );
+      expect(listExecute).toHaveBeenCalledTimes(2);
+      expect(maxInFlight).toBeGreaterThanOrEqual(2);
+      expect(res.reply).toContain("got both");
+    } finally {
+      listExecute.mockRestore();
+    }
   });
 });
