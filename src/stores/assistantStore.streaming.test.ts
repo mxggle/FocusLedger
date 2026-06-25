@@ -7,8 +7,7 @@ const { streamChatV2Stub, streamState, emitted } = vi.hoisted(() => ({
 }));
 vi.mock("../services/ai/chatClient", () => ({
   streamChatV2: streamChatV2Stub,
-  generateChat: vi.fn(),
-  streamChat: vi.fn()
+  generateChat: vi.fn()
 }));
 
 const { messageRepo } = vi.hoisted(() => ({

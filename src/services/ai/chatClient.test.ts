@@ -4,7 +4,7 @@ import type { AiSettings } from "./providers";
 const { fetch } = vi.hoisted(() => ({ fetch: vi.fn() }));
 vi.mock("@tauri-apps/plugin-http", () => ({ fetch }));
 
-import { generateChat, streamChat } from "./chatClient";
+import { generateChat } from "./chatClient";
 
 function settings(overrides: Partial<AiSettings> = {}): AiSettings {
   return {
@@ -98,50 +98,6 @@ describe("generateChat", () => {
     const result = await generateChat(settings({ aiProvider: "gemini" }), chatInput);
     expect(result).not.toBe("");
     expect(JSON.parse(result)).toEqual({
-      tool_calls: [{ name: "list_tasks", args: { scope: "today" } }]
-    });
-  });
-});
-
-describe("streamChat v1 fallback (no usable stream body)", () => {
-  beforeEach(() => {
-    fetch.mockReset();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("reconstructs canonical {tool_calls} JSON when Gemini returns a functionCall with no text", async () => {
-    fetch.mockResolvedValue({
-      ok: true,
-      status: 200,
-      body: undefined,
-      text: async () =>
-        JSON.stringify({
-          candidates: [
-            {
-              content: {
-                parts: [{ functionCall: { name: "list_tasks", args: { scope: "today" } } }]
-              }
-            }
-          ]
-        })
-    });
-
-    const tokens: string[] = [];
-    const result = await streamChat(
-      settings({ aiProvider: "gemini" }),
-      chatInput,
-      { onToken: (c) => tokens.push(c) }
-    );
-
-    expect(result).not.toBe("");
-    expect(JSON.parse(result)).toEqual({
-      tool_calls: [{ name: "list_tasks", args: { scope: "today" } }]
-    });
-    expect(tokens).toHaveLength(1);
-    expect(JSON.parse(tokens[0])).toEqual({
       tool_calls: [{ name: "list_tasks", args: { scope: "today" } }]
     });
   });
