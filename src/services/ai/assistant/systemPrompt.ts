@@ -121,8 +121,8 @@ const MODE_LINE: Record<PermissionLevel, string> = {
 
 const TOOL_PROTOCOL = [
   "Tool-calling protocol:",
-  '- To use tools, respond with ONLY a JSON object: { "tool_calls": [ { "name": "list_tasks", "args": { "scope": "today" } } ] }',
-  "- You will receive tool results as the next message. Continue with more tool_calls if needed, or give your final answer.",
+  "- When you need to call a tool, use the tool-calling API your provider exposes (function calling). When a tool is not available via the API or your provider has no native tool calling, you may instead respond with ONLY a JSON object: { \"tool_calls\": [ { \"name\": \"list_tasks\", \"args\": { \"scope\": \"today\" } } ] }.",
+  "- You will receive tool results as the next message. Continue with more tool calls if needed, or give your final answer.",
   "- Final answers are plain Markdown. Do not append legacy actions JSON or wrap the reply in JSON.",
   "- Never show internal task ids, category ids, or tool names in final replies. Use task titles and human-readable times only.",
   "- You know the current local time from Current context. For requests like 'from now', 'current time', or '剩下的时间', use that time with today's task list and schedule fields.",

@@ -27,11 +27,17 @@ function task(overrides: Partial<Task> = {}): Task {
 function depsWith({
   updateTask = vi.fn(async () => ({ ok: true })),
   createTask = vi.fn(async () => ({ ok: true, id: "created" })),
-  tasks = [task()]
+  tasks = [task()],
+  getAllTasks
+}: {
+  updateTask?: ReturnType<typeof vi.fn>;
+  createTask?: ReturnType<typeof vi.fn>;
+  tasks?: Task[];
+  getAllTasks?: () => Task[];
 } = {}) {
   return {
     store: {
-      getAllTasks: () => tasks,
+      getAllTasks: getAllTasks ?? (() => tasks),
       getCategories: () => [],
       updateTask,
       createTask,
@@ -199,5 +205,63 @@ describe("runToolLoop", () => {
     expect(update).toHaveBeenNthCalledWith(2, "t2", expect.objectContaining({ planned_start_time: "10:30" }));
     expect(res.toolCalls.filter((call) => call.name === "update_task")).toHaveLength(2);
     expect(res.toolCalls.filter((call) => call.name === "update_task").every((call) => call.status === "executed")).toBe(true);
+  });
+
+  it("uses native toolCalls from generateChatV2 when provided", async () => {
+    const list = vi.fn(async () => ({ ok: true, summary: "1 task" }));
+    const generateChatV2 = async () => ({
+      text: "",
+      toolCalls: [{ name: "list_tasks", args: { scope: "today" } }]
+    });
+    let call = 0;
+    const v2 = async () =>
+      call++ === 0
+        ? { text: "", toolCalls: [{ name: "list_tasks", args: { scope: "today" } }] }
+        : { text: "Done.", toolCalls: [] };
+    const res = await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "x" }],
+        level: "auto",
+        deps: depsWith({ getAllTasks: list as never })
+      },
+      { generateChatV2: v2 }
+    );
+    expect(res.reply).toContain("Done");
+  });
+
+  it("executes parallel read tools concurrently", async () => {
+    let started = 0;
+    let inFlight = 0;
+    const list = vi.fn(async () => {
+      inFlight += 1;
+      started += 1;
+      await new Promise((r) => setTimeout(r, 10));
+      inFlight -= 1;
+      return { ok: true, summary: "ok" };
+    });
+    const v2 = async () => ({
+      text: "",
+      toolCalls: [
+        { name: "list_tasks", args: { scope: "today" } },
+        { name: "list_tasks", args: { scope: "backlog" } }
+      ]
+    });
+    const res = await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "both scopes" }],
+        level: "auto",
+        deps: depsWith({ getAllTasks: list as never })
+      },
+      {
+        generateChatV2: async () => {
+          if (started === 0) return v2();
+          return { text: "got both.", toolCalls: [] };
+        }
+      }
+    );
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(res.reply).toContain("got both");
   });
 });

@@ -3,7 +3,7 @@ import type { AiSettings, ChatInput, ChatTurn } from "../providers";
 import { needsConfirm } from "./agentTools/permissions";
 import { nativeToolSpecs, toolByName } from "./agentTools/registry";
 import type { AgentToolDeps, PermissionLevel, ToolCallRecord } from "./agentTools/types";
-import { parseToolCalls } from "./responseParser";
+import { parseToolCalls, type ParsedToolCall } from "./responseParser";
 import { createId } from "../../../utils/id";
 import { describeToolCallForDisplay } from "./toolDisplay";
 
@@ -20,7 +20,14 @@ export type ToolLoopInput = {
   signal?: AbortSignal;
 };
 
-export type ToolLoopDeps = { generateChat: (settings: AiSettings, input: ChatInput, signal?: AbortSignal) => Promise<string> };
+export type ToolLoopDeps = {
+  generateChat?: (settings: AiSettings, input: ChatInput, signal?: AbortSignal) => Promise<string>;
+  generateChatV2?: (
+    settings: AiSettings,
+    input: ChatInput,
+    signal?: AbortSignal
+  ) => Promise<{ text: string; toolCalls: ParsedToolCall[] }>;
+};
 
 export type ToolLoopResult = { reply: string; toolCalls: ToolCallRecord[] };
 
@@ -42,33 +49,60 @@ export async function runToolLoop(
     if (input.signal?.aborted) {
       return { reply: "", toolCalls: records };
     }
-    const raw = await deps.generateChat(settings, {
+    const genInput: ChatInput = {
       system: input.system,
       messages,
       temperature: TOOL_TEMPERATURE,
       tools: nativeToolSpecs()
-    }, input.signal);
-    const calls = parseToolCalls(raw);
+    };
+    let raw: string;
+    let nativeCalls: ParsedToolCall[] | null = null;
+    if (deps.generateChatV2) {
+      const { text, toolCalls } = await deps.generateChatV2(settings, genInput, input.signal);
+      raw = text;
+      nativeCalls = toolCalls && toolCalls.length > 0 ? toolCalls : null;
+    } else {
+      raw = await (deps.generateChat ?? defaultGenerateChat)(settings, genInput, input.signal);
+      nativeCalls = null;
+    }
+
+    const calls = nativeCalls ?? parseToolCalls(raw);
     if (!calls) return { reply: raw.trim(), toolCalls: records };
 
-    const feedback: string[] = [];
-    for (const call of calls) {
+    const feedback: string[] = new Array(calls.length).fill("");
+    const readIndices: number[] = [];
+    calls.forEach((call, idx) => {
       const tool = toolByName(call.name);
       if (!tool) {
-        feedback.push(`${call.name}: unknown tool`);
-        continue;
+        feedback[idx] = `${call.name}: unknown tool`;
+        return;
       }
+      if (tool.category === "read") readIndices.push(idx);
+    });
+
+    await Promise.all(
+      readIndices.map(async (idx) => {
+        const call = calls[idx];
+        const tool = toolByName(call.name)!;
+        input.onStep?.(`Looking up ${call.name}...`);
+        const parsed = tool.parameters.safeParse(call.args);
+        if (!parsed.success) {
+          feedback[idx] = `${call.name}: invalid args - ${parsed.error.issues[0]?.message ?? "bad args"}`;
+          return;
+        }
+        const result = await tool.execute(call.args, input.deps);
+        feedback[idx] = `${call.name}: ${result.ok ? result.summary : result.error}`;
+      })
+    );
+
+    for (let idx = 0; idx < calls.length; idx++) {
+      const call = calls[idx];
+      const tool = toolByName(call.name);
+      if (!tool || tool.category === "read") continue;
 
       const parsed = tool.parameters.safeParse(call.args);
       if (!parsed.success) {
-        feedback.push(`${call.name}: invalid args - ${parsed.error.issues[0]?.message ?? "bad args"}`);
-        continue;
-      }
-
-      if (tool.category === "read") {
-        const result = await tool.execute(call.args, input.deps);
-        feedback.push(`${call.name}: ${result.ok ? result.summary : result.error}`);
-        input.onStep?.(`Looking up ${call.name}...`);
+        feedback[idx] = `${call.name}: invalid args - ${parsed.error.issues[0]?.message ?? "bad args"}`;
         continue;
       }
 
@@ -86,7 +120,7 @@ export async function runToolLoop(
 
       if (needsConfirm(tool, input.level)) {
         records.push({ ...base, status: "pending" });
-        feedback.push(`${call.name}: queued for the user's confirmation (not applied yet)`);
+        feedback[idx] = `${call.name}: queued for the user's confirmation (not applied yet)`;
         continue;
       }
 
@@ -101,26 +135,36 @@ export async function runToolLoop(
           undo,
           expectedUpdatedAt: expectedUpdatedAtFor({ undo }, input.deps)
         });
-        feedback.push(`${call.name}: ${result.summary}`);
+        feedback[idx] = `${call.name}: ${result.summary}`;
       } else {
         records.push({ ...base, status: "failed", error: result.error, result: result.error });
-        feedback.push(`${call.name}: FAILED - ${result.error}`);
+        feedback[idx] = `${call.name}: FAILED - ${result.error}`;
       }
     }
 
-    messages.push({ role: "assistant", content: raw });
+    const assistantContent =
+      raw && raw.trim().length > 0
+        ? raw
+        : JSON.stringify({ tool_calls: calls.map((c) => ({ name: c.name, args: c.args })) });
+    messages.push({ role: "assistant", content: assistantContent });
     messages.push({
       role: "user",
       content: `Tool results:\n${feedback.join("\n")}\n\nContinue, or give your final answer.`
     });
   }
 
-  const finalRaw = await deps
-    .generateChat(settings, {
-      system: input.system,
-      messages: [...messages, { role: "user", content: "Give your final answer now (plain text, no tool calls)." }],
-      temperature: TOOL_TEMPERATURE
-    }, input.signal)
-    .catch(() => "");
+  const finalGenInput: ChatInput = {
+    system: input.system,
+    messages: [...messages, { role: "user", content: "Give your final answer now (plain text, no tool calls)." }],
+    temperature: TOOL_TEMPERATURE
+  };
+  const finalRaw = deps.generateChatV2
+    ? (
+        await deps.generateChatV2(settings, finalGenInput, input.signal).catch(() => ({
+          text: "",
+          toolCalls: [] as ParsedToolCall[]
+        }))
+      ).text
+    : await (deps.generateChat ?? defaultGenerateChat)(settings, finalGenInput, input.signal).catch(() => "");
   return { reply: finalRaw.trim(), toolCalls: records };
 }
