@@ -1,6 +1,8 @@
 import type { AiProvider, AppSettings } from "../../types";
 import type { ParsedToolCall } from "./assistant/responseParser";
 
+export type { ParsedToolCall };
+
 export type AiRequest = {
   url: string;
   headers: Record<string, string>;
