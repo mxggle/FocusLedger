@@ -131,7 +131,13 @@ export function ToastViewport() {
           setExpanded(false);
         }
       }}
-      className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-[360px] flex-col items-stretch gap-2"
+      // The region is the hover boundary (pointer-events-auto): it only ever
+      // grows upward on expand (bottom edge is pinned), so the cursor stays
+      // inside its box during the transition. Keeping hover detection on a
+      // transparent (pointer-events-none) region would let the header slide out
+      // from under the cursor onto dead space, firing mouseleave → collapse →
+      // mouseenter → expand in a loop (the "Clear all" button jumping around).
+      className="pointer-events-auto fixed bottom-4 right-4 z-50 flex w-[360px] flex-col items-stretch gap-2"
     >
       <AnimatePresence initial={false}>
         {count > 1 ? (
