@@ -155,6 +155,7 @@ type UiState = {
     toast: Omit<ToastMessage, "id"> & { durationMs?: number }
   ) => string | undefined;
   dismissToast: (id: string) => void;
+  dismissAllToasts: () => void;
   confirm: (options: ConfirmOptions | string) => Promise<boolean>;
   resolveConfirm: (confirmed: boolean) => void;
 
@@ -238,6 +239,8 @@ export const useUiStore = create<UiState>((set) => ({
     set((state) => ({
       toasts: state.toasts.filter((toast) => toast.id !== id)
     })),
+
+  dismissAllToasts: () => set({ toasts: [] }),
 
   confirm: (options) => {
     const normalized =
