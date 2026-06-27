@@ -7,6 +7,7 @@ import { useAssistantStore } from "../../stores/assistantStore";
 import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
 import { Markdown } from "../ui/Markdown";
+import { Button } from "../ui/Button";
 import { IconButton } from "../ui/IconButton";
 import { MessageEditor } from "./MessageEditor";
 import { ToolCallCard } from "./ToolCallCard";
@@ -28,6 +29,7 @@ function AssistantRow({ message, isStreaming }: { message: ChatMessage; isStream
   const status = useAssistantStore((s) => s.status);
   const regenerateLast = useAssistantStore((s) => s.regenerateLast);
   const applyToolCall = useAssistantStore((s) => s.applyToolCall);
+  const applyAllToolCalls = useAssistantStore((s) => s.applyAllToolCalls);
   const revertToolCall = useAssistantStore((s) => s.revertToolCall);
   const dismissToolCall = useAssistantStore((s) => s.dismissToolCall);
   const allTasks = useTaskStore((s) => s.allTasks);
@@ -75,6 +77,13 @@ function AssistantRow({ message, isStreaming }: { message: ChatMessage; isStream
 
         {message.toolCalls && message.toolCalls.length > 0 ? (
           <div className="flex flex-col gap-2">
+            {applicableCount(message.toolCalls) >= 2 ? (
+              <div className="flex justify-end">
+                <Button size="sm" variant="primary" onClick={() => void applyAllToolCalls(message.id)}>
+                  Apply all ({applicableCount(message.toolCalls)})
+                </Button>
+              </div>
+            ) : null}
             {message.toolCalls.map((call) => (
               <ToolCallCard
                 key={call.id}
@@ -139,6 +148,11 @@ function UserRow({ message }: { message: ChatMessage }) {
       </div>
     </div>
   );
+}
+
+/** How many queued cards "Apply all" would act on (pending or retryable failures). */
+function applicableCount(calls: ChatMessage["toolCalls"]): number {
+  return (calls ?? []).filter((call) => call.status === "pending" || call.status === "failed").length;
 }
 
 function findLastAssistantId(messages: ChatMessage[]): string | null {

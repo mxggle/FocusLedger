@@ -10,6 +10,7 @@ import { runSkillReview, SKILL_REVIEW_DEBOUNCE_MS } from "../services/ai/assista
 import type { AssistantSkill } from "../services/ai/assistant/skills/types";
 import { createAgentTaskStore } from "../services/ai/assistant/agentTools/storeAdapter";
 import { hasDrifted, revertToolCall as revertExecutedToolCall } from "../services/ai/assistant/agentTools/revert";
+import { isDestructive } from "../services/ai/assistant/agentTools/permissions";
 import { toolByName } from "../services/ai/assistant/agentTools/registry";
 import type { ConversationRecallEntry, ToolCallRecord } from "../services/ai/assistant/agentTools/types";
 import { runAssistantToolTurn } from "../services/ai/assistant/assistantRunner";
@@ -121,6 +122,7 @@ type AssistantState = {
   regenerateLast: () => Promise<void>;
   editUserMessage: (messageId: string, newContent: string) => Promise<void>;
   applyToolCall: (messageId: string, toolCallId: string) => Promise<void>;
+  applyAllToolCalls: (messageId: string) => Promise<void>;
   revertToolCall: (messageId: string, toolCallId: string) => Promise<void>;
   dismissToolCall: (messageId: string, toolCallId: string) => void;
   clear: () => void;
@@ -176,6 +178,62 @@ function expectedUpdatedAtFor(call: Pick<ToolCallRecord, "undo">): string | unde
 
 function canApplyToolCall(status: ToolCallRecord["status"]): boolean {
   return status === "pending" || status === "dismissed" || status === "reverted" || status === "failed";
+}
+
+type ApplyOutcome = { ok: true } | { ok: false; error: string; cancelled?: boolean };
+
+/**
+ * Execute one queued write against the live store. On success it patches the
+ * call to `executed`; on failure it returns the error WITHOUT marking the card
+ * failed, so a batch can retry it once other changes free up the schedule.
+ */
+async function attemptToolCallApply(
+  messageId: string,
+  call: ToolCallRecord,
+  get: () => AssistantState,
+  set: (partial: Partial<AssistantState>) => void
+): Promise<ApplyOutcome> {
+  const tool = toolByName(call.name);
+  if (!tool || tool.category !== "write") return { ok: false, error: "Tool is unavailable" };
+
+  if (isDestructive(tool, call.args)) {
+    const confirmed = await useUiStore.getState().confirm({
+      message: `${call.summary}?`,
+      confirmLabel: "Apply",
+      danger: true
+    });
+    if (!confirmed) return { ok: false, error: "Not confirmed", cancelled: true };
+  }
+
+  const parsed = tool.parameters.safeParse(call.args);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid tool arguments" };
+
+  const adapter = createAgentTaskStore();
+  const ctx = buildAssistantContext(snapshot(), get().insights);
+  try {
+    const result = await tool.execute(parsed.data, {
+      store: adapter,
+      ctx,
+      insights: get().insights,
+      history: get().history ?? [],
+      now: () => new Date().toISOString()
+    });
+    if (!result.ok) return { ok: false, error: result.error };
+
+    await adapter.refresh();
+    set({
+      messages: patchToolCall(get().messages, messageId, call.id, {
+        status: "executed",
+        summary: result.summary,
+        result: result.summary,
+        undo: result.undo,
+        expectedUpdatedAt: expectedUpdatedAtFor({ undo: result.undo })
+      })
+    });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Could not apply this change" };
+  }
 }
 
 export const useAssistantStore = create<AssistantState>((set, get) => ({
@@ -267,75 +325,85 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     const call = message?.toolCalls?.find((entry) => entry.id === toolCallId);
     if (!call || !canApplyToolCall(call.status)) return;
 
-    const tool = toolByName(call.name);
-    if (!tool || tool.category !== "write") {
+    const outcome = await attemptToolCallApply(messageId, call, get, set);
+    if (!outcome.ok && !outcome.cancelled) {
       set({
         messages: patchToolCall(get().messages, messageId, toolCallId, {
           status: "failed",
-          error: "Tool is unavailable"
+          error: outcome.error,
+          result: outcome.error
         })
       });
-      return;
+      useUiStore.getState().addToast({ kind: "error", title: "Could not apply", description: outcome.error });
+    }
+  },
+
+  applyAllToolCalls: async (messageId) => {
+    // Apply every queued change in one go. Reschedules in a batch can briefly
+    // collide while the OTHER task still sits in its old slot, so we make
+    // repeated passes: each task that lands frees its slot for the next, and we
+    // stop once a full pass makes no progress. Whatever still can't apply is a
+    // genuine conflict and is surfaced as failed.
+    const batchable = (status: ToolCallRecord["status"]) => status === "pending" || status === "failed";
+    const errors = new Map<string, string>();
+    const skip = new Set<string>(); // destructive/cancelled cards: attempt once, never re-prompt
+    let appliedCount = 0;
+
+    for (;;) {
+      const message = get().messages.find((entry) => entry.id === messageId);
+      const pending = (message?.toolCalls ?? []).filter((call) => batchable(call.status) && !skip.has(call.id));
+      if (pending.length === 0) break;
+
+      let progressed = false;
+      for (const call of pending) {
+        const outcome = await attemptToolCallApply(messageId, call, get, set);
+        if (outcome.ok) {
+          progressed = true;
+          appliedCount += 1;
+          errors.delete(call.id);
+        } else {
+          const tool = toolByName(call.name);
+          if (outcome.cancelled) {
+            skip.add(call.id);
+            errors.delete(call.id);
+          } else {
+            errors.set(call.id, outcome.error);
+            if (tool && isDestructive(tool, call.args)) skip.add(call.id); // don't re-prompt
+          }
+        }
+      }
+      if (!progressed) break;
     }
 
-    if (tool.destructive) {
-      const confirmed = await useUiStore.getState().confirm({
-        message: `${call.summary}?`,
-        confirmLabel: "Apply",
-        danger: true
-      });
-      if (!confirmed) return;
-    }
-
-    const parsed = tool.parameters.safeParse(call.args);
-    if (!parsed.success) {
-      const error = parsed.error.issues[0]?.message ?? "Invalid tool arguments";
-      set({ messages: patchToolCall(get().messages, messageId, toolCallId, { status: "failed", error }) });
-      return;
-    }
-
-    const adapter = createAgentTaskStore();
-    const ctx = buildAssistantContext(snapshot(), get().insights);
-    try {
-      const result = await tool.execute(parsed.data, {
-        store: adapter,
-        ctx,
-        insights: get().insights,
-        history: get().history ?? [],
-        now: () => new Date().toISOString()
-      });
-      if (!result.ok) {
+    const finalMessage = get().messages.find((entry) => entry.id === messageId);
+    let failedCount = 0;
+    for (const call of finalMessage?.toolCalls ?? []) {
+      if (batchable(call.status) && errors.has(call.id)) {
+        failedCount += 1;
         set({
-          messages: patchToolCall(get().messages, messageId, toolCallId, {
+          messages: patchToolCall(get().messages, messageId, call.id, {
             status: "failed",
-            error: result.error,
-            result: result.error
+            error: errors.get(call.id),
+            result: errors.get(call.id)
           })
         });
-        useUiStore.getState().addToast({ kind: "error", title: "Could not apply", description: result.error });
-        return;
       }
+    }
 
-      await adapter.refresh();
-      set({
-        messages: patchToolCall(get().messages, messageId, toolCallId, {
-          status: "executed",
-          summary: result.summary,
-          result: result.summary,
-          undo: result.undo,
-          expectedUpdatedAt: expectedUpdatedAtFor({ undo: result.undo })
-        })
+    if (appliedCount > 0) {
+      useUiStore.getState().addToast({
+        kind: failedCount > 0 ? "info" : "success",
+        title:
+          failedCount > 0
+            ? `Applied ${appliedCount}, ${failedCount} still conflict`
+            : `Applied ${appliedCount} change${appliedCount === 1 ? "" : "s"}`
       });
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "Could not apply this change";
-      set({
-        messages: patchToolCall(get().messages, messageId, toolCallId, {
-          status: "failed",
-          error: detail,
-          result: detail
-        })
+    } else if (failedCount > 0) {
+      useUiStore.getState().addToast({
+        kind: "error",
+        title: "Couldn't apply these changes",
+        description: "They conflict with your current schedule."
       });
-      useUiStore.getState().addToast({ kind: "error", title: "Could not apply", description: detail });
     }
   },
 

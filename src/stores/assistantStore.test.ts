@@ -505,6 +505,79 @@ describe("assistantStore tool calls", () => {
     expect(taskState.updateTask).toHaveBeenCalledWith("t1", expect.objectContaining({ planned_start_time: "09:30" }));
     expect(useAssistantStore.getState().messages[0].toolCalls?.[0].status).toBe("executed");
   });
+
+  it("applyAllToolCalls retries a transient ordering conflict until the batch lands", async () => {
+    taskState.allTasks = [
+      taskFixture({ id: "t1", title: "A", planned_start_time: "10:00" }),
+      taskFixture({ id: "t2", title: "B", planned_start_time: "11:00" })
+    ];
+    // t1 can only move once t2 has vacated its slot — it fails on the first pass
+    // and must succeed on a later one. This is exactly the spurious "Time
+    // overlaps" that the batch apply has to resolve by retrying.
+    let t2Applied = false;
+    taskState.updateTask.mockImplementation(async (id: string) => {
+      if (id === "t2") {
+        t2Applied = true;
+        return { ok: true };
+      }
+      if (id === "t1") {
+        return t2Applied ? { ok: true } : { ok: false, message: 'Time overlaps with "B".' };
+      }
+      return { ok: true };
+    });
+
+    useAssistantStore.setState({
+      messages: [
+        {
+          id: "m1",
+          role: "assistant",
+          content: "plan",
+          createdAt: "2026-06-20T10:00:00Z",
+          toolCalls: [
+            { id: "tc1", name: "update_task", args: { task_id: "t1", planned_start_time: "11:00" }, category: "write", destructive: false, summary: "Move A", status: "pending" },
+            { id: "tc2", name: "update_task", args: { task_id: "t2", planned_start_time: "12:00" }, category: "write", destructive: false, summary: "Move B", status: "pending" }
+          ]
+        }
+      ],
+      status: "idle"
+    });
+
+    await useAssistantStore.getState().applyAllToolCalls("m1");
+
+    const calls = useAssistantStore.getState().messages[0].toolCalls!;
+    expect(calls.find((c) => c.id === "tc1")?.status).toBe("executed");
+    expect(calls.find((c) => c.id === "tc2")?.status).toBe("executed");
+  });
+
+  it("applyAllToolCalls marks a genuinely-conflicting card failed but applies the rest", async () => {
+    taskState.allTasks = [taskFixture({ id: "t1", title: "A" }), taskFixture({ id: "t2", title: "B" })];
+    taskState.updateTask.mockImplementation(async (id: string) =>
+      id === "t2" ? { ok: false, message: 'Time overlaps with "C".' } : { ok: true }
+    );
+
+    useAssistantStore.setState({
+      messages: [
+        {
+          id: "m1",
+          role: "assistant",
+          content: "plan",
+          createdAt: "2026-06-20T10:00:00Z",
+          toolCalls: [
+            { id: "tc1", name: "update_task", args: { task_id: "t1", planned_start_time: "09:30" }, category: "write", destructive: false, summary: "Move A", status: "pending" },
+            { id: "tc2", name: "update_task", args: { task_id: "t2", planned_start_time: "09:30" }, category: "write", destructive: false, summary: "Move B", status: "pending" }
+          ]
+        }
+      ],
+      status: "idle"
+    });
+
+    await useAssistantStore.getState().applyAllToolCalls("m1");
+
+    const calls = useAssistantStore.getState().messages[0].toolCalls!;
+    expect(calls.find((c) => c.id === "tc1")?.status).toBe("executed");
+    expect(calls.find((c) => c.id === "tc2")?.status).toBe("failed");
+    expect(calls.find((c) => c.id === "tc2")?.error).toMatch(/overlaps/);
+  });
 });
 
 describe("assistantStore regenerateLast / editUserMessage", () => {
