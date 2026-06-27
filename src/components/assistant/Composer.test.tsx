@@ -52,19 +52,10 @@ function textarea(container: HTMLElement): HTMLTextAreaElement {
   return container.querySelector("textarea")!;
 }
 
-function chip(container: HTMLElement, label: string): HTMLButtonElement {
-  const match = Array.from(container.querySelectorAll("button")).find(
-    (b) => b.textContent?.trim() === label
-  );
-  if (!match) throw new Error(`chip "${label}" not found`);
-  return match;
-}
-
 describe("Composer", () => {
-  it("sends on Enter in Quick mode", () => {
+  it("sends raw input as-is on Enter", () => {
     mockAssistant.status = "idle";
     const container = render(<Composer />);
-    fireClick(chip(container, "Quick"));
     fireInput(textarea(container), "hi");
     fireKey(textarea(container), "Enter");
     expect(mockAssistant.send).toHaveBeenCalledWith("hi", undefined);
@@ -73,32 +64,17 @@ describe("Composer", () => {
   it("does not send on Shift+Enter", () => {
     mockAssistant.status = "idle";
     const container = render(<Composer />);
-    fireClick(chip(container, "Quick"));
     fireInput(textarea(container), "hi");
     fireKey(textarea(container), "Enter", { shiftKey: true });
     expect(mockAssistant.send).not.toHaveBeenCalled();
   });
 
-  it("displays the raw input but sends the Plan-wrapped prompt to the model in Plan mode", () => {
+  it("/plan displays the raw args but sends the Plan-wrapped prompt to the model", () => {
     mockAssistant.status = "idle";
     const container = render(<Composer />);
-    fireInput(textarea(container), "plan my day");
+    fireInput(textarea(container), "/plan my day");
     fireKey(textarea(container), "Enter");
-    expect(mockAssistant.send).toHaveBeenCalledWith("plan my day", buildPlanPrompt("plan my day"));
-  });
-
-  it("toggles mode chips", () => {
-    mockAssistant.status = "idle";
-    const container = render(<Composer />);
-    const plan = chip(container, "Plan");
-    const quick = chip(container, "Quick");
-    expect(plan.getAttribute("aria-pressed")).toBe("true");
-    expect(quick.getAttribute("aria-pressed")).toBe("false");
-    fireClick(quick);
-    expect(quick.getAttribute("aria-pressed")).toBe("true");
-    expect(plan.getAttribute("aria-pressed")).toBe("false");
-    fireClick(plan);
-    expect(plan.getAttribute("aria-pressed")).toBe("true");
+    expect(mockAssistant.send).toHaveBeenCalledWith("my day", buildPlanPrompt("my day"));
   });
 
   it("shows a Stop button that calls stop while streaming", () => {

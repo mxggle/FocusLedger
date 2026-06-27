@@ -3,8 +3,6 @@ import { CalendarClock, CalendarRange, Eraser, ListChecks, Sparkles } from "luci
 import type { ComponentType } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-export type SlashMode = "plan" | "quick";
-
 export type SlashCommand = {
   name: string;
   label: string;
@@ -12,12 +10,10 @@ export type SlashCommand = {
   icon: ComponentType<{ className?: string }>;
   /** Executes immediately on pick instead of inserting (e.g. /clear). */
   immediate?: boolean;
-  /** Sets the composer mode chip when picked. */
-  mode?: SlashMode;
 };
 
 export const COMMANDS: SlashCommand[] = [
-  { name: "plan", label: "Plan", description: "Turn text into scoped tasks", icon: Sparkles, mode: "plan" },
+  { name: "plan", label: "Plan", description: "Turn text into scoped tasks", icon: Sparkles },
   { name: "today", label: "Today", description: "How is today looking?", icon: CalendarRange },
   { name: "reschedule", label: "Reschedule", description: "Move unfinished to tomorrow", icon: CalendarClock },
   { name: "backlog", label: "Backlog", description: "Review backlog for this week", icon: ListChecks },

@@ -6,7 +6,8 @@ import { useUiStore } from "../../stores/uiStore";
 import { IconButton } from "../ui/IconButton";
 import { AnimatePresence } from "framer-motion";
 import { useAssistantStore } from "../../stores/assistantStore";
-import { SlashCommandMenu, type SlashCommand, type SlashMode } from "./SlashCommandMenu";
+import { SlashCommandMenu, type SlashCommand } from "./SlashCommandMenu";
+import { AutonomyMenu } from "./AutonomyMenu";
 
 const MAX_HEIGHT = 220;
 
@@ -36,7 +37,6 @@ function activeSlashToken(value: string, caret: number): SlashState {
 
 export function Composer() {
   const [value, setValue] = useState("");
-  const [mode, setMode] = useState<SlashMode>("plan");
   const [slash, setSlash] = useState<SlashState>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -67,7 +67,7 @@ export function Composer() {
     if (text.length === 0 || busy || !keyConfigured) return;
 
     // `display` is what the user sees in the chat; `outgoing` is what the model receives.
-    // Plan-mode wrapping is internal scaffolding, so it must not leak into the bubble.
+    // `/plan` wrapping is internal scaffolding, so it must not leak into the bubble.
     let display = text;
     let outgoing = text;
     if (text.startsWith("/")) {
@@ -83,7 +83,6 @@ export function Composer() {
       }
       if (builder) {
         if (name === "plan") {
-          setMode("plan");
           display = args || text;
           outgoing = buildPlanPrompt(args);
         } else {
@@ -91,8 +90,6 @@ export function Composer() {
           outgoing = display;
         }
       }
-    } else if (mode === "plan") {
-      outgoing = buildPlanPrompt(text);
     }
 
     setValue("");
@@ -140,7 +137,6 @@ export function Composer() {
     const next = value.slice(0, start) + inserted + value.slice(caret);
     setValue(next);
     setSlash(null);
-    if (command.mode) setMode(command.mode);
     requestAnimationFrame(() => {
       const node = textareaRef.current;
       if (!node) return;
@@ -202,11 +198,8 @@ export function Composer() {
       </div>
 
       {keyConfigured ? (
-        <div className="mt-1.5 flex items-center justify-between gap-2 pl-1">
-          <div className="flex items-center gap-1.5" role="group" aria-label="Send mode">
-            <ModeChip label="Plan" active={mode === "plan"} onClick={() => setMode("plan")} />
-            <ModeChip label="Quick" active={mode === "quick"} onClick={() => setMode("quick")} />
-          </div>
+        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 pl-1">
+          <AutonomyMenu />
           <p className="text-[11px] text-muted-foreground">
             <kbd className="rounded border border-border bg-muted px-1 font-sans">↵</kbd> to send ·{" "}
             <kbd className="rounded border border-border bg-muted px-1 font-sans">Shift+↵</kbd> for a new line
@@ -215,31 +208,5 @@ export function Composer() {
         </div>
       ) : null}
     </form>
-  );
-}
-
-function ModeChip({
-  label,
-  active,
-  onClick
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={
-        "rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors " +
-        (active
-          ? "border-primary bg-primary-soft text-primary-soft-foreground"
-          : "border-border text-muted-foreground hover:bg-muted")
-      }
-    >
-      {label}
-    </button>
   );
 }
