@@ -68,11 +68,19 @@ The real problem isn't making lists. It's not knowing when you started, how long
 - Spot high-focus weeks and drill back into the underlying days
 - Use long-horizon perspective without leaving the daily workflow
 
+### 🧠 AI Assistant (in-app)
+- A tool-calling chat agent that reads your day and can create, update, schedule, start, complete, or drop tasks through validated tools
+- Choose autonomy in **Settings → AI**: Plan/Ask queues write cards for approval; Auto applies reversible writes and keeps **Revert** available
+- **History-aware:** learns from your real time records — estimate-vs-actual **calibration**, **slip & blocker** detection, and an automatic **weekly review**
+- Grounds advice in your actual numbers and applies your real estimation ratios when planning the day
+- Numbers are computed deterministically; the model only explains them — so it never makes them up
+- Bring your own AI key (OpenAI / Anthropic / Gemini / compatible) in **Settings → AI**
+
 ### 🤖 AI-Native (MCP)
 - Ships an **MCP server** that exposes your tasks and time records to AI agents
 - Works with **Claude Desktop, Claude Code, Cursor**, and any MCP-compatible tool
 - Ask _"where did my time go today?"_ directly from your AI assistant
-- Read-only — agents can look, but **never modify** your data
+- External agents can read and manage tasks; set `YOLO_MCP_READONLY=1` when you want a read-only server
 
 ---
 
@@ -187,9 +195,10 @@ See [`mcp/README.md`](mcp/README.md) for the full Claude Desktop config and inte
 
 The core desktop workflow is complete. The next phase makes Yolo truly **AI-native**.
 
-- [ ] 🧠 **AI time companion** — daily debrief, tomorrow planner, estimate calibration, proactive focus coach
+- [x] 🧠 **AI assistant** — in-app tool-calling agent with autonomy levels, undo, and history-aware planning
+- [x] 🔌 **MCP write tools** — external agents can create and update tasks; read-only mode remains available
+- [ ] 🔮 **Proactive coaching** — unprompted morning plans, focus-rhythm placement, goal-driven planning
 - [ ] 💬 **AI-native capture** — natural-language quick-add and smart stop-notes
-- [ ] 🔌 **MCP write tools** — let agents create and update tasks on your behalf
 - [ ] 🖥 **Desktop power features** — system tray, global shortcuts, mini floating timer, notifications
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phased plan and architecture decisions.
@@ -204,6 +213,7 @@ yolo/
 │   ├── components/         # UI components (layout, pages, primitives)
 │   ├── db/                 # Repository layer (all SQL access)
 │   ├── hooks/              # Custom React hooks
+│   ├── services/           # AI assistant + retrospective analytics
 │   ├── stores/             # Zustand state stores
 │   ├── types/              # Shared TypeScript types
 │   └── utils/              # Helper utilities

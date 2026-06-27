@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Task, TimeEntryWithTask, TodayStats } from "../../types";
-import { buildDebriefPrompt, buildDebriefSystemPrompt } from "./debriefService";
+
+const generateText = vi.hoisted(() => vi.fn(async (_settings: unknown, _data: unknown) => "ok"));
+vi.mock("./aiClient", () => ({ generateText }));
+
+import { buildDebriefPrompt, buildDebriefSystemPrompt, debriefInputHash, generateDebrief } from "./debriefService";
+import type { AiSettings } from "./providers";
 
 const task: Task = {
   id: "task-1",
@@ -51,6 +56,20 @@ const stats: TodayStats = {
   categoryStats: [
     { categoryId: "dev", categoryName: "Development", color: "#7c3aed", totalSeconds: 5400 }
   ]
+};
+
+const debriefData = {
+  date: "2026-06-13",
+  tasks: [task],
+  entries: [entry],
+  stats
+};
+
+const aiSettings: AiSettings = {
+  aiProvider: "anthropic",
+  aiApiKey: "k",
+  aiModel: "",
+  aiBaseUrl: ""
 };
 
 describe("buildDebriefPrompt", () => {
@@ -118,5 +137,41 @@ describe("buildDebriefSystemPrompt", () => {
       expect(system).toContain("language the user's task titles and notes");
       expect(system).not.toContain("Write the entire debrief in");
     }
+  });
+});
+
+describe("debriefInputHash (AI-DEBRIEF-03)", () => {
+  it("is stable for identical inputs", () => {
+    const a = debriefInputHash(debriefData);
+    const b = debriefInputHash({ ...debriefData });
+    expect(a).toBe(b);
+    expect(a).toMatch(/^[0-9a-z]+$/);
+  });
+
+  it("changes when focus sessions, stats, tasks, or language change", () => {
+    const base = debriefInputHash(debriefData);
+    const longerEntry = debriefInputHash({ ...debriefData, entries: [{ ...entry, duration_seconds: 7000 }] });
+    const noStats = debriefInputHash({ ...debriefData, stats: null });
+    const newTask = debriefInputHash({ ...debriefData, tasks: [{ ...task, title: "Edit report" }] });
+    const japanese = debriefInputHash({ ...debriefData, language: "Japanese" });
+    expect(longerEntry).not.toBe(base);
+    expect(noStats).not.toBe(base);
+    expect(newTask).not.toBe(base);
+    expect(japanese).not.toBe(base);
+  });
+});
+
+describe("generateDebrief (AI-DEBRIEF-01 / AI-DEBRIEF-04)", () => {
+  it("AI-DEBRIEF-01: returns the provider response so the caller can save it", async () => {
+    generateText.mockResolvedValueOnce("## Where the time went\nShort day.");
+    const content = await generateDebrief(aiSettings, debriefData);
+    expect(content).toContain("Where the time went");
+    expect(generateText).toHaveBeenCalledTimes(1);
+  });
+
+  it("AI-DEBRIEF-04: propagates provider failures so the UI can surface a toast", async () => {
+    generateText.mockReset();
+    generateText.mockRejectedValueOnce(new Error("The AI provider rejected your API key"));
+    await expect(generateDebrief(aiSettings, debriefData)).rejects.toThrow(/API key/);
   });
 });

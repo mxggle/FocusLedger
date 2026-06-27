@@ -1,3 +1,5 @@
+import type { PermissionLevel } from "../services/ai/assistant/agentTools/types";
+
 export type AppTheme = "system" | "light" | "dark";
 
 export type AiProvider = "anthropic" | "openai" | "gemini" | "custom";
@@ -29,6 +31,18 @@ export type AppSettings = {
   aiBaseUrl: string;
   /** Language for AI output (English name, e.g. "Japanese"); empty lets the model decide. */
   aiLanguage: string;
+  /** Free-text "About me" the assistant reads every turn (role, projects, hours, goals). */
+  assistantProfile: string;
+  /** The assistant's display name (its "soul" answers to this). */
+  assistantName: string;
+  /** Markdown SOUL.md-style identity block. Blank → the shipped DEFAULT_SOUL is used. */
+  assistantSoul: string;
+  /** How freely the assistant may apply write tools. */
+  assistantPermissionLevel: PermissionLevel;
+  /** Master switch for self-curated memory (background review + recall). */
+  assistantMemoryEnabled: boolean;
+  /** Optional cheaper model for the background memory review; empty → reuse aiModel. */
+  assistantMemoryModel: string;
   /** Generate the daily debrief automatically at `debriefAutoTime`. */
   debriefAutoEnabled: boolean;
   /** Local time of day (`HH:mm`) for the automatic debrief. */
@@ -51,6 +65,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   aiModel: "",
   aiBaseUrl: "",
   aiLanguage: "",
+  assistantProfile: "",
+  assistantName: "Yolo Assistant",
+  assistantSoul: "",
+  assistantPermissionLevel: "auto",
+  assistantMemoryEnabled: true,
+  assistantMemoryModel: "",
   debriefAutoEnabled: false,
   debriefAutoTime: "23:00"
 };

@@ -18,6 +18,8 @@ import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { Task, TaskPriority } from "../../types";
 import { formatDateLabel, toDateKey } from "../../utils/date";
+import { cn } from "../../utils/cn";
+import { useTaskHighlight } from "../../hooks/useTaskHighlight";
 import { formatDurationCompact } from "../../utils/duration";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -152,6 +154,7 @@ function BacklogTaskCard({ task }: { task: Task }) {
 
   const category = categories.find((item) => item.id === task.category_id);
   const categoryColor = resolveCategoryColor(category?.color);
+  const { ref: highlightRef, highlighted } = useTaskHighlight<HTMLDivElement>(task.id);
 
   useEffect(() => {
     setTitle(task.title);
@@ -260,7 +263,13 @@ function BacklogTaskCard({ task }: { task: Task }) {
   }
 
   return (
-    <div className="group relative overflow-hidden rounded-xl border border-border bg-surface p-4 pl-5 shadow-card transition-[box-shadow,border-color,transform] duration-fast hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md">
+    <div
+      ref={highlightRef}
+      className={cn(
+        "group relative overflow-hidden rounded-xl border border-border bg-surface p-4 pl-5 shadow-card transition-[box-shadow,border-color,transform] duration-fast hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md",
+        highlighted && "border-primary ring-2 ring-primary/60"
+      )}
+    >
       <span
         className="absolute inset-y-0 left-0 w-1"
         style={{ backgroundColor: categoryColor }}

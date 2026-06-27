@@ -56,4 +56,18 @@ describe("shouldRunAutoDebrief", () => {
   it("treats a malformed time as disabled", () => {
     expect(shouldRunAutoDebrief(check({ time: "oops" }))).toBe(false);
   });
+
+  it("AI-DEBRIEF-02: fires once per day after the configured time only when enabled, key, and entries exist", () => {
+    expect(
+      shouldRunAutoDebrief(
+        check({ now: new Date("2026-06-13T23:30:00"), enabled: true, hasKey: true, hasEntries: true })
+      )
+    ).toBe(true);
+    expect(shouldRunAutoDebrief(check({ now: new Date("2026-06-13T22:59:00") }))).toBe(false);
+    expect(shouldRunAutoDebrief(check({ enabled: false }))).toBe(false);
+    expect(shouldRunAutoDebrief(check({ hasKey: false }))).toBe(false);
+    expect(shouldRunAutoDebrief(check({ hasEntries: false }))).toBe(false);
+    expect(shouldRunAutoDebrief(check({ alreadyGenerated: true }))).toBe(false);
+    expect(shouldRunAutoDebrief(check({ alreadyAttempted: true }))).toBe(false);
+  });
 });

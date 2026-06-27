@@ -4,18 +4,28 @@ import { useNotificationPermission } from "../../hooks/useNotificationPermission
 import { showStyledNotification } from "../../notify/notifyCenter";
 import { AI_LANGUAGES } from "../../services/ai/languages";
 import { DEFAULT_MODELS, PROVIDER_LABELS } from "../../services/ai/providers";
+import { DEFAULT_SOUL } from "../../services/ai/assistant/soul";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
 import { sendTestNotification } from "../../utils/notificationPermission";
 import type { AiProvider, AppTheme, NotificationStyle } from "../../types";
+import type { PermissionLevel } from "../../services/ai/assistant/agentTools/types";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Field, Input, Select } from "../ui/Field";
 import { PageHeader, SettingsSection } from "../ui/PageHeader";
+import { SegmentedControl } from "../ui/SegmentedControl";
 import { ShortcutInput } from "../ui/ShortcutInput";
 import { Switch } from "../ui/Switch";
 import { CategoryManager } from "./CategoryManager";
+import { MemoryManager } from "./MemoryManager";
+
+const PERMISSION_SEGMENTS: { value: PermissionLevel; label: string; icon: typeof SlidersHorizontal }[] = [
+  { value: "plan", label: "Plan", icon: SlidersHorizontal },
+  { value: "ask", label: "Ask", icon: Bell },
+  { value: "auto", label: "Auto", icon: Sparkles }
+];
 
 export function SettingsPage() {
   const settings = useSettingsStore((state) => state.settings);
@@ -232,7 +242,87 @@ export function SettingsPage() {
               </Field>
             </div>
 
-            <div className="mt-4 border-t border-border pt-1">
+            <div className="mt-6 border-t border-border pt-4">
+              <h3 className="mb-3 text-sm font-medium text-foreground">Assistant identity</h3>
+              <div className="space-y-4">
+                <Field label="Assistant name" hint="What your assistant is called.">
+                  <Input
+                    type="text"
+                    placeholder="Yolo Assistant"
+                    value={settings.assistantName}
+                    onChange={(event) => void updateSetting("assistantName", event.target.value)}
+                  />
+                </Field>
+                <div>
+                  <Field
+                    label="Soul"
+                    hint="Defines who your assistant is and how it behaves — its identity, voice, and boundaries. Leave blank to use the default."
+                  >
+                    <textarea
+                      rows={10}
+                      placeholder={DEFAULT_SOUL}
+                      value={settings.assistantSoul}
+                      onChange={(event) => void updateSetting("assistantSoul", event.target.value)}
+                      className="w-full resize-y rounded-md border border-input bg-surface px-3 py-2 font-mono text-xs leading-relaxed text-foreground shadow-xs outline-none transition-[box-shadow,border-color] duration-fast placeholder:text-subtle hover:border-border-strong focus:border-ring focus:shadow-ring"
+                    />
+                  </Field>
+                  <button
+                    type="button"
+                    onClick={() => void updateSetting("assistantSoul", DEFAULT_SOUL)}
+                    className="mt-2 text-xs font-medium text-primary hover:underline"
+                  >
+                    Reset to default soul
+                  </button>
+                </div>
+                <Field
+                  label="About me"
+                  hint="About you — the assistant reads this to tailor its work to your role, projects, hours, and goals."
+                >
+                  <textarea
+                    rows={4}
+                    placeholder="e.g. I'm a product manager relocating to Tokyo. Mornings are for deep work; I keep meetings after 2pm. Current focus: the Q3 launch and learning Japanese."
+                    value={settings.assistantProfile}
+                    onChange={(event) => void updateSetting("assistantProfile", event.target.value)}
+                    className="w-full resize-y rounded-md border border-input bg-surface px-3 py-2 text-sm leading-relaxed text-foreground shadow-xs outline-none transition-[box-shadow,border-color] duration-fast placeholder:text-subtle hover:border-border-strong focus:border-ring focus:shadow-ring"
+                  />
+                </Field>
+                <Field label="Assistant autonomy" hint="Plan proposes changes, Ask confirms each change, Auto applies reversible changes.">
+                  <SegmentedControl
+                    segments={PERMISSION_SEGMENTS}
+                    value={settings.assistantPermissionLevel}
+                    onChange={(level) => void updateSetting("assistantPermissionLevel", level)}
+                    className="w-full justify-between sm:w-auto"
+                  />
+                </Field>
+              </div>
+            </div>
+
+            <div className="mt-6 border-t border-border pt-4">
+              <h3 className="mb-3 text-sm font-medium text-foreground">Memory</h3>
+              <SettingRow
+                label="Self-curated memory"
+                hint="Let the assistant learn durable facts about you from your conversations and recall them in future chats."
+                value={settings.assistantMemoryEnabled}
+                onChange={(value) => void updateSetting("assistantMemoryEnabled", value)}
+              />
+              <div className="mt-4 space-y-4">
+                <Field
+                  label="Memory model (optional)"
+                  hint="A cheaper model for the background memory review. Leave empty to reuse your assistant model."
+                >
+                  <Input
+                    type="text"
+                    placeholder={settings.aiModel || DEFAULT_MODELS[settings.aiProvider] || "same as assistant"}
+                    value={settings.assistantMemoryModel}
+                    onChange={(event) => void updateSetting("assistantMemoryModel", event.target.value)}
+                  />
+                </Field>
+                <MemoryManager />
+              </div>
+            </div>
+
+            <div className="mt-6 border-t border-border pt-4">
+              <h3 className="mb-3 text-sm font-medium text-foreground">Automation</h3>
               <SettingRow
                 label="Automatic daily debrief"
                 hint="Generate the debrief on a schedule and notify you when it's ready."

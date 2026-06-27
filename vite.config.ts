@@ -21,6 +21,6 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     // The MCP server is a standalone package with its own deps and test runner.
-    exclude: [...configDefaults.exclude, "mcp/**"]
+    exclude: [...configDefaults.exclude, "mcp/**", ".worktrees/**"]
   }
 });

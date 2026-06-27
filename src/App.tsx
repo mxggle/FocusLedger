@@ -1,6 +1,8 @@
 import { AlertCircle, BarChart3, CalendarDays, CheckSquare, Hourglass, Inbox, Info, Settings, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AboutPage } from "./components/about/AboutPage";
+import { AssistantDock } from "./components/assistant/AssistantDock";
+import { AssistantLauncher } from "./components/assistant/AssistantLauncher";
 import { BacklogPage } from "./components/backlog/BacklogPage";
 import { HistoryPage } from "./components/history/HistoryPage";
 import { AppShell } from "./components/layout/AppShell";
@@ -15,6 +17,7 @@ import { ConfirmDialog } from "./components/ui/ConfirmDialog";
 import { SkeletonList } from "./components/ui/Skeleton";
 import { ToastViewport } from "./components/ui/ToastViewport";
 import { TooltipProvider } from "./components/ui/Tooltip";
+import { useAssistantShortcut } from "./hooks/useAssistantShortcut";
 import { useDayRollover } from "./hooks/useDayRollover";
 import { useDebriefSchedule } from "./hooks/useDebriefSchedule";
 import { useNotificationPermissionPrompt } from "./hooks/useNotificationPermission";
@@ -23,6 +26,7 @@ import { useTaskReminders } from "./hooks/useTaskReminders";
 import { useTrayMenu } from "./hooks/useTrayMenu";
 import { useTrayStatus } from "./hooks/useTrayStatus";
 import { ensureNotifyCenter } from "./notify/notifyCenter";
+import { useAssistantStore } from "./stores/assistantStore";
 import { useSettingsStore } from "./stores/settingsStore";
 import { useTaskStore } from "./stores/taskStore";
 import { useUiStore } from "./stores/uiStore";
@@ -68,9 +72,11 @@ export default function App() {
   useTaskReminders({ onOpenToday: openToday });
   useDayRollover();
   useDebriefSchedule();
+  useAssistantShortcut();
 
   useEffect(() => {
     void initialize();
+    void useAssistantStore.getState().hydrate();
   }, [initialize]);
 
   // Wire the fullscreen notification action listeners once, so their buttons
@@ -107,6 +113,7 @@ export default function App() {
         onRouteChange={setRoute}
         title="Yolo"
         subtitle="Make your time count."
+        rightRail={<AssistantDock />}
       >
         {!initialized && loading ? (
           <div className="p-6">
@@ -142,6 +149,7 @@ export default function App() {
       <QuickAddDialog />
       <ConfirmDialog />
       <ToastViewport />
+      <AssistantLauncher />
     </TooltipProvider>
   );
 }

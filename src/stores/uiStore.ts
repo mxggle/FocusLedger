@@ -41,12 +41,58 @@ export type TodayPanes = {
 const STORAGE_SIDEBAR = "fl:sidebarCollapsed";
 const STORAGE_PANES = "fl:todayPanes";
 const STORAGE_SUMMARY_EXPANDED = "fl:todaySummaryExpanded";
+const STORAGE_ASSISTANT_OPEN = "fl:assistantOpen";
+const STORAGE_ASSISTANT_WIDTH = "fl:assistantWidth";
+
+// The assistant is a docked rail that reflows the main content, so its width is
+// user-tunable within a range that keeps both the chat and the task list usable.
+export const ASSISTANT_MIN_WIDTH = 360;
+export const ASSISTANT_MAX_WIDTH = 640;
+export const ASSISTANT_DEFAULT_WIDTH = 420;
+
+function clampAssistantWidth(value: number): number {
+  if (!Number.isFinite(value)) return ASSISTANT_DEFAULT_WIDTH;
+  return Math.min(ASSISTANT_MAX_WIDTH, Math.max(ASSISTANT_MIN_WIDTH, Math.round(value)));
+}
 
 function readSidebarCollapsed(): boolean {
   try {
     return localStorage.getItem(STORAGE_SIDEBAR) === "true";
   } catch {
     return false;
+  }
+}
+
+function readAssistantOpen(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_ASSISTANT_OPEN) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function readAssistantWidth(): number {
+  try {
+    const raw = localStorage.getItem(STORAGE_ASSISTANT_WIDTH);
+    return raw ? clampAssistantWidth(Number(raw)) : ASSISTANT_DEFAULT_WIDTH;
+  } catch {
+    return ASSISTANT_DEFAULT_WIDTH;
+  }
+}
+
+function writeAssistantOpen(value: boolean): void {
+  try {
+    localStorage.setItem(STORAGE_ASSISTANT_OPEN, String(value));
+  } catch {
+    // ignore
+  }
+}
+
+function writeAssistantWidth(value: number): void {
+  try {
+    localStorage.setItem(STORAGE_ASSISTANT_WIDTH, String(value));
+  } catch {
+    // ignore
   }
 }
 
@@ -92,6 +138,10 @@ function writeTodayPanes(value: TodayPanes): void {
   }
 }
 
+// How long the "change just landed" highlight stays lit before auto-clearing.
+const TASK_HIGHLIGHT_MS = 2200;
+let highlightTimer: ReturnType<typeof setTimeout> | undefined;
+
 // ── Store type ───────────────────────────────────────────────────────────────
 
 type UiState = {
@@ -105,6 +155,7 @@ type UiState = {
     toast: Omit<ToastMessage, "id"> & { durationMs?: number }
   ) => string | undefined;
   dismissToast: (id: string) => void;
+  dismissAllToasts: () => void;
   confirm: (options: ConfirmOptions | string) => Promise<boolean>;
   resolveConfirm: (confirmed: boolean) => void;
 
@@ -122,6 +173,22 @@ type UiState = {
   focusZen: boolean;
   setFocusZen: (value: boolean) => void;
   toggleFocusZen: () => void;
+
+  // Yolo Assistant docked rail. Open state + width persist, so the workspace
+  // layout the user set up is restored on relaunch (like an IDE side panel).
+  assistantOpen: boolean;
+  assistantWidth: number;
+  openAssistant: () => void;
+  closeAssistant: () => void;
+  toggleAssistant: () => void;
+  setAssistantWidth: (width: number) => void;
+
+  // Transient "a change just landed here" highlight. The assistant sets it when
+  // a proposed task change is applied, so the affected card flashes + scrolls
+  // into view in the (now visible) task list. Auto-clears after a beat.
+  highlightedTaskId: string | null;
+  highlightTask: (taskId: string) => void;
+  clearHighlightedTask: () => void;
 
   // Cross-component navigation request. Components without access to App's
   // route state (the Today debrief button, the scheduled-debrief toast) set
@@ -172,6 +239,8 @@ export const useUiStore = create<UiState>((set) => ({
     set((state) => ({
       toasts: state.toasts.filter((toast) => toast.id !== id)
     })),
+
+  dismissAllToasts: () => set({ toasts: [] }),
 
   confirm: (options) => {
     const normalized =
@@ -232,6 +301,43 @@ export const useUiStore = create<UiState>((set) => ({
   focusZen: false,
   setFocusZen: (value) => set({ focusZen: value }),
   toggleFocusZen: () => set((state) => ({ focusZen: !state.focusZen })),
+
+  assistantOpen: readAssistantOpen(),
+  assistantWidth: readAssistantWidth(),
+  openAssistant: () => {
+    writeAssistantOpen(true);
+    set({ assistantOpen: true });
+  },
+  closeAssistant: () => {
+    writeAssistantOpen(false);
+    set({ assistantOpen: false });
+  },
+  toggleAssistant: () =>
+    set((state) => {
+      const next = !state.assistantOpen;
+      writeAssistantOpen(next);
+      return { assistantOpen: next };
+    }),
+  setAssistantWidth: (width) =>
+    set(() => {
+      const next = clampAssistantWidth(width);
+      writeAssistantWidth(next);
+      return { assistantWidth: next };
+    }),
+
+  highlightedTaskId: null,
+  highlightTask: (taskId) => {
+    if (highlightTimer) clearTimeout(highlightTimer);
+    set({ highlightedTaskId: taskId });
+    highlightTimer = setTimeout(() => {
+      useUiStore.getState().clearHighlightedTask();
+    }, TASK_HIGHLIGHT_MS);
+  },
+  clearHighlightedTask: () => {
+    if (highlightTimer) clearTimeout(highlightTimer);
+    highlightTimer = undefined;
+    set({ highlightedTaskId: null });
+  },
 
   requestedRoute: null,
   requestRoute: (route) => set({ requestedRoute: route }),

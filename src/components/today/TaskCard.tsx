@@ -22,6 +22,7 @@ import type { Task, TaskPriority } from "../../types";
 import { formatDateLabel, toDateKey } from "../../utils/date";
 import { formatDurationCompact } from "../../utils/duration";
 import { isTaskOverdue } from "../../utils/taskGrouping";
+import { useTaskHighlight } from "../../hooks/useTaskHighlight";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { CategoryDot } from "../ui/CategoryDot";
@@ -93,6 +94,7 @@ export function TaskCard({ task }: { task: Task }) {
   const [plannedStart, setPlannedStart] = useState(task.planned_start_time ?? "");
   const [plannedEnd, setPlannedEnd] = useState(task.planned_end_time ?? "");
   const [stopOpen, setStopOpen] = useState(false);
+  const { ref: highlightRef, highlighted } = useTaskHighlight<HTMLDivElement>(task.id);
 
   const category = categories.find((item) => item.id === task.category_id);
   const categoryColor = resolveCategoryColor(category?.color);
@@ -313,10 +315,12 @@ export function TaskCard({ task }: { task: Task }) {
   return (
     <>
       <div
+        ref={highlightRef}
         className={cn(
           "group relative overflow-hidden rounded-xl border bg-surface p-3.5 pl-4 shadow-card",
           "transition-[box-shadow,border-color,transform] duration-fast hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md",
-          isActive ? "border-primary/40 ring-1 ring-inset ring-primary/10" : "border-border"
+          isActive ? "border-primary/40 ring-1 ring-inset ring-primary/10" : "border-border",
+          highlighted && "border-primary ring-2 ring-primary/60"
         )}
       >
       {/* Category accent rail */}
