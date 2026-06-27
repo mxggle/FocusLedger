@@ -1,4 +1,4 @@
-import type { AgentTaskStore, PermissionLevel } from "./agentTools/types";
+import type { AgentTaskStore, ConversationRecallEntry, PermissionLevel } from "./agentTools/types";
 import { runToolLoop, type ToolLoopDeps, type ToolLoopResult } from "./toolLoop";
 import { generateChat as defaultGenerateChat } from "../chatClient";
 import type { AiSettings, ChatTurn } from "../providers";
@@ -13,6 +13,7 @@ export type RunAssistantTurnInput = {
   messages: ChatTurn[]; // full conversation history, oldest first, last = newest user turn
   insights?: RetrospectiveInsights | null; // pre-computed retrospective facts
   history?: RecallEntry[]; // trailing window of logged reflections, for the recall tool
+  conversations?: ConversationRecallEntry[]; // past conversation messages, for recall_conversations
   onStep?: (label: string) => void; // live status as the tool loop runs
   onToken?: (chunk: string) => void; // live final-answer text deltas
   onStreamStep?: (stepIndex: number, kind: "reasoning" | "final") => void; // phase signaling
@@ -60,6 +61,7 @@ export async function runAssistantToolTurn(
         ctx,
         insights: input.insights ?? null,
         history: input.history ?? [],
+        conversations: input.conversations ?? [],
         now: () => turnTime
       },
       onStep: input.onStep,

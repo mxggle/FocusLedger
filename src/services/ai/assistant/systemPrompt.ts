@@ -1,7 +1,9 @@
 import { buildSoulBlock } from "./soul";
 import { renderMemoryBlock } from "./memory/injectMemory";
+import { renderSkillBlock } from "./skills/render";
 import type { AssistantContext, ContextTask } from "./types";
 import { renderToolCatalog } from "./agentTools/registry";
+import { computeTimePulse, hhmmToMinutes, renderTimePulse } from "./timePulse";
 import type { PermissionLevel } from "./agentTools/types";
 import type {
   CalibrationStat,
@@ -34,6 +36,13 @@ function renderContext(ctx: AssistantContext): string {
 
   if (ctx.currentTime) {
     lines.push(`Current local time: ${localTimeLabel(ctx.currentTime)} (${ctx.currentTime})`);
+    // Only reason about wall-clock progress when the user is actually viewing
+    // today; on a past/future date "now" would be misleading.
+    if (ctx.currentTime.startsWith(ctx.today)) {
+      const nowMinutes = hhmmToMinutes(localTimeLabel(ctx.currentTime));
+      const pulse = nowMinutes != null ? computeTimePulse(nowMinutes, ctx.tasks) : null;
+      if (pulse) lines.push(renderTimePulse(pulse));
+    }
   }
 
   lines.push(
@@ -120,6 +129,10 @@ const MODE_LINE: Record<PermissionLevel, string> = {
 };
 
 const TOOL_PROTOCOL = [
+  "How to think before acting:",
+  "- For anything beyond a one-shot lookup, take a beat first: name the goal in your own words, decide what you must look up to be sure, and sketch the order of operations — then act. Don't guess at ids, times, or estimates you could verify with a read.",
+  "- After tools return, reflect before continuing: did the result match what you expected? Did any write fail? Is the user's goal actually met? Adjust your plan if not, and only give the final answer once it is — don't keep calling tools out of momentum.",
+  "",
   "Tool-calling protocol:",
   "- When you need to call a tool, use the tool-calling API your provider exposes (function calling). When a tool is not available via the API or your provider has no native tool calling, you may instead respond with ONLY a JSON object: { \"tool_calls\": [ { \"name\": \"list_tasks\", \"args\": { \"scope\": \"today\" } } ] }.",
   "- You will receive tool results as the next message. Continue with more tool calls if needed, or give your final answer.",
@@ -128,9 +141,12 @@ const TOOL_PROTOCOL = [
   "- You know the current local time from Current context. For requests like 'from now', 'current time', or '剩下的时间', use that time with today's task list and schedule fields.",
   "- Reads can gather facts. Writes may execute or be queued depending on the permission level below.",
   "- create_task is ONLY for genuinely new work the user wants tracked. If a request cannot be done with the available tools, say so plainly and suggest the closest supported action - never invent a task to fake completion.",
-  "- Before changing many tasks, call list_tasks to fetch exact ids and current schedule times, then call update_task per affected task.",
+  "- When a request is ambiguous, under-specified, or could mean materially different things, call clarify with ONE focused question (optionally with suggested options) instead of guessing. This ends your turn until the user replies.",
+  "- For multi-step, bulk, or conditional work (e.g. 'shift every task 30 min', 'rebalance my afternoon', 'for each overdue task ...'), prefer ONE execute_program call: write a short JavaScript program that calls the tools as async functions and loops over the results, then return a brief summary. This is faster and more reliable than emitting many separate tool calls.",
+  "- Before changing many tasks, call list_tasks to fetch exact ids and current schedule times, then call update_task per affected task (or do both inside execute_program).",
   "- Before setting estimated_minutes, you may call get_calibration so estimates reflect deterministic history.",
   "- When the user asks about past work, what happened, lessons learned, or recurring blockers, call recall before answering.",
+  "- When the user refers to something from an earlier chat ('like we discussed', 'the plan from before', 'what did I ask you last time'), call recall_conversations to look it up before answering.",
   "",
   "Tools available:",
   renderToolCatalog()
@@ -184,6 +200,9 @@ export function buildAssistantSystemPrompt(ctx: AssistantContext): string {
       : []),
     ...(ctx.learnedMemories && ctx.learnedMemories.length > 0
       ? [renderMemoryBlock(ctx.learnedMemories), ""]
+      : []),
+    ...(ctx.learnedSkills && ctx.learnedSkills.length > 0
+      ? [renderSkillBlock(ctx.learnedSkills), ""]
       : []),
     "Write final replies as Markdown. Use tool_calls JSON only for tool turns.",
     "",

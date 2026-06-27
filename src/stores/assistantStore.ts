@@ -4,10 +4,14 @@ import { assistantMemoryRepository } from "../db/assistantMemoryRepository";
 import { rankMemories, MEMORY_INJECT_K } from "../services/ai/assistant/memory/retrieve";
 import { runMemoryReview, MEMORY_REVIEW_DEBOUNCE_MS } from "../services/ai/assistant/memory/runMemoryReview";
 import type { MemoryEntry } from "../services/ai/assistant/memory/types";
+import { assistantSkillRepository } from "../db/assistantSkillRepository";
+import { rankSkills, SKILL_INJECT_K } from "../services/ai/assistant/skills/rank";
+import { runSkillReview, SKILL_REVIEW_DEBOUNCE_MS } from "../services/ai/assistant/skills/runSkillReview";
+import type { AssistantSkill } from "../services/ai/assistant/skills/types";
 import { createAgentTaskStore } from "../services/ai/assistant/agentTools/storeAdapter";
 import { hasDrifted, revertToolCall as revertExecutedToolCall } from "../services/ai/assistant/agentTools/revert";
 import { toolByName } from "../services/ai/assistant/agentTools/registry";
-import type { ToolCallRecord } from "../services/ai/assistant/agentTools/types";
+import type { ConversationRecallEntry, ToolCallRecord } from "../services/ai/assistant/agentTools/types";
 import { runAssistantToolTurn } from "../services/ai/assistant/assistantRunner";
 import { streamChatV2 } from "../services/ai/chatClient";
 import { loadRecallEntries, type RecallEntry } from "../services/ai/assistant/recallHistory";
@@ -26,11 +30,38 @@ export type AssistantStatus = "idle" | "thinking" | "streaming" | "error";
 /** How many past messages to restore on launch. Bounds the prompt size too. */
 const HISTORY_LIMIT = 40;
 
+/** How many past messages to load for cross-session conversation recall. */
+const CONVERSATION_RECALL_CAP = 200;
+
 /** Abort controller for the in-flight stream. Kept outside Zustand state. */
 let currentAbort: AbortController | null = null;
 
 /** Debounce timer for the post-turn background memory review. */
 let memoryReviewTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Debounce timer for the post-turn background skill review (the learning loop). */
+let skillReviewTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Schedule a debounced background skill review for the just-finished exchange. */
+function scheduleSkillReview(transcript: string, assistantText: string, executedToolSummaries: string[]): void {
+  const settings = useSettingsStore.getState().settings;
+  if (!settings.assistantMemoryEnabled) return; // the learning loop shares the memory toggle
+  if (executedToolSummaries.length < 2) return; // gate also enforces this; cheap early-out
+  if (skillReviewTimer) clearTimeout(skillReviewTimer);
+  skillReviewTimer = setTimeout(() => {
+    skillReviewTimer = null;
+    const aux = settings.assistantMemoryModel.trim() || settings.aiModel;
+    void runSkillReview({
+      settings: { ...settings, aiModel: aux },
+      transcript,
+      assistantText,
+      executedToolSummaries,
+      existing: useAssistantStore.getState().skills ?? []
+    })
+      .then(() => useAssistantStore.getState().loadSkills(true)) // refresh cache with new learning
+      .catch(() => {});
+  }, SKILL_REVIEW_DEBOUNCE_MS);
+}
 
 /** Schedule a debounced background memory review for the just-finished exchange. */
 function scheduleMemoryReview(userText: string, assistantText: string): void {
@@ -81,6 +112,8 @@ type AssistantState = {
   insights: RetrospectiveInsights | null;
   history: RecallEntry[] | null;
   memories: MemoryEntry[] | null;
+  skills: AssistantSkill[] | null;
+  conversations: ConversationRecallEntry[] | null;
   streamingMessageId: string | null;
   hydrate: () => Promise<void>;
   send: (text: string, modelText?: string) => Promise<void>;
@@ -94,6 +127,8 @@ type AssistantState = {
   loadInsights: () => Promise<void>;
   loadHistory: () => Promise<void>;
   loadMemories: (force?: boolean) => Promise<void>;
+  loadSkills: (force?: boolean) => Promise<void>;
+  loadConversations: (force?: boolean) => Promise<void>;
   refreshInsights: () => Promise<void>;
 };
 
@@ -151,6 +186,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
   insights: null,
   history: null,
   memories: null,
+  skills: null,
+  conversations: null,
   streamingMessageId: null,
 
   hydrate: async () => {
@@ -363,6 +400,32 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     }
   },
 
+  loadSkills: async (force = false) => {
+    if (!force && get().skills) return; // cached for the session
+    try {
+      set({ skills: await assistantSkillRepository.getActive() });
+    } catch {
+      set({ skills: [] }); // best-effort
+    }
+  },
+
+  loadConversations: async (force = false) => {
+    if (!force && get().conversations) return; // cached for the session
+    try {
+      const recent = await assistantMessageRepository.getRecent(CONVERSATION_RECALL_CAP);
+      const conversations: ConversationRecallEntry[] = recent
+        .filter((message) => message.role === "user" || message.role === "assistant")
+        .map((message) => ({
+          role: message.role as "user" | "assistant",
+          content: message.content,
+          createdAt: message.createdAt
+        }));
+      set({ conversations });
+    } catch {
+      set({ conversations: [] }); // best-effort
+    }
+  },
+
   refreshInsights: async () => {
     try {
       set({ insights: await buildRetrospectiveInsights() });
@@ -391,10 +454,13 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
   await store.getState().loadInsights();
   await store.getState().loadHistory();
   await store.getState().loadMemories();
+  await store.getState().loadSkills();
+  await store.getState().loadConversations();
 
   const lastUserText = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
   const rankedMemories = rankMemories(store.getState().memories ?? [], lastUserText, MEMORY_INJECT_K);
-  const turnSnapshot = { ...snapshot(), learnedMemories: rankedMemories };
+  const rankedSkills = rankSkills(store.getState().skills ?? [], lastUserText, SKILL_INJECT_K);
+  const turnSnapshot = { ...snapshot(), learnedMemories: rankedMemories, learnedSkills: rankedSkills };
 
   currentAbort = new AbortController();
   const controller = currentAbort;
@@ -517,6 +583,7 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
         messages: toChatTurns(history),
         insights: store.getState().insights,
         history: store.getState().history ?? [],
+        conversations: store.getState().conversations ?? [],
         onStep,
         onToken,
         onStreamStep,
@@ -571,6 +638,10 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
     }
     if (finalContent.trim().length > 0) {
       scheduleMemoryReview(lastUserText, finalContent);
+      const executedToolSummaries = result.toolCalls
+        .filter((call) => call.status === "executed")
+        .map((call) => call.summary);
+      scheduleSkillReview(`User: ${lastUserText}\nAssistant: ${finalContent}`, finalContent, executedToolSummaries);
     }
     currentAbort = null;
   } catch (error) {

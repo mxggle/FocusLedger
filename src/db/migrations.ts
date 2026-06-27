@@ -109,6 +109,19 @@ const SCHEMA_STATEMENTS = [
     updated_at TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_assistant_memory_status ON assistant_memory(status)`,
+  `CREATE TABLE IF NOT EXISTS assistant_skills (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    trigger TEXT NOT NULL,
+    steps TEXT NOT NULL,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    archived INTEGER NOT NULL DEFAULT 0,
+    use_count INTEGER NOT NULL DEFAULT 0,
+    last_used_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_assistant_skills_archived ON assistant_skills(archived)`,
   `CREATE INDEX IF NOT EXISTS idx_tasks_due_status ON tasks(due_date, status)`,
   `CREATE INDEX IF NOT EXISTS idx_task_templates_enabled ON task_templates(enabled)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_template_occurrences_date

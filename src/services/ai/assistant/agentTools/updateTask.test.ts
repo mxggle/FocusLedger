@@ -24,18 +24,21 @@ function task(p: Partial<Task> & { id: string }): Task {
   };
 }
 
-function deps(tasks: Task[], updateTask = vi.fn(async () => ({ ok: true }))): AgentToolDeps {
+function deps(
+  tasks: Task[],
+  overrides: Partial<Record<"updateTask" | "startTask" | "pauseActiveTask" | "completeTask" | "dropTask", ReturnType<typeof vi.fn>>> = {}
+): AgentToolDeps {
   return {
     store: {
       getAllTasks: () => tasks,
       getCategories: () => [{ id: "c1", name: "Dev" }],
       createTask: vi.fn(),
-      updateTask,
+      updateTask: overrides.updateTask ?? vi.fn(async () => ({ ok: true })),
       deleteTask: vi.fn(),
-      startTask: vi.fn(),
-      pauseActiveTask: vi.fn(),
-      completeTask: vi.fn(),
-      dropTask: vi.fn(),
+      startTask: overrides.startTask ?? vi.fn(async () => "started"),
+      pauseActiveTask: overrides.pauseActiveTask ?? vi.fn(async () => ({ ok: true })),
+      completeTask: overrides.completeTask ?? vi.fn(async () => ({ ok: true })),
+      dropTask: overrides.dropTask ?? vi.fn(async () => ({ ok: true })),
       moveTaskToBacklog: vi.fn(),
       ensureCategory: vi.fn(async () => "c2"),
       refresh: vi.fn()
@@ -51,7 +54,7 @@ describe("update_task tool", () => {
   it("sets planned_start_time and returns a restore_task undo with the prior value", async () => {
     const t = task({ id: "t1", planned_start_time: "09:00", updated_at: "u0" });
     const update = vi.fn(async () => ({ ok: true }));
-    const res = await updateTaskTool.execute({ task_id: "t1", planned_start_time: "09:30" }, deps([t], update));
+    const res = await updateTaskTool.execute({ task_id: "t1", planned_start_time: "09:30" }, deps([t], { updateTask: update }));
     expect(res.ok).toBe(true);
     expect(update).toHaveBeenCalledWith("t1", expect.objectContaining({ planned_start_time: "09:30" }));
     if (res.ok) {
@@ -73,7 +76,7 @@ describe("update_task tool", () => {
     expect(res.ok).toBe(false);
   });
 
-  it("updates every editable field and captures the prior snapshot (AI-TOOL-09)", async () => {
+  it("edits fields via update and routes the status change through the lifecycle method (AI-TOOL-09)", async () => {
     const t = task({
       id: "t1",
       title: "Old",
@@ -87,7 +90,8 @@ describe("update_task tool", () => {
       status: "todo",
       updated_at: "u0"
     });
-    const update = vi.fn(async () => ({ ok: true }));
+    const update = vi.fn(async (_id: string, _input: Record<string, unknown>) => ({ ok: true }));
+    const startTask = vi.fn(async () => "started" as const);
     const res = await updateTaskTool.execute(
       {
         task_id: "t1",
@@ -101,39 +105,69 @@ describe("update_task tool", () => {
         planned_end_time: "11:00",
         status: "doing"
       },
-      deps([t], update)
+      deps([t], { updateTask: update, startTask })
     );
     expect(res.ok).toBe(true);
-    expect(update).toHaveBeenCalledWith(
-      "t1",
-      expect.objectContaining({
-        title: "New",
-        description: "new desc",
-        category_id: "c1",
-        priority: "high",
-        estimated_minutes: 60,
-        due_date: "2026-06-24",
-        planned_start_time: "10:00",
-        planned_end_time: "11:00",
-        status: "doing"
-      })
-    );
+    // Field edits go through updateTask WITHOUT a raw status write...
+    const updateArgs = (update.mock.calls[0]?.[1] ?? {}) as Record<string, unknown>;
+    expect(updateArgs).toMatchObject({
+      title: "New",
+      description: "new desc",
+      category_id: "c1",
+      priority: "high",
+      estimated_minutes: 60,
+      due_date: "2026-06-24",
+      planned_start_time: "10:00",
+      planned_end_time: "11:00"
+    });
+    expect(updateArgs.status).toBeUndefined();
+    // ...and the status transition is routed through start_task's lifecycle.
+    expect(startTask).toHaveBeenCalledWith("t1");
     if (res.ok) {
       expect(res.undo).toEqual({
         kind: "restore_task",
         taskId: "t1",
         before: expect.objectContaining({
           title: "Old",
-          description: "old desc",
-          category_id: "c1",
-          priority: "low",
-          estimated_minutes: 30,
-          due_date: "2026-06-23",
-          planned_start_time: "09:00",
-          planned_end_time: "10:00",
-          status: "todo"
+          status: "todo",
+          completed_at: null,
+          dropped_at: null
         })
       });
+    }
+  });
+
+  it("routes status→done through complete_task, not a raw status write", async () => {
+    const t = task({ id: "t1", status: "doing" });
+    const update = vi.fn(async () => ({ ok: true }));
+    const completeTask = vi.fn(async () => ({ ok: true }));
+    const res = await updateTaskTool.execute({ task_id: "t1", status: "done" }, deps([t], { updateTask: update, completeTask }));
+    expect(res.ok).toBe(true);
+    expect(completeTask).toHaveBeenCalledWith("t1");
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("routes status→dropped through drop_task and flags the call destructive", async () => {
+    const t = task({ id: "t1", status: "todo" });
+    const dropTask = vi.fn(async () => ({ ok: true }));
+    const res = await updateTaskTool.execute({ task_id: "t1", status: "dropped" }, deps([t], { dropTask }));
+    expect(res.ok).toBe(true);
+    expect(dropTask).toHaveBeenCalledWith("t1");
+    // The gate (auto mode) keys off destructiveFor — dropping must require confirmation.
+    expect(updateTaskTool.destructiveFor?.({ task_id: "t1", status: "dropped" })).toBe(true);
+    expect(updateTaskTool.destructiveFor?.({ task_id: "t1", status: "done" })).toBe(false);
+    expect(updateTaskTool.destructiveFor?.({ task_id: "t1", planned_start_time: "09:00" })).toBe(false);
+  });
+
+  it("clears completed_at/dropped_at when reopening a done task to todo", async () => {
+    const t = task({ id: "t1", status: "done", completed_at: "2026-06-20T00:00:00.000Z" });
+    const update = vi.fn(async () => ({ ok: true }));
+    const res = await updateTaskTool.execute({ task_id: "t1", status: "todo" }, deps([t], { updateTask: update }));
+    expect(res.ok).toBe(true);
+    expect(update).toHaveBeenCalledWith("t1", expect.objectContaining({ status: "todo", completed_at: null, dropped_at: null }));
+    if (res.ok) {
+      // Undo must restore the prior completion stamp, not silently drop it.
+      expect(res.undo).toMatchObject({ before: { completed_at: "2026-06-20T00:00:00.000Z" } });
     }
   });
 });

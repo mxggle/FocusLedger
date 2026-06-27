@@ -2,6 +2,7 @@ import type { Category, Task } from "../../../types";
 import type { AssistantContext, ContextTask } from "./types";
 import type { RetrospectiveInsights } from "../../retrospect/types";
 import type { MemoryEntry } from "./memory/types";
+import type { AssistantSkill } from "./skills/types";
 import { computeDayBriefing } from "./dayBriefing";
 import type { PermissionLevel } from "./agentTools/types";
 
@@ -19,6 +20,7 @@ export type AssistantStoreSnapshot = {
   assistantName?: string;
   assistantSoul?: string;
   learnedMemories?: MemoryEntry[];
+  learnedSkills?: AssistantSkill[];
   permissionLevel?: PermissionLevel;
 };
 
@@ -57,6 +59,9 @@ export function buildAssistantContext(
     ...(insights && insights.hasData ? { retro: insights } : {}),
     ...(snapshot.learnedMemories && snapshot.learnedMemories.length > 0
       ? { learnedMemories: snapshot.learnedMemories }
+      : {}),
+    ...(snapshot.learnedSkills && snapshot.learnedSkills.length > 0
+      ? { learnedSkills: snapshot.learnedSkills }
       : {}),
     ...(snapshot.permissionLevel ? { permissionLevel: snapshot.permissionLevel } : {})
   };

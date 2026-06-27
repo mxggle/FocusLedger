@@ -158,6 +158,8 @@ const BEFORE_T1: TaskUndoSnapshot = {
   planned_start_time: null,
   planned_end_time: null,
   status: "todo",
+  completed_at: null,
+  dropped_at: null,
   updated_at: "u0"
 };
 
@@ -405,6 +407,8 @@ describe("assistantStore tool calls", () => {
                   planned_start_time: null,
                   planned_end_time: null,
                   status: "todo",
+                  completed_at: null,
+                  dropped_at: null,
                   updated_at: "u0"
                 }
               }
@@ -453,6 +457,8 @@ describe("assistantStore tool calls", () => {
                   planned_start_time: null,
                   planned_end_time: null,
                   status: "todo",
+                  completed_at: null,
+                  dropped_at: null,
                   updated_at: "u0"
                 }
               }

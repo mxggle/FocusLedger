@@ -29,6 +29,8 @@ const before: TaskUndoSnapshot = {
   planned_start_time: "09:00",
   planned_end_time: null,
   status: "todo",
+  completed_at: null,
+  dropped_at: null,
   updated_at: "2026-06-23T00:00:00.000Z"
 };
 
@@ -53,6 +55,16 @@ describe("revertToolCall", () => {
     expect(s.updateTask).toHaveBeenCalledWith(
       "t1",
       expect.objectContaining({ planned_start_time: "09:00", status: "todo" })
+    );
+  });
+
+  it("restore_task round-trips the lifecycle timestamps so revert clears a stale completion", async () => {
+    const s = store();
+    const completed = { ...before, status: "done" as const, completed_at: "2026-06-20T00:00:00.000Z" };
+    await revertToolCall(rec({ kind: "restore_task", taskId: "t1", before: completed }), s);
+    expect(s.updateTask).toHaveBeenCalledWith(
+      "t1",
+      expect.objectContaining({ status: "done", completed_at: "2026-06-20T00:00:00.000Z", dropped_at: null })
     );
   });
 

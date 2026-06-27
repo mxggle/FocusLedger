@@ -62,6 +62,15 @@ describe("write tools", () => {
     if (res.ok) expect(res.undo).toEqual({ kind: "delete_task", taskId: "new1" });
   });
 
+  it("create_task defaults a new task to today when no due_date is given (matches MCP)", async () => {
+    const d = deps([]);
+    const create = vi.fn(async () => ({ ok: true, id: "new1" }));
+    d.store.createTask = create;
+    const res = await createTaskTool.execute({ title: "Inbox zero" }, d);
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ due_date: "2026-06-23" }));
+    if (res.ok) expect(res.summary).toContain("for 2026-06-23");
+  });
+
   it("create_task fails if the created id is unavailable", async () => {
     const d = deps([]);
     d.store.createTask = vi.fn(async () => ({ ok: true }));

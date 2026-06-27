@@ -17,6 +17,10 @@ export type TaskUndoSnapshot = Pick<
   | "planned_start_time"
   | "planned_end_time"
   | "status"
+  // Lifecycle timestamps must round-trip with status, otherwise reverting a
+  // done/dropped task leaves a stale completed_at/dropped_at behind.
+  | "completed_at"
+  | "dropped_at"
   | "updated_at"
 >;
 
@@ -43,18 +47,31 @@ export interface AgentTaskStore {
   refresh(): Promise<void>;
 }
 
+/** A past assistant-conversation message, for cross-session recall. */
+export type ConversationRecallEntry = {
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+};
+
 export type AgentToolDeps = {
   store: AgentTaskStore;
   ctx: AssistantContext;
   insights: RetrospectiveInsights | null;
   history: RecallEntry[];
+  conversations?: ConversationRecallEntry[];
   now: () => string;
 };
 
 export type AgentTool = {
   name: string;
   category: ToolCategory;
+  /** Static destructiveness. For tools whose risk depends on the arguments
+   *  (e.g. update_task only when status→dropped), see `destructiveFor`. */
   destructive: boolean;
+  /** Per-call override: returns true when *these* args make the call destructive.
+   *  Falls back to `destructive` when absent. */
+  destructiveFor?: (args: unknown) => boolean;
   description: string;
   paramsHint: string;
   parameters: z.ZodType<unknown>;

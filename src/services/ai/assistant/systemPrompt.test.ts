@@ -60,7 +60,7 @@ describe("buildAssistantSystemPrompt", () => {
 
   it("renders the Soul as slot #1 and drops the hardcoded day-planning identity", () => {
     const prompt = buildAssistantSystemPrompt(makeCtx({ assistantName: "Hermes", assistantSoul: "" }));
-    expect(prompt).toContain("operating partner"); // a phrase from DEFAULT_SOUL
+    expect(prompt).toContain("time-management partner"); // a phrase from DEFAULT_SOUL
     expect(prompt).toContain("Hermes");
     expect(prompt).not.toContain("focused day-planning companion");
   });

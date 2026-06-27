@@ -1,7 +1,9 @@
+import { clarifyTool } from "./clarify";
 import { completeTaskTool } from "./completeTask";
 import { createTaskTool } from "./createTask";
 import { dailySummaryTool } from "./dailySummary";
 import { dropTaskTool } from "./dropTask";
+import { findFreeSlotsTool } from "./findFreeSlots";
 import { getCalibrationTool } from "./getCalibration";
 import { getTaskTool } from "./getTask";
 import { listCategoriesTool } from "./listCategories";
@@ -9,6 +11,7 @@ import { listTasksTool } from "./listTasks";
 import { moveToBacklogTool } from "./moveToBacklog";
 import { pauseTaskTool } from "./pauseTask";
 import { recallTool } from "./recall";
+import { recallConversationsTool } from "./recallConversations";
 import { searchTasksTool } from "./searchTasks";
 import { startTaskTool } from "./startTask";
 import type { AgentTool } from "./types";
@@ -21,8 +24,11 @@ export const AGENT_TOOLS: AgentTool[] = [
   searchTasksTool,
   listCategoriesTool,
   getCalibrationTool,
+  findFreeSlotsTool,
   recallTool,
+  recallConversationsTool,
   dailySummaryTool,
+  clarifyTool,
   createTaskTool,
   updateTaskTool,
   startTaskTool,
@@ -38,8 +44,13 @@ export function toolByName(name: string): AgentTool | undefined {
   return BY_NAME.get(name);
 }
 
+export const EXECUTE_PROGRAM_DESCRIPTION =
+  "Run a small JavaScript program that calls the other tools as async functions (e.g. `const t = await list_tasks({scope:\"today\"}); for (const x of t.data) await update_task({task_id:x.id, ...});` then `return` a short summary). Prefer this for multi-step, bulk, or conditional work over many separate tool calls. Reads return their data; writes obey the same permission level. log(...) for debugging.";
+
 export function renderToolCatalog(): string {
-  return AGENT_TOOLS.map((tool) => `- ${tool.name}: ${tool.description} params: ${tool.paramsHint}`).join("\n");
+  const lines = AGENT_TOOLS.map((tool) => `- ${tool.name}: ${tool.description} params: ${tool.paramsHint}`);
+  lines.push(`- execute_program: ${EXECUTE_PROGRAM_DESCRIPTION} params: code (required, JavaScript source)`);
+  return lines.join("\n");
 }
 
 const STRING = { type: "string" };
@@ -79,7 +90,20 @@ const NATIVE_PARAMETERS: Record<string, Record<string, unknown>> = {
     type: "object",
     properties: { category: STRING }
   },
+  find_free_slots: {
+    type: "object",
+    properties: {
+      duration_minutes: NUMBER,
+      earliest: STRING,
+      latest: STRING
+    }
+  },
   recall: {
+    type: "object",
+    properties: { query: STRING },
+    required: ["query"]
+  },
+  recall_conversations: {
     type: "object",
     properties: { query: STRING },
     required: ["query"]
@@ -87,6 +111,14 @@ const NATIVE_PARAMETERS: Record<string, Record<string, unknown>> = {
   daily_summary: {
     type: "object",
     properties: { scope: STRING }
+  },
+  clarify: {
+    type: "object",
+    properties: {
+      question: STRING,
+      options: { type: "array", items: { type: "string" } }
+    },
+    required: ["question"]
   },
   create_task: {
     type: "object",
@@ -145,9 +177,19 @@ const NATIVE_PARAMETERS: Record<string, Record<string, unknown>> = {
 };
 
 export function nativeToolSpecs(): ChatToolSpec[] {
-  return AGENT_TOOLS.map((tool) => ({
+  const specs = AGENT_TOOLS.map((tool) => ({
     name: tool.name,
     description: tool.description,
     parameters: NATIVE_PARAMETERS[tool.name] ?? { type: "object", properties: {} }
   }));
+  specs.push({
+    name: "execute_program",
+    description: EXECUTE_PROGRAM_DESCRIPTION,
+    parameters: {
+      type: "object",
+      properties: { code: { type: "string" } },
+      required: ["code"]
+    }
+  });
+  return specs;
 }

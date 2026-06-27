@@ -96,8 +96,16 @@ Current tools:
 
 | Category | Tools |
 |---|---|
-| Read | `list_tasks`, `get_task`, `search_tasks`, `list_categories`, `get_calibration`, `recall`, `daily_summary` |
+| Read | `list_tasks`, `get_task`, `search_tasks`, `list_categories`, `get_calibration`, `find_free_slots`, `recall`, `recall_conversations`, `daily_summary`, `clarify` |
 | Write | `create_task`, `update_task`, `start_task`, `pause_task`, `complete_task`, `move_to_backlog`, `drop_task` |
+| Meta | `execute_program` (programmatic tool calling — see §3.9), `clarify` (ask one question instead of guessing) |
+
+`find_free_slots` is pure deterministic schedule math (open gaps in today's plan
+that fit a block); like all numbers it is computed in TS and only narrated.
+`create_task` defaults a new task to **today** (matching the MCP `add_task`); pass
+`due_date: null` for the backlog. `update_task` routes any `status` change through
+the dedicated lifecycle methods (`complete/drop/start/pause`) so timers close and
+`completed_at`/`dropped_at` stay consistent — it is not a raw status write.
 
 The model may emit:
 
@@ -113,7 +121,12 @@ the user's **Assistant autonomy** setting (`PermissionLevel`):
 |---|---|
 | `plan` | Reads run; every write is queued as a pending card. |
 | `ask` | Reads run; every write is queued as a pending card. |
-| `auto` | Reversible writes execute immediately; destructive writes (`drop_task`) are queued for confirmation. |
+| `auto` | Reversible writes execute immediately; destructive writes are queued for confirmation. |
+
+Destructiveness is per-call, not just per-tool: a tool may expose `destructiveFor(args)`
+so that, e.g., `update_task` with `status: "dropped"` is gated exactly like `drop_task`
+instead of slipping through `auto` mode. The JSON loop and the PTC sandbox share the
+same `isDestructive` / `needsConfirm` gate.
 
 All write results are stored as `ToolCallRecord`s with status
 `executed` / `pending` / `failed` / `reverted` / `dismissed`.
@@ -123,7 +136,10 @@ All write results are stored as `ToolCallRecord`s with status
 Write tools return an inverse `UndoOp`:
 
 - created tasks return `{ kind: "delete_task", taskId }`;
-- edits and state changes return `{ kind: "restore_task", taskId, before }`.
+- edits and state changes return `{ kind: "restore_task", taskId, before }`. The
+  `before` snapshot includes the lifecycle timestamps (`completed_at`/`dropped_at`)
+  so reverting a done/dropped task clears its stamp instead of leaving it stale.
+  (Reopening a closed time entry is out of scope — revert is a best-effort field restore.)
 
 Executed reversible calls render with a **Revert** control. Reverting checks
 `expectedUpdatedAt`; if the task changed since the assistant edit, the user must
@@ -214,7 +230,41 @@ the `assistant_memory` table.
 
 Invariants: deterministic retrieval (the LLM only *extracts/narrates*, never ranks);
 validation drops-never-throws; BYO-key with **no new provider dependency** (no embeddings,
-no FTS5). **Next pillars:** learned skills + cross-session conversation recall.
+no FTS5).
+
+### 3.9 Programmatic tool calling (PTC, Hermes L2)
+
+For multi-step / bulk / conditional work, the model can emit one `execute_program`
+call whose `code` is a small JavaScript program that calls the other tools as async
+functions and loops/branches over the results (e.g. *"shift every task 30 min"* →
+`const t = await list_tasks(...); for (...) await update_task(...)`). The program runs
+in a sandboxed QuickJS VM ([`ptc/sandbox.ts`](../src/services/ai/assistant/ptc/sandbox.ts),
+`quickjs-emscripten`): wall-clock timeout, max-call cap, `AbortSignal` honored, **no host
+network/filesystem access**. [`ptc/registryBridge.ts`](../src/services/ai/assistant/ptc/registryBridge.ts)
+adapts the live registry into sandbox host functions so **writes obey the same permission
+gate and record the same reversible `UndoOp`s** as direct calls; deferred writes return a
+"queued" sentinel so the program can continue. `runToolLoop` feeds the program's return
+value, logs, and per-call results back to the model. If the WASM fails to load, the loop
+degrades gracefully (captured error → the model falls back to one-call-at-a-time JSON).
+
+### 3.10 Learned skills (the procedural-memory pillar)
+
+Ported alongside memory: the assistant extracts reusable **skills** from genuinely
+multi-step turns and recalls relevant ones each turn. Pure cores live in
+[`assistant/skills/`](../src/services/ai/assistant/skills) (rank / render / gate / extract /
+parse / applyOps — mirroring `memory/`), with [`assistantSkillRepository`](../src/db/assistantSkillRepository.ts)
+and the `assistant_skills` table. Pre-turn: `rankSkills` injects the top-K into the prompt
+(additive — empty when none). Post-turn: a debounced, gated, fire-and-forget `runSkillReview`
+makes one aux LLM call, parses `SkillOp[]`, folds (dedup → usage bump, pinned protected,
+archive-not-delete), and persists. Shares the `assistantMemoryEnabled` learning-loop toggle.
+
+### 3.11 Clarify + cross-session recall
+
+`clarify` lets the agent ask **one** focused question (with optional suggested options)
+instead of guessing on an ambiguous request — it ends the turn until the user replies, with
+no write side effects. `recall_conversations` searches prior assistant conversations
+(persisted in `assistant_messages`, capped window, deterministic keyword rank in TS) so the
+agent can answer *"like we discussed before"* across sessions.
 
 ---
 

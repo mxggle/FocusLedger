@@ -1,14 +1,18 @@
 import { generateChat as defaultGenerateChat } from "../chatClient";
 import type { AiSettings, ChatInput, ChatTurn } from "../providers";
-import { needsConfirm } from "./agentTools/permissions";
+import { isDestructive, needsConfirm } from "./agentTools/permissions";
 import { nativeToolSpecs, toolByName } from "./agentTools/registry";
 import type { AgentToolDeps, PermissionLevel, ToolCallRecord } from "./agentTools/types";
 import { parseToolCalls, type ParsedToolCall } from "./responseParser";
 import { createId } from "../../../utils/id";
 import { describeToolCallForDisplay } from "./toolDisplay";
+import { runProgram } from "./ptc/sandbox";
+import { buildHostTools } from "./ptc/registryBridge";
 
 export const TOOL_TEMPERATURE = 0.3;
 export const MAX_STEPS = 12;
+export const PROGRAM_TIMEOUT_MS = 8000;
+export const PROGRAM_MAX_CALLS = 60;
 
 export type ToolLoopInput = {
   settings: AiSettings;
@@ -59,23 +63,84 @@ export async function runToolLoop(
     };
     let raw: string;
     let nativeCalls: ParsedToolCall[] | null = null;
-    if (deps.generateChatV2) {
-      const { text, toolCalls } = await deps.generateChatV2(settings, genInput, {
-        onToken: input.onToken,
-        signal: input.signal
-      });
-      raw = text;
-      nativeCalls = toolCalls && toolCalls.length > 0 ? toolCalls : null;
-    } else {
-      raw = await (deps.generateChat ?? defaultGenerateChat)(settings, genInput, input.signal);
-      nativeCalls = null;
+    try {
+      if (deps.generateChatV2) {
+        const { text, toolCalls } = await deps.generateChatV2(settings, genInput, {
+          onToken: input.onToken,
+          signal: input.signal
+        });
+        raw = text;
+        nativeCalls = toolCalls && toolCalls.length > 0 ? toolCalls : null;
+      } else {
+        raw = await (deps.generateChat ?? defaultGenerateChat)(settings, genInput, input.signal);
+        nativeCalls = null;
+      }
+    } catch {
+      // An abort surfaces here as a thrown error — treat it as a clean stop.
+      if (input.signal?.aborted) return { reply: "", toolCalls: records };
+      // Transient provider failure mid-loop: stop iterating and fall through to
+      // the catch-guarded final fallback so any executed writes still surface.
+      break;
     }
+
+    // The signal may have aborted *during* generation; don't run tool calls
+    // (especially writes) the user already cancelled.
+    if (input.signal?.aborted) return { reply: raw.trim(), toolCalls: records };
 
     const calls = nativeCalls ?? parseToolCalls(raw);
     if (!calls) {
       input.onStreamStep?.(step, "final");
       return { reply: raw.trim(), toolCalls: records };
     }
+
+    const clarifyCall = calls.find((call) => call.name === "clarify");
+    if (clarifyCall) {
+      const parsed = toolByName("clarify")?.parameters.safeParse(clarifyCall.args);
+      if (parsed?.success) {
+        const data = parsed.data as { question: string; options?: string[] };
+        const options = data.options ?? [];
+        const reply =
+          options.length > 0 ? `${data.question}\n\n${options.map((opt) => `- ${opt}`).join("\n")}` : data.question;
+        input.onStreamStep?.(step, "final");
+        return { reply, toolCalls: records };
+      }
+    }
+
+    const programCall = calls.find((call) => call.name === "execute_program");
+    if (programCall) {
+      input.onStreamStep?.(step, "reasoning");
+      const code = (programCall.args as { code?: unknown })?.code;
+      if (typeof code !== "string" || code.trim().length === 0) {
+        messages.push({ role: "assistant", content: JSON.stringify({ tool_calls: [{ name: "execute_program", args: programCall.args }] }) });
+        messages.push({
+          role: "user",
+          content: "Program result:\nexecute_program: missing or empty `code` string argument.\n\nContinue, or give your final answer."
+        });
+        continue;
+      }
+      input.onStep?.("Running a program...");
+      const hostTools = buildHostTools(input.deps, input.level, records);
+      const ptc = await runProgram(code, {
+        tools: hostTools,
+        signal: input.signal,
+        timeoutMs: PROGRAM_TIMEOUT_MS,
+        maxCalls: PROGRAM_MAX_CALLS
+      });
+      const callLines = ptc.calls.map(
+        (call) => `  - ${call.name}: ${call.error ? `error - ${call.error}` : "ok"}`
+      );
+      const programFeedback = ptc.ok
+        ? [
+            `execute_program: ok. return value: ${JSON.stringify(ptc.returnValue ?? null)}`,
+            ...(ptc.logs.length > 0 ? [`logs:`, ...ptc.logs.map((line) => `  ${line}`)] : []),
+            ...(callLines.length > 0 ? [`tool calls made:`, ...callLines] : [])
+          ].join("\n")
+        : `execute_program: FAILED - ${ptc.error}${callLines.length > 0 ? `\ntool calls made:\n${callLines.join("\n")}` : ""}`;
+      messages.push({ role: "assistant", content: JSON.stringify({ tool_calls: [{ name: "execute_program", args: { code } }] }) });
+      messages.push({ role: "user", content: `Program result:\n${programFeedback}\n\nContinue, or give your final answer.` });
+      continue;
+    }
+
     input.onStreamStep?.(step, "reasoning");
 
     const feedback: string[] = new Array(calls.length).fill("");
@@ -121,13 +186,13 @@ export async function runToolLoop(
         name: call.name,
         args: call.args,
         category: "write",
-        destructive: tool.destructive,
+        destructive: isDestructive(tool, parsed.data),
         summary: display.summary,
         targetTitle: display.targetTitle,
         status: "pending"
       };
 
-      if (needsConfirm(tool, input.level)) {
+      if (needsConfirm(tool, input.level, parsed.data)) {
         records.push({ ...base, status: "pending" });
         feedback[idx] = `${call.name}: queued for the user's confirmation (not applied yet)`;
         continue;
@@ -155,10 +220,16 @@ export async function runToolLoop(
       raw && raw.trim().length > 0
         ? raw
         : JSON.stringify({ tool_calls: calls.map((c) => ({ name: c.name, args: c.args })) });
+    const anyFailed = feedback.some((line) => / FAILED -/.test(line));
+    // Nudge a quick self-check: stop when the goal is met, fix course when a step
+    // failed — rather than calling tools out of momentum.
+    const reflect = anyFailed
+      ? "A step failed above. Decide whether to adjust and retry, or explain the blocker — don't repeat the same failing call."
+      : "If the user's goal is now met, give your final answer; otherwise continue with the next needed step.";
     messages.push({ role: "assistant", content: assistantContent });
     messages.push({
       role: "user",
-      content: `Tool results:\n${feedback.join("\n")}\n\nContinue, or give your final answer.`
+      content: `Tool results:\n${feedback.join("\n")}\n\n${reflect}`
     });
   }
 

@@ -25,9 +25,9 @@ export const createTaskTool: AgentTool = {
   category: "write",
   destructive: false,
   description:
-    'Create a genuinely new task the user wants tracked. Do not use this as a fallback for unsupported requests or requests about existing tasks.',
+    'Create a genuinely new task the user wants tracked. Defaults to today when no due_date is given; pass due_date null to send it to the backlog instead. Do not use this as a fallback for unsupported requests or requests about existing tasks.',
   paramsHint:
-    'title (required), description, category, priority(low|medium|high), estimated_minutes, due_date("today"|YYYY-MM-DD|null), planned_start_time("HH:mm"|null), planned_end_time("HH:mm"|null)',
+    'title (required), description, category, priority(low|medium|high), estimated_minutes, due_date("today"|YYYY-MM-DD|null; omit→today), planned_start_time("HH:mm"|null), planned_end_time("HH:mm"|null)',
   parameters: schema,
   async execute(rawArgs, deps: AgentToolDeps): Promise<ToolResult> {
     try {
@@ -39,7 +39,9 @@ export const createTaskTool: AgentTool = {
       if (args.description !== undefined) input.description = args.description;
       if (args.priority !== undefined) input.priority = args.priority;
       if (args.estimated_minutes !== undefined) input.estimated_minutes = args.estimated_minutes;
-      if (args.due_date !== undefined) input.due_date = resolveDueDate(deps, args.due_date);
+      // Match the MCP add_task default: a new task lands on today unless the
+      // caller explicitly sends it to the backlog (due_date null/"").
+      input.due_date = args.due_date === undefined ? deps.ctx.today : resolveDueDate(deps, args.due_date);
       if (args.planned_start_time !== undefined) input.planned_start_time = args.planned_start_time || null;
       if (args.planned_end_time !== undefined) input.planned_end_time = args.planned_end_time || null;
       if (args.category !== undefined) {

@@ -16,6 +16,8 @@ export function snapshot(task: Task): TaskUndoSnapshot {
     planned_start_time: task.planned_start_time,
     planned_end_time: task.planned_end_time,
     status: task.status,
+    completed_at: task.completed_at,
+    dropped_at: task.dropped_at,
     updated_at: task.updated_at
   };
 }

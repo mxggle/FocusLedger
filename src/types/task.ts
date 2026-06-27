@@ -47,5 +47,9 @@ export type UpdateTaskInput = Partial<
     | "planned_start_time"
     | "planned_end_time"
     | "sort_order"
+    // Lifecycle timestamps travel with status so a status change can keep them
+    // consistent (set on done/dropped, cleared otherwise).
+    | "completed_at"
+    | "dropped_at"
   >
 >;

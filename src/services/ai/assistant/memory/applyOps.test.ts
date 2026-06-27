@@ -57,6 +57,23 @@ describe("applyMemoryOps", () => {
     expect(writes).toEqual([]);
   });
 
+  it("keeps distinct CJK facts apart instead of collapsing them onto an empty key", () => {
+    counter = 0;
+    // Two genuinely different Chinese facts. The old ASCII-only normalize folded
+    // both to "" and deduped the second into the first; they must stay distinct.
+    const { writes } = applyMemoryOps(
+      [],
+      [
+        { op: "add", kind: "preference", text: "喜欢早晨工作" },
+        { op: "add", kind: "context", text: "下午容易分心" }
+      ],
+      NOW,
+      makeId
+    );
+    expect(writes).toHaveLength(2);
+    expect(writes.every((w) => w.kind === "add")).toBe(true);
+  });
+
   it("AI-MEM-05: resolves a contradiction by archiving the outdated memory and adding the corrected one", () => {
     counter = 0;
     const existing = [mem({ id: "m1", text: "Prefers mornings", useCount: 1 })];

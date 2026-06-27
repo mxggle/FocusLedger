@@ -9,6 +9,9 @@ export async function revertToolCall(
   if (rec.undo.kind === "delete_task") return store.deleteTask(rec.undo.taskId);
 
   const { before, taskId } = rec.undo;
+  // Best-effort: restores the task row including lifecycle status + timestamps.
+  // It does not reopen a time entry that was closed when the task was
+  // completed/dropped — reversing that is out of scope for a field restore.
   return store.updateTask(taskId, {
     title: before.title,
     description: before.description,
@@ -18,7 +21,9 @@ export async function revertToolCall(
     due_date: before.due_date,
     planned_start_time: before.planned_start_time,
     planned_end_time: before.planned_end_time,
-    status: before.status
+    status: before.status,
+    completed_at: before.completed_at,
+    dropped_at: before.dropped_at
   });
 }
 

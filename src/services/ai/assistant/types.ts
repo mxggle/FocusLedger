@@ -4,6 +4,7 @@ import type { RetrospectiveInsights } from "../../retrospect/types";
 import type { DayBriefing } from "./dayBriefing";
 import type { PermissionLevel, ToolCallRecord } from "./agentTools/types";
 import type { MemoryEntry } from "./memory/types";
+import type { AssistantSkill } from "./skills/types";
 
 export type { ChatRole };
 
@@ -34,6 +35,7 @@ export type AssistantContext = {
   briefing?: DayBriefing; // deterministic snapshot of today's load
   retro?: RetrospectiveInsights; // present only when there is history to report
   learnedMemories?: MemoryEntry[]; // ranked top-K for this turn (empty/absent → no block)
+  learnedSkills?: AssistantSkill[]; // ranked top-K reusable skills for this turn (empty/absent → no block)
   permissionLevel?: PermissionLevel;
 };
 

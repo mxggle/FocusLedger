@@ -92,6 +92,68 @@ describe("runToolLoop", () => {
     expect(exec?.undo).toBeTruthy();
   });
 
+  it("clarify ends the turn with the question as the reply and runs no writes", async () => {
+    const update = vi.fn(async () => ({ ok: true }));
+    const generateChat = vi.fn(async () =>
+      '{"tool_calls":[{"name":"clarify","args":{"question":"Which day did you mean?","options":["Today","Tomorrow"]}}]}'
+    );
+    const res = await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "move my stuff" }],
+        level: "auto",
+        deps: depsWith({ updateTask: update })
+      },
+      { generateChat }
+    );
+    expect(generateChat).toHaveBeenCalledTimes(1);
+    expect(update).not.toHaveBeenCalled();
+    expect(res.reply).toContain("Which day did you mean?");
+    expect(res.reply).toContain("Today");
+    expect(res.toolCalls).toHaveLength(0);
+  });
+
+  it("runs an execute_program call that drives a write tool in auto mode", async () => {
+    const update = vi.fn(async () => ({ ok: true }));
+    const replies = [
+      '{"tool_calls":[{"name":"execute_program","args":{"code":"await update_task({task_id:\\"t1\\", planned_start_time:\\"09:30\\"}); return \\"done\\";"}}]}',
+      "Shifted it via a program."
+    ];
+    let i = 0;
+    const res = await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "shift report" }],
+        level: "auto",
+        deps: depsWith({ updateTask: update })
+      },
+      { generateChat: vi.fn(async () => replies[i++]) }
+    );
+    expect(update).toHaveBeenCalledWith("t1", expect.objectContaining({ planned_start_time: "09:30" }));
+    expect(res.reply).toContain("via a program");
+    expect(res.toolCalls.find((call) => call.name === "update_task")?.status).toBe("executed");
+  });
+
+  it("defers program-driven writes to pending in ask mode", async () => {
+    const update = vi.fn(async () => ({ ok: true }));
+    const replies = [
+      '{"tool_calls":[{"name":"execute_program","args":{"code":"await update_task({task_id:\\"t1\\", planned_start_time:\\"09:30\\"}); return \\"queued\\";"}}]}',
+      "Proposed via program."
+    ];
+    let i = 0;
+    const res = await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "shift report" }],
+        level: "ask",
+        deps: depsWith({ updateTask: update })
+      },
+      { generateChat: vi.fn(async () => replies[i++]) }
+    );
+    expect(update).not.toHaveBeenCalled();
+    expect(res.toolCalls.find((call) => call.name === "update_task")?.status).toBe("pending");
+  });
+
   it("ask mode defers the write as pending and does not execute", async () => {
     const update = vi.fn(async () => ({ ok: true }));
     const replies = [
@@ -174,6 +236,52 @@ describe("runToolLoop", () => {
     );
     expect(generateChat).not.toHaveBeenCalled();
     expect(res.reply.trim()).toBe("");
+  });
+
+  it("does not execute writes when the signal aborts during generation", async () => {
+    const update = vi.fn(async () => ({ ok: true }));
+    const controller = new AbortController();
+    // First call yields a write, but the user aborts before we act on it.
+    const generateChat = vi.fn(async () => {
+      controller.abort();
+      return '{"tool_calls":[{"name":"update_task","args":{"task_id":"t1","planned_start_time":"09:30"}}]}';
+    });
+    const res = await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "shift it" }],
+        level: "auto",
+        deps: depsWith({ updateTask: update }),
+        signal: controller.signal
+      },
+      { generateChat }
+    );
+    expect(update).not.toHaveBeenCalled();
+    expect(res.toolCalls).toHaveLength(0);
+  });
+
+  it("queues an auto-mode drop routed via update_task for confirmation instead of executing it", async () => {
+    const update = vi.fn(async () => ({ ok: true }));
+    const drop = vi.fn(async () => ({ ok: true }));
+    const replies = [
+      '{"tool_calls":[{"name":"update_task","args":{"task_id":"t1","status":"dropped"}}]}',
+      "Want me to drop it?"
+    ];
+    let i = 0;
+    const res = await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "ditch the report" }],
+        level: "auto",
+        deps: depsWith({ updateTask: update }) as never
+      },
+      { generateChat: vi.fn(async () => replies[i++]) }
+    );
+    // Destructive status change must not slip through auto mode unconfirmed.
+    expect(drop).not.toHaveBeenCalled();
+    const rec = res.toolCalls.find((call) => call.name === "update_task");
+    expect(rec?.status).toBe("pending");
+    expect(rec?.destructive).toBe(true);
   });
 
   it("regression: bulk schedule shifts update existing tasks instead of creating a junk task", async () => {

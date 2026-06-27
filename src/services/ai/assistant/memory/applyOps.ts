@@ -1,8 +1,5 @@
+import { normalizeKey as normalize } from "../normalizeKey";
 import type { MemoryEntry, MemoryOp, MemoryWrite } from "./types";
-
-function normalize(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
-}
 
 /**
  * Fold the review model's ops into concrete persistence writes, deterministically.
