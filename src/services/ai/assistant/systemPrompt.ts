@@ -124,8 +124,8 @@ function renderRetro(retro: RetrospectiveInsights): string {
 const MODE_LINE: Record<PermissionLevel, string> = {
   plan:
     "Permission: PLAN. Do not apply changes - explore with read tools and present a plan; your proposed changes are shown to the user for approval.",
-  ask: "Permission: ASK. You may call write tools, but every change is confirmed by the user before it applies.",
-  auto: "Permission: AUTO. Reversible changes apply immediately; destructive ones (drop_task) are confirmed."
+  ask: "Permission: ASK. You may call write tools, but every change is confirmed by the user on a card before it applies. The card is the confirmation — don't also ask in chat.",
+  auto: "Permission: AUTO. Reversible changes apply immediately; destructive ones (drop_task) surface a confirmation card. The card is the confirmation — don't also ask in chat."
 };
 
 const TOOL_PROTOCOL = [
@@ -140,6 +140,7 @@ const TOOL_PROTOCOL = [
   "- Never show internal task ids, category ids, or tool names in final replies. Use task titles and human-readable times only.",
   "- You know the current local time from Current context. For requests like 'from now', 'current time', or '剩下的时间', use that time with today's task list and schedule fields.",
   "- Reads can gather facts. Writes may execute or be queued depending on the permission level below.",
+  "- When the user clearly asks for a write — including a destructive one like dropping a task — call the tool right away. Queued and destructive calls surface a confirmation card with an Apply button; that card IS the confirmation. Never ask a separate 'are you sure / please confirm' question in chat first — it makes the user confirm twice. Only pause to ask when the request is genuinely ambiguous (then use clarify).",
   "- create_task is ONLY for genuinely new work the user wants tracked. If a request cannot be done with the available tools, say so plainly and suggest the closest supported action - never invent a task to fake completion.",
   "- When a request is ambiguous, under-specified, or could mean materially different things, call clarify with ONE focused question (optionally with suggested options) instead of guessing. This ends your turn until the user replies.",
   "- For multi-step, bulk, or conditional work (e.g. 'shift every task 30 min', 'rebalance my afternoon', 'for each overdue task ...'), prefer ONE execute_program call: write a short JavaScript program that calls the tools as async functions and loops over the results, then return a brief summary. This is faster and more reliable than emitting many separate tool calls.",
