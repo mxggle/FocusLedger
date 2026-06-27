@@ -12,14 +12,27 @@ vi.mock("../services/ai/assistant/assistantRunner", () => ({
 
 const { messageRepo } = vi.hoisted(() => ({
   messageRepo: {
-    append: vi.fn((_message: ChatMessage): Promise<void> => Promise.resolve()),
+    append: vi.fn((_message: ChatMessage, _sessionId: string | null): Promise<void> => Promise.resolve()),
     getRecent: vi.fn((_limit: number): Promise<ChatMessage[]> => Promise.resolve([])),
-    clear: vi.fn((): Promise<void> => Promise.resolve()),
+    getBySession: vi.fn((_sessionId: string, _limit: number): Promise<ChatMessage[]> => Promise.resolve([])),
+    clearSession: vi.fn((_sessionId: string): Promise<void> => Promise.resolve()),
     deleteOne: vi.fn((_id: string): Promise<void> => Promise.resolve()),
     deleteAfter: vi.fn((_id: string): Promise<void> => Promise.resolve())
   }
 }));
 vi.mock("../db/assistantMessageRepository", () => ({ assistantMessageRepository: messageRepo }));
+
+const { sessionRepo } = vi.hoisted(() => ({
+  sessionRepo: {
+    create: vi.fn((_s: { id: string; title?: string; createdAt: string }): Promise<void> => Promise.resolve()),
+    list: vi.fn((): Promise<unknown[]> => Promise.resolve([])),
+    rename: vi.fn((_id: string, _title: string): Promise<void> => Promise.resolve()),
+    setTitleIfEmpty: vi.fn((_id: string, _title: string): Promise<void> => Promise.resolve()),
+    touch: vi.fn((_id: string, _at: string): Promise<void> => Promise.resolve()),
+    delete: vi.fn((_id: string): Promise<void> => Promise.resolve())
+  }
+}));
+vi.mock("../db/assistantSessionRepository", () => ({ assistantSessionRepository: sessionRepo }));
 
 const { memoryRepo } = vi.hoisted(() => ({
   memoryRepo: {
@@ -173,7 +186,9 @@ beforeEach(() => {
     streamingMessageId: null,
     insights: null,
     history: null,
-    memories: null
+    memories: null,
+    activeSessionId: null,
+    sessions: null
   });
   vi.clearAllMocks();
   runAssistantToolTurn.mockReset();
@@ -643,7 +658,10 @@ describe("assistantStore regenerateLast / editUserMessage", () => {
     await useAssistantStore.getState().editUserMessage("u1", "edited question");
 
     expect(messageRepo.deleteAfter).toHaveBeenCalledWith("u1");
-    expect(messageRepo.append).toHaveBeenCalledWith(expect.objectContaining({ id: "u1", content: "edited question" }));
+    expect(messageRepo.append).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "u1", content: "edited question" }),
+      null
+    );
     const messages = useAssistantStore.getState().messages;
     expect(messages.map((m) => m.role)).toEqual(["user", "assistant"]);
     expect(messages[0].content).toBe("edited question");
@@ -728,18 +746,24 @@ describe("assistantStore persistence", () => {
         ]
       }
     ];
-    messageRepo.getRecent.mockResolvedValueOnce(rows);
+    sessionRepo.list.mockResolvedValueOnce([
+      { id: "ses1", title: "earlier", createdAt: "2026-06-19T10:00:00Z", updatedAt: "2026-06-19T10:00:01Z" }
+    ]);
+    messageRepo.getBySession.mockResolvedValueOnce(rows);
 
     await useAssistantStore.getState().hydrate();
 
     const messages = useAssistantStore.getState().messages;
     expect(messages).toHaveLength(2);
     expect(messages[1].toolCalls?.[0].status).toBe("dismissed");
+    expect(useAssistantStore.getState().activeSessionId).toBe("ses1");
   });
 
-  it("clear wipes the persisted history", () => {
+  it("clear deletes the active session", () => {
+    useAssistantStore.setState({ activeSessionId: "ses1", messages: [{ id: "m", role: "user", content: "x", createdAt: "t" }] });
     useAssistantStore.getState().clear();
-    expect(messageRepo.clear).toHaveBeenCalled();
+    expect(sessionRepo.delete).toHaveBeenCalledWith("ses1");
+    expect(useAssistantStore.getState().activeSessionId).toBeNull();
   });
 
   it("clear aborts any in-flight tool turn and keeps the conversation cleared", async () => {
@@ -930,7 +954,10 @@ describe("assistantStore approval, revert, reapply (AI-ACT)", () => {
         "m1"
       )
     ];
-    messageRepo.getRecent.mockResolvedValueOnce(rows);
+    sessionRepo.list.mockResolvedValueOnce([
+      { id: "ses1", title: "earlier", createdAt: "2026-06-19T10:00:00Z", updatedAt: "2026-06-19T10:00:01Z" }
+    ]);
+    messageRepo.getBySession.mockResolvedValueOnce(rows);
 
     await useAssistantStore.getState().hydrate();
     expect(useAssistantStore.getState().messages[1].toolCalls?.[0].status).toBe("dismissed");

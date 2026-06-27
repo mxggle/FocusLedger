@@ -1,5 +1,8 @@
 import { create } from "zustand";
 import { assistantMessageRepository } from "../db/assistantMessageRepository";
+import { assistantSessionRepository } from "../db/assistantSessionRepository";
+import type { AssistantSession } from "../db/types";
+import { deriveSessionTitle } from "../services/ai/assistant/sessionTitle";
 import { assistantMemoryRepository } from "../db/assistantMemoryRepository";
 import { rankMemories, MEMORY_INJECT_K } from "../services/ai/assistant/memory/retrieve";
 import { runMemoryReview, MEMORY_REVIEW_DEBOUNCE_MS } from "../services/ai/assistant/memory/runMemoryReview";
@@ -84,6 +87,51 @@ function scheduleMemoryReview(userText: string, assistantText: string): void {
   }, MEMORY_REVIEW_DEBOUNCE_MS);
 }
 
+/**
+ * Persist a finalized message against the active session and bump the session's
+ * activity timestamp so it sorts to the top of the history list. Best-effort:
+ * the in-memory conversation is the source of truth for the live UI.
+ */
+function persistMessage(message: ChatMessage): void {
+  const sessionId = useAssistantStore.getState().activeSessionId;
+  void assistantMessageRepository.append(message, sessionId).catch(() => {});
+  if (!sessionId) return;
+  void assistantSessionRepository
+    .touch(sessionId, new Date().toISOString())
+    .then(() => useAssistantStore.getState().loadSessions(true))
+    .catch(() => {});
+}
+
+/**
+ * Make sure there is a persisted session to attach messages to before the first
+ * send of a thread. Creates one lazily (titled from the user's first message) so
+ * blank "New chat" threads never hit the database. Subsequent sends only fill in
+ * a missing title. Returns the active session id.
+ */
+async function ensureActiveSession(firstUserText: string): Promise<string> {
+  const store = useAssistantStore;
+  const existing = store.getState().activeSessionId;
+  const title = deriveSessionTitle(firstUserText);
+  if (existing) {
+    if (title) {
+      void assistantSessionRepository
+        .setTitleIfEmpty(existing, title)
+        .then(() => store.getState().loadSessions(true))
+        .catch(() => {});
+    }
+    return existing;
+  }
+  const id = createId("ses");
+  store.setState({ activeSessionId: id });
+  try {
+    await assistantSessionRepository.create({ id, title, createdAt: new Date().toISOString() });
+  } catch {
+    // best-effort: messages still render in-memory even if the row can't persist
+  }
+  void store.getState().loadSessions(true);
+  return id;
+}
+
 function isAbortError(error: unknown): boolean {
   return (
     error instanceof Error &&
@@ -116,7 +164,14 @@ type AssistantState = {
   skills: AssistantSkill[] | null;
   conversations: ConversationRecallEntry[] | null;
   streamingMessageId: string | null;
+  activeSessionId: string | null;
+  sessions: AssistantSession[] | null;
   hydrate: () => Promise<void>;
+  loadSessions: (force?: boolean) => Promise<void>;
+  newSession: () => void;
+  switchSession: (id: string) => Promise<void>;
+  renameSession: (id: string, title: string) => Promise<void>;
+  deleteSession: (id: string) => Promise<void>;
   send: (text: string, modelText?: string) => Promise<void>;
   stop: () => void;
   regenerateLast: () => Promise<void>;
@@ -251,17 +306,104 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
   skills: null,
   conversations: null,
   streamingMessageId: null,
+  activeSessionId: null,
+  sessions: null,
 
   hydrate: async () => {
-    if (get().messages.length > 0) return; // already loaded this session
+    if (get().messages.length > 0 || get().activeSessionId) return; // already loaded this session
     try {
-      const restored = restoreHistoryActions(await assistantMessageRepository.getRecent(HISTORY_LIMIT));
+      const sessions = await assistantSessionRepository.list();
+      set({ sessions });
+      const latest = sessions[0];
+      if (!latest) return; // no history yet — the first send creates a session
+      const restored = restoreHistoryActions(
+        await assistantMessageRepository.getBySession(latest.id, HISTORY_LIMIT)
+      );
       // Don't clobber a conversation the user started while we were loading.
-      if (get().messages.length === 0 && restored.length > 0) {
-        set({ messages: restored });
+      if (get().messages.length === 0 && !get().activeSessionId) {
+        set({ activeSessionId: latest.id, messages: restored });
       }
     } catch {
       // Best-effort: a fresh conversation is fine if history can't be loaded.
+    }
+  },
+
+  loadSessions: async (force = false) => {
+    if (!force && get().sessions) return; // cached for the session
+    try {
+      set({ sessions: await assistantSessionRepository.list() });
+    } catch {
+      set({ sessions: [] }); // best-effort
+    }
+  },
+
+  /** Start a fresh, empty thread. The session row is created lazily on first send
+   *  so we never accumulate empty sessions. No-op when already on a blank thread. */
+  newSession: () => {
+    if (get().messages.length === 0 && !get().activeSessionId) return;
+    if (currentAbort) {
+      currentAbort.abort();
+      currentAbort = null;
+    }
+    set({
+      activeSessionId: null,
+      messages: [],
+      status: "idle",
+      error: null,
+      steps: [],
+      streamingMessageId: null
+    });
+  },
+
+  switchSession: async (id) => {
+    if (get().activeSessionId === id) return;
+    if (currentAbort) {
+      currentAbort.abort();
+      currentAbort = null;
+    }
+    try {
+      const restored = restoreHistoryActions(
+        await assistantMessageRepository.getBySession(id, HISTORY_LIMIT)
+      );
+      set({
+        activeSessionId: id,
+        messages: restored,
+        status: "idle",
+        error: null,
+        steps: [],
+        streamingMessageId: null
+      });
+    } catch {
+      // Leave the current thread in place if the switch can't load.
+    }
+  },
+
+  renameSession: async (id, title) => {
+    const trimmed = title.trim();
+    if (trimmed.length === 0) return;
+    try {
+      await assistantSessionRepository.rename(id, trimmed);
+    } catch {
+      // best-effort
+    }
+    await get().loadSessions(true);
+  },
+
+  deleteSession: async (id) => {
+    try {
+      await assistantSessionRepository.delete(id);
+    } catch {
+      // best-effort
+    }
+    await get().loadSessions(true);
+    if (get().activeSessionId !== id) return;
+    // The active thread was deleted — fall back to the most recent remaining
+    // session, or a blank new thread if none are left.
+    const next = (get().sessions ?? []).find((session) => session.id !== id);
+    if (next) {
+      await get().switchSession(next.id);
+    } else {
+      set({ activeSessionId: null, messages: [], status: "idle", error: null, steps: [], streamingMessageId: null });
     }
   },
 
@@ -281,7 +423,8 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     };
     const history = [...get().messages, userMessage];
     set({ messages: history, status: "thinking", error: null, steps: [], streamingMessageId: null });
-    void assistantMessageRepository.append(userMessage).catch(() => {});
+    await ensureActiveSession(trimmed);
+    persistMessage(userMessage);
     await runStreamFrom(history);
   },
 
@@ -320,7 +463,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     const kept = [...messages.slice(0, idx), edited];
     set({ messages: kept, status: "thinking", error: null, steps: [], streamingMessageId: null });
     void assistantMessageRepository.deleteAfter(messageId).catch(() => {});
-    void assistantMessageRepository.append(edited).catch(() => {});
+    persistMessage(edited);
     await runStreamFrom(kept);
   },
 
@@ -506,13 +649,21 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     }
   },
 
+  /** Clear the *current* thread: delete its session + messages, then drop back
+   *  to a blank new thread. A no-op session (never sent) just resets in memory. */
   clear: () => {
     if (currentAbort) {
       currentAbort.abort();
       currentAbort = null;
     }
-    set({ messages: [], status: "idle", error: null, steps: [], streamingMessageId: null });
-    void assistantMessageRepository.clear().catch(() => {});
+    const sessionId = get().activeSessionId;
+    set({ messages: [], status: "idle", error: null, steps: [], streamingMessageId: null, activeSessionId: null });
+    if (sessionId) {
+      void assistantSessionRepository
+        .delete(sessionId)
+        .then(() => get().loadSessions(true))
+        .catch(() => {});
+    }
   }
 }));
 
@@ -615,7 +766,7 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
       }));
       if (shouldPersist) {
         const finalized = store.getState().messages.find((m) => m.id === id);
-        if (finalized) void assistantMessageRepository.append(finalized).catch(() => {});
+        if (finalized) persistMessage(finalized);
       } else {
         store.setState((state) => ({ messages: state.messages.filter((m) => m.id !== id) }));
       }
@@ -634,7 +785,7 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
         streamingMessageId: null,
         steps: []
       }));
-      void assistantMessageRepository.append(msg).catch(() => {});
+      persistMessage(msg);
     } else {
       store.setState({ status: "idle", streamingMessageId: null, steps: [] });
     }
@@ -690,7 +841,7 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
         steps: []
       }));
       const finalized = store.getState().messages.find((m) => m.id === id);
-      if (finalized) void assistantMessageRepository.append(finalized).catch(() => {});
+      if (finalized) persistMessage(finalized);
     } else {
       // No streaming happened (text-fallback / no tokens) — append the assistant message.
       const msg: ChatMessage = {
@@ -706,7 +857,7 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
         streamingMessageId: null,
         steps: []
       }));
-      void assistantMessageRepository.append(msg).catch(() => {});
+      persistMessage(msg);
     }
     if (finalContent.trim().length > 0) {
       scheduleMemoryReview(lastUserText, finalContent);

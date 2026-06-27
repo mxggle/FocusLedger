@@ -12,14 +12,27 @@ vi.mock("../services/ai/chatClient", () => ({
 
 const { messageRepo } = vi.hoisted(() => ({
   messageRepo: {
-    append: vi.fn((_message: unknown): Promise<void> => Promise.resolve()),
+    append: vi.fn((_message: unknown, _sessionId: string | null): Promise<void> => Promise.resolve()),
     getRecent: vi.fn((_limit: number): Promise<unknown[]> => Promise.resolve([])),
-    clear: vi.fn((): Promise<void> => Promise.resolve()),
+    getBySession: vi.fn((_sessionId: string, _limit: number): Promise<unknown[]> => Promise.resolve([])),
+    clearSession: vi.fn((_sessionId: string): Promise<void> => Promise.resolve()),
     deleteOne: vi.fn((_id: string): Promise<void> => Promise.resolve()),
     deleteAfter: vi.fn((_id: string): Promise<void> => Promise.resolve())
   }
 }));
 vi.mock("../db/assistantMessageRepository", () => ({ assistantMessageRepository: messageRepo }));
+
+const { sessionRepo } = vi.hoisted(() => ({
+  sessionRepo: {
+    create: vi.fn((): Promise<void> => Promise.resolve()),
+    list: vi.fn((): Promise<unknown[]> => Promise.resolve([])),
+    rename: vi.fn((): Promise<void> => Promise.resolve()),
+    setTitleIfEmpty: vi.fn((): Promise<void> => Promise.resolve()),
+    touch: vi.fn((): Promise<void> => Promise.resolve()),
+    delete: vi.fn((): Promise<void> => Promise.resolve())
+  }
+}));
+vi.mock("../db/assistantSessionRepository", () => ({ assistantSessionRepository: sessionRepo }));
 
 const { memoryRepo } = vi.hoisted(() => ({
   memoryRepo: {
@@ -230,7 +243,8 @@ describe("stop / abort finalization", () => {
     expect(stoppedMsg?.content).not.toContain("tail");
     expect(uiState.addToast).not.toHaveBeenCalled();
     expect(messageRepo.append).toHaveBeenCalledWith(
-      expect.objectContaining({ id: placeholderId, content: "Partial " })
+      expect.objectContaining({ id: placeholderId, content: "Partial " }),
+      expect.anything()
     );
   });
 

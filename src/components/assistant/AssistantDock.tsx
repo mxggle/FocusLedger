@@ -1,4 +1,4 @@
-import { Eraser, Sparkles, X } from "lucide-react";
+import { Eraser, SquarePen, Sparkles, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PROVIDER_LABELS, resolveModel } from "../../services/ai/providers";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -9,6 +9,7 @@ import { useAssistantStore } from "../../stores/assistantStore";
 import { BriefingBanner } from "./BriefingBanner";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
+import { SessionHistoryMenu } from "./SessionHistoryMenu";
 
 /**
  * The assistant as a docked, non-modal rail. It lives inside the app layout
@@ -21,6 +22,7 @@ export function AssistantDock() {
   const width = useUiStore((s) => s.assistantWidth);
   const setWidth = useUiStore((s) => s.setAssistantWidth);
   const clear = useAssistantStore((s) => s.clear);
+  const newSession = useAssistantStore((s) => s.newSession);
   const hasMessages = useAssistantStore((s) => s.messages.length > 0);
   const status = useAssistantStore((s) => s.status);
   const settings = useSettingsStore((state) => state.settings);
@@ -114,6 +116,15 @@ export function AssistantDock() {
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-1">
+            <IconButton
+              icon={SquarePen}
+              label="New chat"
+              variant="ghost"
+              size="sm"
+              onClick={newSession}
+              disabled={!hasMessages}
+            />
+            <SessionHistoryMenu />
             {hasMessages ? (
               <IconButton icon={Eraser} label="Clear conversation" variant="ghost" size="sm" onClick={clear} />
             ) : null}
