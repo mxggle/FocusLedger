@@ -1,20 +1,14 @@
-import { Brain, Pin, PinOff, RotateCcw, Trash2 } from "lucide-react";
+import { Brain, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { assistantMemoryRepository } from "../../db/assistantMemoryRepository";
-import type { MemoryEntry } from "../../services/ai/assistant/memory/types";
-import { EmptyState } from "../ui/EmptyState";
-import { IconButton } from "../ui/IconButton";
-
-const KIND_LABELS: Record<MemoryEntry["kind"], string> = {
-  preference: "Preference",
-  workstyle: "Work style",
-  context: "Context",
-  fact: "Fact"
-};
+import type { MemoryEntry, MemoryKind } from "../../services/ai/assistant/memory/types";
+import { createId } from "../../utils/id";
+import { MemoryDialog } from "./MemoryDialog";
 
 export function MemoryManager() {
   const [entries, setEntries] = useState<MemoryEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -32,6 +26,26 @@ export function MemoryManager() {
 
   const now = () => new Date().toISOString();
 
+  const onAdd = async (kind: MemoryKind, text: string) => {
+    const ts = now();
+    await assistantMemoryRepository.add({
+      id: createId("mem"),
+      kind,
+      text,
+      pinned: true, // user-authored memories are pinned so the auto-review won't clobber them
+      status: "active",
+      sourceMessageId: null,
+      useCount: 0,
+      lastUsedAt: null,
+      createdAt: ts,
+      updatedAt: ts
+    });
+    await reload();
+  };
+  const onSaveEdit = async (id: string, kind: MemoryKind, text: string) => {
+    await assistantMemoryRepository.updateText(id, text, kind, now());
+    await reload();
+  };
   const onForget = async (id: string) => {
     await assistantMemoryRepository.archive(id, now());
     await reload();
@@ -46,70 +60,44 @@ export function MemoryManager() {
   };
 
   const active = entries.filter((entry) => entry.status === "active");
-  const archived = entries.filter((entry) => entry.status === "archived");
+  const pinnedCount = active.filter((entry) => entry.pinned).length;
 
-  if (entries.length === 0) {
-    return loaded ? (
-      <EmptyState
-        icon={Brain}
-        title="No memories yet"
-        hint="The assistant hasn't learned anything about you yet. As you chat, durable facts about you appear here."
-        dashed
-      />
-    ) : null;
-  }
+  const summary = !loaded
+    ? "Loading…"
+    : active.length === 0
+      ? "Nothing learned yet"
+      : `${active.length} ${active.length === 1 ? "memory" : "memories"}${
+          pinnedCount > 0 ? ` · ${pinnedCount} pinned` : ""
+        }`;
 
   return (
-    <div className="grid gap-3">
-      {active.length > 0 && (
-        <ul className="divide-y divide-border rounded-lg border border-border">
-          {active.map((entry) => (
-            <li key={entry.id} className="flex items-start gap-3 px-3 py-2.5">
-              <div className="min-w-0 flex-1">
-                <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {KIND_LABELS[entry.kind]}
-                </span>
-                <p className="text-sm leading-relaxed text-foreground">{entry.text}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-0.5">
-                <IconButton
-                  icon={entry.pinned ? PinOff : Pin}
-                  label={entry.pinned ? "Unpin" : "Pin"}
-                  size="sm"
-                  onClick={() => void onTogglePin(entry)}
-                />
-                <IconButton
-                  icon={Trash2}
-                  label="Forget"
-                  size="sm"
-                  onClick={() => void onForget(entry.id)}
-                />
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 text-left shadow-xs outline-none transition-[background-color,border-color,box-shadow] duration-fast hover:border-border-strong hover:bg-surface-2 focus-visible:border-ring focus-visible:shadow-ring"
+      >
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          <Brain className="h-4 w-4" aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium text-foreground">Manage memories</span>
+          <span className="block text-xs text-muted-foreground">{summary}</span>
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-subtle" aria-hidden="true" />
+      </button>
 
-      {archived.length > 0 && (
-        <details className="rounded-lg border border-border px-3 py-2">
-          <summary className="cursor-pointer text-xs text-muted-foreground">
-            Forgotten ({archived.length})
-          </summary>
-          <ul className="mt-2 divide-y divide-border">
-            {archived.map((entry) => (
-              <li key={entry.id} className="flex items-center gap-3 py-2 opacity-60">
-                <p className="min-w-0 flex-1 text-sm text-foreground line-through">{entry.text}</p>
-                <IconButton
-                  icon={RotateCcw}
-                  label="Restore"
-                  size="sm"
-                  onClick={() => void onRestore(entry.id)}
-                />
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-    </div>
+      <MemoryDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        loaded={loaded}
+        entries={entries}
+        onAdd={onAdd}
+        onSaveEdit={onSaveEdit}
+        onTogglePin={onTogglePin}
+        onForget={onForget}
+        onRestore={onRestore}
+      />
+    </>
   );
 }

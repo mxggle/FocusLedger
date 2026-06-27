@@ -317,12 +317,7 @@ export function SettingsPage() {
                     onChange={(event) => void updateSetting("assistantMemoryModel", event.target.value)}
                   />
                 </Field>
-                <Field
-                  label="What the assistant has learned"
-                  hint="Inspect, pin, or forget anything the assistant has learned about you."
-                >
-                  <MemoryManager />
-                </Field>
+                <MemoryManager />
               </div>
             </div>
 
