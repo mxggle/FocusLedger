@@ -74,7 +74,8 @@ vi.mock("./taskStore", () => ({ useTaskStore: { getState: () => taskState } }));
 
 const uiState = {
   addToast: vi.fn(),
-  confirm: vi.fn().mockResolvedValue(true)
+  confirm: vi.fn().mockResolvedValue(true),
+  highlightTask: vi.fn()
 };
 vi.mock("./uiStore", () => ({ useUiStore: { getState: () => uiState } }));
 

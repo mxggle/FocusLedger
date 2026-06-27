@@ -23,6 +23,10 @@ type AppShellProps<T extends string> = {
   title: string;
   subtitle: string;
   children: ReactNode;
+  /** Docked rail rendered to the right of the main content. As a flex sibling
+   *  it reflows `<main>` instead of overlaying it — so the task list stays
+   *  visible and interactive while the assistant is open. */
+  rightRail?: ReactNode;
 };
 
 export function AppShell<T extends string>({
@@ -31,7 +35,8 @@ export function AppShell<T extends string>({
   onRouteChange,
   title,
   subtitle,
-  children
+  children,
+  rightRail
 }: AppShellProps<T>) {
   const sidebarCollapsed = useUiStore((state) => state.sidebarCollapsed);
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
@@ -180,6 +185,8 @@ export function AppShell<T extends string>({
           <div data-tauri-drag-region className="h-9 shrink-0" aria-hidden="true" />
           <main className="min-w-0 flex-1 overflow-auto">{children}</main>
         </div>
+
+        {rightRail}
       </div>
     );
   }
@@ -235,6 +242,8 @@ export function AppShell<T extends string>({
 
         {/* Main content */}
         <main className="min-w-0 flex-1 overflow-auto">{children}</main>
+
+        {rightRail}
       </div>
     </div>
   );

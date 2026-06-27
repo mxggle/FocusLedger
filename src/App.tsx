@@ -1,7 +1,8 @@
 import { AlertCircle, BarChart3, CalendarDays, CheckSquare, Hourglass, Inbox, Info, Settings, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AboutPage } from "./components/about/AboutPage";
-import { AssistantPanel } from "./components/assistant/AssistantPanel";
+import { AssistantDock } from "./components/assistant/AssistantDock";
+import { AssistantLauncher } from "./components/assistant/AssistantLauncher";
 import { BacklogPage } from "./components/backlog/BacklogPage";
 import { HistoryPage } from "./components/history/HistoryPage";
 import { AppShell } from "./components/layout/AppShell";
@@ -112,6 +113,7 @@ export default function App() {
         onRouteChange={setRoute}
         title="Yolo"
         subtitle="Make your time count."
+        rightRail={<AssistantDock />}
       >
         {!initialized && loading ? (
           <div className="p-6">
@@ -147,7 +149,7 @@ export default function App() {
       <QuickAddDialog />
       <ConfirmDialog />
       <ToastViewport />
-      <AssistantPanel />
+      <AssistantLauncher />
     </TooltipProvider>
   );
 }

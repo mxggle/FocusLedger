@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useUiStore } from "./uiStore";
 
 // ── Existing tests ──────────────────────────────────────────────────────────
@@ -158,7 +158,11 @@ describe("uiStore todaySummaryExpanded", () => {
 });
 
 describe("assistant panel state", () => {
-  it("toggles and sets assistant open (ephemeral, defaults closed)", () => {
+  beforeEach(() => {
+    useUiStore.getState().closeAssistant();
+  });
+
+  it("toggles and sets assistant open (defaults closed)", () => {
     expect(useUiStore.getState().assistantOpen).toBe(false);
     useUiStore.getState().toggleAssistant();
     expect(useUiStore.getState().assistantOpen).toBe(true);
@@ -167,5 +171,58 @@ describe("assistant panel state", () => {
     useUiStore.getState().openAssistant();
     expect(useUiStore.getState().assistantOpen).toBe(true);
     useUiStore.getState().closeAssistant();
+  });
+
+  it("persists open state to localStorage", () => {
+    useUiStore.getState().openAssistant();
+    expect(localStorage.getItem("fl:assistantOpen")).toBe("true");
+    useUiStore.getState().closeAssistant();
+    expect(localStorage.getItem("fl:assistantOpen")).toBe("false");
+  });
+});
+
+describe("assistant dock width", () => {
+  it("clamps width within the usable range", () => {
+    useUiStore.getState().setAssistantWidth(10_000);
+    expect(useUiStore.getState().assistantWidth).toBe(640);
+    useUiStore.getState().setAssistantWidth(10);
+    expect(useUiStore.getState().assistantWidth).toBe(360);
+  });
+
+  it("rounds and persists a width inside the range", () => {
+    useUiStore.getState().setAssistantWidth(480.6);
+    expect(useUiStore.getState().assistantWidth).toBe(481);
+    expect(localStorage.getItem("fl:assistantWidth")).toBe("481");
+  });
+
+  it("falls back to the default on a non-finite width", () => {
+    useUiStore.getState().setAssistantWidth(Number.NaN);
+    expect(useUiStore.getState().assistantWidth).toBe(420);
+  });
+});
+
+describe("task highlight", () => {
+  beforeEach(() => {
+    useUiStore.getState().clearHighlightedTask();
+  });
+
+  it("sets and clears the highlighted task", () => {
+    expect(useUiStore.getState().highlightedTaskId).toBeNull();
+    useUiStore.getState().highlightTask("task-1");
+    expect(useUiStore.getState().highlightedTaskId).toBe("task-1");
+    useUiStore.getState().clearHighlightedTask();
+    expect(useUiStore.getState().highlightedTaskId).toBeNull();
+  });
+
+  it("auto-clears the highlight after a delay", () => {
+    vi.useFakeTimers();
+    try {
+      useUiStore.getState().highlightTask("task-2");
+      expect(useUiStore.getState().highlightedTaskId).toBe("task-2");
+      vi.advanceTimersByTime(2500);
+      expect(useUiStore.getState().highlightedTaskId).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -230,6 +230,10 @@ async function attemptToolCallApply(
         expectedUpdatedAt: expectedUpdatedAtFor({ undo: result.undo })
       })
     });
+    // Flash the affected card in the (now visible) task list so the user sees
+    // exactly what landed. Both undo kinds carry the task id; reads/pause don't.
+    const affectedTaskId = result.undo?.taskId;
+    if (affectedTaskId) useUiStore.getState().highlightTask(affectedTaskId);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Could not apply this change" };

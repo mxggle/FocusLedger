@@ -22,7 +22,6 @@ export function MessageList() {
   const send = useAssistantStore((s) => s.send);
   const settings = useSettingsStore((s) => s.settings);
   const requestRoute = useUiStore((s) => s.requestRoute);
-  const closeAssistant = useUiStore((s) => s.closeAssistant);
   const keyConfigured = hasAiKey(settings);
   const assistantName = settings.assistantName.trim() || "Assistant";
 
@@ -57,7 +56,8 @@ export function MessageList() {
   }, [messages, status, streamingMessageId]);
 
   function openSettings() {
-    closeAssistant();
+    // The dock is non-modal now, so it can stay open while settings render in
+    // the reflowed main area — the user sees their key land without losing chat.
     requestRoute("settings");
   }
 
