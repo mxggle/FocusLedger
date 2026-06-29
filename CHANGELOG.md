@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.6.0 - 2026-06-29
+
+This release is about **focus and atmosphere**. Yolo gains immersive ambient
+focus scenes, a true rest mode for honest breaks, and — outside the app — a
+brand-new marketing site that shows the whole product.
+
+### Added
+
+- **Ambient focus scenes.** Expand a running task into a full-screen focus stage
+  and choose a scene — **None, Rain, Fire, or River**. The whole stage takes on
+  the scene's color: the progress ring, the timer, and the controls all adopt a
+  live focus accent, so the moment belongs to the scene instead of the chrome.
+- **A built-in soundscape mixer.** Layer ambient sounds — **rain, fire, river,
+  wind, birds, and brown noise** — each with its own volume, plus a master
+  level and mute. Brown noise is synthesized, so it always works even without
+  audio files; the rest stream from bundled assets.
+- **Rest mode.** Take a deliberate break from the focus stage. Rest gets its own
+  calmer indigo accent and a **draining** countdown ring, can be extended in
+  5-minute steps, and is always tracked as rest — never disguised as a task or
+  padded into your focus time. Rest sessions show up quietly in the day log.
+- **Reduced-motion & performance care.** Scenes render on a single canvas loop,
+  cap device pixel ratio, pause when the window is hidden, and fall back to a
+  static frame when the OS prefers reduced motion.
+
+### Changed
+
+- The Current Focus card and full-screen focus/rest overlays now share a single
+  scene-accent system (`--focus-accent`), so accent color flows consistently
+  through rings, buttons, status dots, and ambient glow.
+- Small assistant prompt and tool-loop refinements carried over from the AI
+  work, with added test coverage.
+
+### Project
+
+- **New landing page.** A self-contained marketing site lives in `website/`
+  (Vite + React + Tailwind + Framer Motion), mirroring the app's real design
+  tokens and screens — Today, Focus, My Day, Life, Plan, Backlog, History — with
+  the AI assistant and the MCP server front and center. It is independent of the
+  desktop app build and deploys to Vercel; it is never bundled into the app.
+
+### Validation
+
+- `yarn build` (tsc + vite) and `yarn test` pass; ambient mixer, sound diffing,
+  and rest-decision logic are unit-tested. The website builds with `tsc + vite`.
+
 ## 0.5.0 - 2026-06-27
 
 This release introduces **Yolo's built-in AI assistant** — a chat companion
