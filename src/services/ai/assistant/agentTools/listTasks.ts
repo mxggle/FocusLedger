@@ -1,11 +1,13 @@
 import { z } from "zod";
 import type { Task, TaskStatus } from "../../../../types";
 import { MAX_RESULTS, taskLine } from "./readHelpers";
+import { resolveDueDate } from "./helpers";
 import type { AgentTool, AgentToolDeps, ToolResult } from "./types";
 
 const statuses: TaskStatus[] = ["todo", "doing", "paused", "done", "dropped"];
 const schema = z.object({
   scope: z.enum(["today", "backlog", "all"]).optional(),
+  due_date: z.string().nullable().optional(),
   status: z.enum(statuses as [TaskStatus, ...TaskStatus[]]).optional(),
   category: z.string().optional(),
   undated: z.boolean().optional()
@@ -33,14 +35,17 @@ export const listTasksTool: AgentTool = {
   category: "read",
   destructive: false,
   description:
-    "List tasks by scope, status, category, or undated/backlog state. Use before bulk edits so you have exact task ids and schedule times.",
+    'List tasks by scope, due_date, status, category, or undated/backlog state. due_date supports "today", "yesterday", "tomorrow", YYYY-MM-DD, or null for backlog. Use before bulk edits so you have exact task ids and schedule times.',
   paramsHint:
-    'scope optional ("today"|"backlog"|"all", default "today"), status optional, category optional name/id/"none", undated optional boolean',
+    'scope optional ("today"|"backlog"|"all", default "today"), due_date optional ("today"|"yesterday"|"tomorrow"|YYYY-MM-DD|null), status optional, category optional name/id/"none", undated optional boolean',
   parameters: schema,
   async execute(rawArgs, deps: AgentToolDeps): Promise<ToolResult> {
     try {
       const args = schema.parse(rawArgs);
-      let tasks = filterByScope(deps.store.getAllTasks(), args.scope ?? "today", deps);
+      let tasks =
+        args.due_date !== undefined
+          ? deps.store.getAllTasks().filter((task) => task.due_date === resolveDueDate(deps, args.due_date))
+          : filterByScope(deps.store.getAllTasks(), args.scope ?? "today", deps);
       if (args.status) tasks = tasks.filter((task) => task.status === args.status);
       tasks = filterByCategory(tasks, args.category, deps);
       if (args.undated === true) tasks = tasks.filter((task) => !task.due_date);
@@ -52,7 +57,7 @@ export const listTasksTool: AgentTool = {
       const summary = [`list_tasks found ${tasks.length}:`, ...shown.map((task) => taskLine(task, deps)), ...more].join(
         "\n"
       );
-      return { ok: true, summary, data: shown };
+      return { ok: true, summary, data: tasks };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "invalid list_tasks args" };
     }

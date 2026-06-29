@@ -12,7 +12,7 @@ import { buildHostTools } from "./ptc/registryBridge";
 export const TOOL_TEMPERATURE = 0.3;
 export const MAX_STEPS = 12;
 export const PROGRAM_TIMEOUT_MS = 8000;
-export const PROGRAM_MAX_CALLS = 60;
+export const PROGRAM_MAX_CALLS = 300;
 
 export type ToolLoopInput = {
   settings: AiSettings;

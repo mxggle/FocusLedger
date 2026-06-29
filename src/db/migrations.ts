@@ -43,6 +43,18 @@ const SCHEMA_STATEMENTS = [
     updated_at TEXT NOT NULL,
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
   )`,
+  // Rest / break sessions. Intentionally has no task_id and no FK to tasks —
+  // rest is the absence of work, kept apart from time_entries so it never
+  // pollutes calibration, stats, or the daily focus total.
+  `CREATE TABLE IF NOT EXISTS rest_sessions (
+    id TEXT PRIMARY KEY,
+    start_at TEXT NOT NULL,
+    end_at TEXT,
+    duration_seconds INTEGER,
+    trigger TEXT NOT NULL DEFAULT 'manual',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS categories (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -136,6 +148,7 @@ const SCHEMA_STATEMENTS = [
     ON template_occurrences(template_id, date)`,
   `CREATE INDEX IF NOT EXISTS idx_time_entries_task ON time_entries(task_id)`,
   `CREATE INDEX IF NOT EXISTS idx_time_entries_range ON time_entries(start_at, end_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_rest_sessions_range ON rest_sessions(start_at, end_at)`,
   `UPDATE time_entries
     SET
       end_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
@@ -285,7 +298,11 @@ async function seedDefaultSettings(db: SqlDatabase): Promise<void> {
     ["enableNotifications", DEFAULT_SETTINGS.enableNotifications],
     ["globalShortcut", DEFAULT_SETTINGS.globalShortcut],
     ["birthDate", DEFAULT_SETTINGS.birthDate],
-    ["lifeExpectancyYears", DEFAULT_SETTINGS.lifeExpectancyYears]
+    ["lifeExpectancyYears", DEFAULT_SETTINGS.lifeExpectancyYears],
+    ["restEnabled", DEFAULT_SETTINGS.restEnabled],
+    ["restDefaultMinutes", DEFAULT_SETTINGS.restDefaultMinutes],
+    ["restAfterTask", DEFAULT_SETTINGS.restAfterTask],
+    ["restAfterTaskMinSessionMinutes", DEFAULT_SETTINGS.restAfterTaskMinSessionMinutes]
   ];
 
   for (const [key, value] of settingsEntries) {

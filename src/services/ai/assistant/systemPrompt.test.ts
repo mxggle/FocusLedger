@@ -194,6 +194,20 @@ describe("buildAssistantSystemPrompt — agent loop", () => {
     expect(prompt.toLowerCase()).toContain("lessons learned");
   });
 
+  it("allows the assistant to derive safe text edits such as task title translations", () => {
+    const prompt = buildAssistantSystemPrompt(ctxTools);
+    expect(prompt).toContain("translate");
+    expect(prompt).toContain("update_task");
+    expect(prompt).toContain("title");
+  });
+
+  it("tells the assistant it can list tasks for explicit past or future dates", () => {
+    const prompt = buildAssistantSystemPrompt(ctxTools);
+    expect(prompt).toContain("yesterday");
+    expect(prompt).toContain("due_date");
+    expect(prompt).toContain("YYYY-MM-DD");
+  });
+
   it("mentions the searchable task count when tasks exist", () => {
     expect(buildAssistantSystemPrompt(ctxTools)).toContain("12");
   });

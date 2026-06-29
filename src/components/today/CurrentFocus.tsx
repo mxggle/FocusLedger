@@ -1,6 +1,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Check, Maximize2, Pause, RotateCcw, Timer } from "lucide-react";
+import { Check, Coffee, Maximize2, Pause, RotateCcw, Timer } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useRestStore } from "../../stores/restStore";
 import { useTaskStore } from "../../stores/taskStore";
 import { getLiveTaskSeconds, useTimerStore } from "../../stores/timerStore";
 import { formatDurationCompact, formatTimer } from "../../utils/duration";
@@ -10,10 +11,15 @@ import {
   COMMIT_WHISPER_MS,
   settle
 } from "../../utils/motion";
+import { useSettingsStore } from "../../stores/settingsStore";
+import { focusAccentStyle } from "../ambient/accent";
+import { AmbientControls } from "../ambient/AmbientControls";
+import { AmbientScene } from "../ambient/AmbientScene";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { CategoryDot } from "../ui/CategoryDot";
 import { EmptyState } from "../ui/EmptyState";
+import { FocusButton } from "./FocusButton";
 import { FocusCelebration } from "./FocusCelebration";
 import { FocusRing } from "./FocusRing";
 import { StopSessionDialog } from "./StopSessionDialog";
@@ -26,6 +32,10 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
   const pauseActiveTask = useTaskStore((state) => state.pauseActiveTask);
   const resumeTask = useTaskStore((state) => state.resumeTask);
   const now = useTimerStore((state) => state.now);
+  const sceneId = useSettingsStore((state) => state.settings.ambientScene);
+  const restEnabled = useSettingsStore((state) => state.settings.restEnabled);
+  const startRest = useRestStore((state) => state.startRest);
+  const maybeAutoRestAfter = useRestStore((state) => state.maybeAutoRestAfter);
   const reduce = useReducedMotion();
   const [stopOpen, setStopOpen] = useState(false);
 
@@ -89,6 +99,19 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
         hint="Pick a task from the Tasks pane and make the next block count."
         className="h-full min-h-[400px]"
         dashed
+        action={
+          restEnabled ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => void startRest()}
+            >
+              <Coffee className="h-4 w-4" />
+              Take a break
+            </Button>
+          ) : undefined
+        }
       />
     );
   }
@@ -100,17 +123,21 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
   const commitMinutes = commit?.minutes ?? null;
 
   return (
-    <div className="relative flex h-full min-h-[460px] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-card">
+    <div
+      className="relative flex h-full min-h-[460px] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-card"
+      style={focusAccentStyle(sceneId)}
+    >
       {focusedTask ? (
         <>
-      {/* Header band with subtle accent gradient */}
-      <div className="bg-gradient-to-b from-primary-soft/60 to-transparent px-6 pt-5 pb-4">
+      {/* Header band — a wash in the active scene's accent so the title block
+          reads as the same surface as the stage below it. */}
+      <div className="bg-gradient-to-b from-[hsl(var(--focus-accent)/0.10)] to-transparent px-6 pt-5 pb-4">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
             {isRunning ? (
               <span
                 className={`absolute inline-flex h-full w-full rounded-full opacity-75 motion-safe:animate-ping ${
-                  overrun ? "bg-warning" : "bg-primary"
+                  overrun ? "bg-warning" : "bg-[hsl(var(--focus-accent))]"
                 }`}
               />
             ) : null}
@@ -119,7 +146,7 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
                 isRunning
                   ? overrun
                     ? "bg-warning"
-                    : "bg-primary"
+                    : "bg-[hsl(var(--focus-accent))]"
                   : "bg-muted-foreground/40"
               }`}
             />
@@ -127,17 +154,20 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             {isRunning ? "Current Focus" : "Paused"}
           </span>
-          {onExpand ? (
-            <button
-              type="button"
-              onClick={onExpand}
-              aria-label="Expand focus to full screen"
-              title="Full-screen focus"
-              className="ml-auto -my-1 -mr-1.5 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none"
-            >
-              <Maximize2 className="h-4 w-4" />
-            </button>
-          ) : null}
+          <div className="ml-auto -my-1 -mr-1.5 flex items-center gap-0.5">
+            <AmbientControls align="end" />
+            {onExpand ? (
+              <button
+                type="button"
+                onClick={onExpand}
+                aria-label="Expand focus to full screen"
+                title="Full-screen focus"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none"
+              >
+                <Maximize2 className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
         </div>
         <h2 className="mt-2.5 truncate text-lg font-semibold leading-snug tracking-tight text-foreground">
           {focusedTask.title}
@@ -160,12 +190,14 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
       <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-4 py-6">
         {/* ── Ambient background layer (replaceable) ── */}
         <div aria-hidden className="pointer-events-none absolute inset-0">
-          {/* Soft base wash */}
+          {/* Procedural scene (rain/fire/river); renders nothing when "none" */}
+          <AmbientScene />
+          {/* Soft base wash — tinted to the scene accent */}
           <div
             className="absolute inset-0"
             style={{
               background:
-                "radial-gradient(120% 90% at 50% 42%, hsl(var(--primary) / 0.06), transparent 72%)"
+                "radial-gradient(120% 90% at 50% 42%, hsl(var(--focus-accent) / 0.06), transparent 72%)"
             }}
           />
           {/* Breathing aura behind the orb */}
@@ -176,7 +208,7 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
               overrun
                 ? "bg-warning/15"
                 : isRunning
-                  ? "bg-primary/15"
+                  ? "bg-[hsl(var(--focus-accent)/0.16)]"
                   : "bg-muted-foreground/10"
             }`}
             style={{ width: "clamp(220px, 78%, 360px)", aspectRatio: "1" }}
@@ -186,7 +218,7 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
             {commit && !reduce ? (
               <motion.div
                 key={commit.id}
-                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/25 blur-3xl"
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[hsl(var(--focus-accent)/0.24)] blur-3xl"
                 style={{ width: "clamp(220px, 80%, 380px)", aspectRatio: "1" }}
                 initial={{ opacity: 0, scale: 0.7 }}
                 animate={{ opacity: [0, 0.32, 0.16], scale: 1 }}
@@ -264,13 +296,15 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
         </AnimatePresence>
       </div>
 
-      {/* Controls — collapse to icon-only on narrow panes (see .focus-controls
-          in styles.css) so labels never truncate to "P… / St… / D…". */}
-      <div className="focus-controls flex items-center gap-2 border-t border-border bg-surface-2/40 px-3 py-3">
+      {/* Controls — a frosted shelf that blends down out of the stage rather than
+          a hard opaque footer, so the scene's glow carries through. Collapses to
+          icon-only on narrow panes (see .focus-controls in styles.css) so labels
+          never truncate to "P… / St… / D…". */}
+      <div className="focus-controls flex items-center gap-2.5 border-t border-[hsl(var(--focus-accent)/0.12)] bg-gradient-to-t from-[hsl(var(--surface)/0.9)] via-[hsl(var(--surface)/0.55)] to-transparent px-3.5 py-3.5 backdrop-blur-sm">
         {isRunning ? (
-          <Button
+          <FocusButton
             type="button"
-            variant="secondary"
+            variant="glass"
             className="min-w-0 flex-1 px-3"
             aria-label="Pause"
             title="Pause"
@@ -278,11 +312,11 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
           >
             <Pause className="h-4 w-4 shrink-0" />
             <span className="focus-control-label truncate">Pause</span>
-          </Button>
+          </FocusButton>
         ) : (
-          <Button
+          <FocusButton
             type="button"
-            variant="primary"
+            variant="accent"
             className="min-w-0 flex-1 px-3"
             aria-label="Resume"
             title="Resume"
@@ -290,11 +324,11 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
           >
             <RotateCcw className="h-4 w-4 shrink-0" />
             <span className="focus-control-label truncate">Resume</span>
-          </Button>
+          </FocusButton>
         )}
-        <Button
+        <FocusButton
           type="button"
-          variant={isRunning ? "primary" : "secondary"}
+          variant={isRunning ? "accent" : "glass"}
           className="min-w-0 flex-1 px-3"
           aria-label="Done"
           title="Done"
@@ -302,7 +336,7 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
         >
           <Check className="h-4 w-4 shrink-0" />
           <span className="focus-control-label truncate">Done</span>
-        </Button>
+        </FocusButton>
       </div>
         </>
       ) : null}
@@ -316,7 +350,10 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
         open={stopOpen}
         onOpenChange={setStopOpen}
         getElapsedSeconds={() => elapsedRef.current}
-        onDone={(seconds) => setCelebration({ seconds })}
+        onDone={(seconds) => {
+          setCelebration({ seconds });
+          maybeAutoRestAfter(seconds);
+        }}
       />
     </div>
   );

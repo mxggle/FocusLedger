@@ -1,4 +1,4 @@
-import { Bell, Keyboard, MonitorCog, SlidersHorizontal, Sparkles, Tags } from "lucide-react";
+import { Bell, Coffee, Keyboard, MonitorCog, SlidersHorizontal, Sparkles, Tags } from "lucide-react";
 import { ChangeEvent } from "react";
 import { useNotificationPermission } from "../../hooks/useNotificationPermission";
 import { showStyledNotification } from "../../notify/notifyCenter";
@@ -9,7 +9,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
 import { sendTestNotification } from "../../utils/notificationPermission";
-import type { AiProvider, AppTheme, NotificationStyle } from "../../types";
+import type { AiProvider, AppTheme, NotificationStyle, RestAfterTask } from "../../types";
 import type { PermissionLevel } from "../../services/ai/assistant/agentTools/types";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -25,6 +25,12 @@ const PERMISSION_SEGMENTS: { value: PermissionLevel; label: string; icon: typeof
   { value: "plan", label: "Plan", icon: SlidersHorizontal },
   { value: "ask", label: "Ask", icon: Bell },
   { value: "auto", label: "Auto", icon: Sparkles }
+];
+
+const REST_AFTER_TASK_SEGMENTS: { value: RestAfterTask; label: string }[] = [
+  { value: "off", label: "Off" },
+  { value: "ask", label: "Ask" },
+  { value: "auto", label: "Auto" }
 ];
 
 export function SettingsPage() {
@@ -166,6 +172,69 @@ export function SettingsPage() {
                 </Select>
               </Field>
             </div>
+          </SettingsSection>
+
+          <SettingsSection
+            icon={Coffee}
+            title="Rest"
+            description="Breaks help your time count. Rest is never tracked as a task — it stays out of your stats and shows in the log only as a calm marker."
+          >
+            <SettingRow
+              label="Enable rest"
+              hint="Show the “Take a break” action and allow breaks after finishing a task."
+              value={settings.restEnabled}
+              onChange={(value) => void updateSetting("restEnabled", value)}
+            />
+            {settings.restEnabled ? (
+              <div className="mt-4 space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Default break length" hint="Minutes per break">
+                    <Input
+                      type="number"
+                      min="1"
+                      max="120"
+                      value={settings.restDefaultMinutes}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        void updateSetting(
+                          "restDefaultMinutes",
+                          Number.isFinite(value) && value > 0 ? Math.round(value) : 5
+                        );
+                      }}
+                    />
+                  </Field>
+                  <Field
+                    label="Minimum session to offer a break"
+                    hint="Skip the break prompt after very short sessions"
+                  >
+                    <Input
+                      type="number"
+                      min="0"
+                      max="240"
+                      value={settings.restAfterTaskMinSessionMinutes}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        void updateSetting(
+                          "restAfterTaskMinSessionMinutes",
+                          Number.isFinite(value) && value >= 0 ? Math.round(value) : 15
+                        );
+                      }}
+                    />
+                  </Field>
+                </div>
+                <Field
+                  label="After finishing a task"
+                  hint="Off does nothing; Ask offers a break; Auto opens the rest screen."
+                >
+                  <SegmentedControl
+                    segments={REST_AFTER_TASK_SEGMENTS}
+                    value={settings.restAfterTask}
+                    onChange={(value) => void updateSetting("restAfterTask", value)}
+                    className="w-full justify-between sm:w-auto"
+                  />
+                </Field>
+              </div>
+            ) : null}
           </SettingsSection>
 
           <SettingsSection

@@ -134,6 +134,84 @@ describe("runToolLoop", () => {
     expect(res.toolCalls.find((call) => call.name === "update_task")?.status).toBe("executed");
   });
 
+  it("allows execute_program to process large task rename batches", async () => {
+    const tasks = Array.from({ length: 65 }, (_, index) =>
+      task({ id: `t${index + 1}`, title: `タスク ${index + 1}` })
+    );
+    const update = vi.fn(async () => ({ ok: true }));
+    const code = `
+      const tasks = await list_tasks({ scope: "all" });
+      for (const t of tasks.data) {
+        await update_task({ task_id: t.id, title: "Task " + t.id.slice(1) });
+      }
+      return "renamed " + tasks.data.length;
+    `;
+    const replies = [
+      JSON.stringify({ tool_calls: [{ name: "execute_program", args: { code } }] }),
+      "Renamed the tasks."
+    ];
+    let i = 0;
+
+    const res = await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "rename all tasks to English" }],
+        level: "auto",
+        deps: depsWith({ updateTask: update, tasks })
+      },
+      { generateChat: vi.fn(async () => replies[i++]) }
+    );
+
+    expect(update).toHaveBeenCalledTimes(65);
+    expect(res.toolCalls.filter((call) => call.name === "update_task")).toHaveLength(65);
+    expect(res.reply).toContain("Renamed");
+  });
+
+  it("can repeat yesterday's tasks by reading a past date and creating today's copies", async () => {
+    const tasks = [
+      task({ id: "t1", title: "Yesterday A", due_date: "2026-06-22", planned_start_time: "09:00", planned_end_time: "10:00" }),
+      task({ id: "t2", title: "Yesterday B", due_date: "2026-06-22", planned_start_time: null, planned_end_time: null }),
+      task({ id: "t3", title: "Today", due_date: "2026-06-23" })
+    ];
+    const create = vi.fn(async () => ({ ok: true, id: "created" }));
+    const code = `
+      const y = await list_tasks({ due_date: "yesterday" });
+      for (const t of y.data) {
+        const args = {
+          title: t.title,
+          description: t.description,
+          priority: t.priority,
+          due_date: "today"
+        };
+        if (t.category_id) args.category = t.category_id;
+        if (t.estimated_minutes != null) args.estimated_minutes = t.estimated_minutes;
+        await create_task(args);
+      }
+      return "created " + y.data.length;
+    `;
+    const replies = [
+      JSON.stringify({ tool_calls: [{ name: "execute_program", args: { code } }] }),
+      "Repeated yesterday's tasks for today."
+    ];
+    let i = 0;
+
+    const res = await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "repeat all of yesterday's tasks" }],
+        level: "auto",
+        deps: depsWith({ createTask: create, tasks })
+      },
+      { generateChat: vi.fn(async () => replies[i++]) }
+    );
+
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create).toHaveBeenNthCalledWith(1, expect.objectContaining({ title: "Yesterday A", due_date: "2026-06-23" }));
+    expect(create).toHaveBeenNthCalledWith(2, expect.objectContaining({ title: "Yesterday B", due_date: "2026-06-23" }));
+    expect(res.toolCalls.filter((call) => call.name === "create_task")).toHaveLength(2);
+    expect(res.reply).toContain("Repeated");
+  });
+
   it("defers program-driven writes to pending in ask mode", async () => {
     const update = vi.fn(async () => ({ ok: true }));
     const replies = [

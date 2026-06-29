@@ -1,3 +1,4 @@
+import { ListTodo, ScrollText, Timer } from "lucide-react";
 import { useEffect } from "react";
 import { useUiStore } from "../../stores/uiStore";
 import { CollapsiblePane } from "../ui/CollapsiblePane";
@@ -46,6 +47,7 @@ export function TodayPage() {
       {/* Tasks pane — border-r separates from Focus */}
       <CollapsiblePane
         title="Tasks"
+        icon={ListTodo}
         collapsed={todayPanes.tasks}
         onToggle={() => toggleTodayPane("tasks")}
         className="border-r border-border"
@@ -59,6 +61,7 @@ export function TodayPage() {
       {/* Focus pane — border-r separates from Log */}
       <CollapsiblePane
         title="Focus"
+        icon={Timer}
         collapsed={todayPanes.focus}
         onToggle={() => toggleTodayPane("focus")}
         className="border-r border-border"
@@ -72,6 +75,7 @@ export function TodayPage() {
           Summary is sticky at the top; the log list scrolls beneath it. */}
       <CollapsiblePane
         title="Log"
+        icon={ScrollText}
         collapsed={todayPanes.log}
         onToggle={() => toggleTodayPane("log")}
       >

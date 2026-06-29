@@ -1,14 +1,19 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Check, Minimize2, Pause, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useRestStore } from "../../stores/restStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
 import { getLiveTaskSeconds, useTimerStore } from "../../stores/timerStore";
 import { formatDurationCompact, formatTimer } from "../../utils/duration";
 import { CELEBRATION_MS, CELEBRATION_MS_REDUCED } from "../../utils/motion";
+import { focusAccentStyle } from "../ambient/accent";
+import { AmbientControls } from "../ambient/AmbientControls";
+import { AmbientScene } from "../ambient/AmbientScene";
 import { Badge } from "../ui/Badge";
-import { Button } from "../ui/Button";
 import { CategoryDot } from "../ui/CategoryDot";
+import { FocusButton } from "./FocusButton";
 import { FocusCelebration } from "./FocusCelebration";
 import { FocusRing } from "./FocusRing";
 import { StopSessionDialog } from "./StopSessionDialog";
@@ -26,6 +31,7 @@ import { StopSessionDialog } from "./StopSessionDialog";
 export function FocusZenOverlay() {
   const focusZen = useUiStore((state) => state.focusZen);
   const setFocusZen = useUiStore((state) => state.setFocusZen);
+  const sceneId = useSettingsStore((state) => state.settings.ambientScene);
   const reduce = useReducedMotion();
 
   // Escape exits — the expected gesture for any full-screen surface.
@@ -46,6 +52,7 @@ export function FocusZenOverlay() {
           aria-modal="true"
           aria-label="Full-screen focus"
           className="fixed inset-0 z-50 flex flex-col bg-background"
+          style={focusAccentStyle(sceneId)}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -65,6 +72,7 @@ function ZenStage({ onExit, reduce }: { onExit: () => void; reduce: boolean }) {
   const closedTaskDurations = useTaskStore((state) => state.closedTaskDurations);
   const pauseActiveTask = useTaskStore((state) => state.pauseActiveTask);
   const resumeTask = useTaskStore((state) => state.resumeTask);
+  const maybeAutoRestAfter = useRestStore((state) => state.maybeAutoRestAfter);
   const now = useTimerStore((state) => state.now);
 
   const [stopOpen, setStopOpen] = useState(false);
@@ -118,11 +126,13 @@ function ZenStage({ onExit, reduce }: { onExit: () => void; reduce: boolean }) {
     <>
       {/* ── Ambient background — a calm wash + a breathing aura behind the orb ── */}
       <div aria-hidden className="pointer-events-none absolute inset-0">
+        {/* Procedural scene (rain/fire/river); renders nothing when "none" */}
+        <AmbientScene />
         <div
           className="absolute inset-0"
           style={{
             background:
-              "radial-gradient(80% 60% at 50% 42%, hsl(var(--primary) / 0.07), transparent 70%)"
+              "radial-gradient(80% 60% at 50% 42%, hsl(var(--focus-accent) / 0.08), transparent 70%)"
           }}
         />
         <div
@@ -132,15 +142,16 @@ function ZenStage({ onExit, reduce }: { onExit: () => void; reduce: boolean }) {
             overrun
               ? "bg-warning/12"
               : isRunning
-                ? "bg-primary/12"
+                ? "bg-[hsl(var(--focus-accent)/0.13)]"
                 : "bg-muted-foreground/8"
           }`}
           style={{ width: "min(56vmin, 560px)", aspectRatio: "1" }}
         />
       </div>
 
-      {/* ── Top bar — just the exit affordance, to keep the stage uncluttered ── */}
-      <div className="relative flex shrink-0 items-center justify-end px-5 py-4">
+      {/* ── Top bar — atmosphere + exit, to keep the stage uncluttered ── */}
+      <div className="relative flex shrink-0 items-center justify-end gap-1 px-5 py-4">
+        <AmbientControls align="end" triggerClassName="h-9 w-9 rounded-lg [&_svg]:h-5 [&_svg]:w-5" />
         <button
           type="button"
           onClick={onExit}
@@ -163,7 +174,7 @@ function ZenStage({ onExit, reduce }: { onExit: () => void; reduce: boolean }) {
                   {isRunning ? (
                     <span
                       className={`absolute inline-flex h-full w-full rounded-full opacity-75 motion-safe:animate-ping ${
-                        overrun ? "bg-warning" : "bg-primary"
+                        overrun ? "bg-warning" : "bg-[hsl(var(--focus-accent))]"
                       }`}
                     />
                   ) : null}
@@ -172,7 +183,7 @@ function ZenStage({ onExit, reduce }: { onExit: () => void; reduce: boolean }) {
                       isRunning
                         ? overrun
                           ? "bg-warning"
-                          : "bg-primary"
+                          : "bg-[hsl(var(--focus-accent))]"
                         : "bg-muted-foreground/40"
                     }`}
                   />
@@ -233,38 +244,41 @@ function ZenStage({ onExit, reduce }: { onExit: () => void; reduce: boolean }) {
               </div>
             </div>
 
-            {/* Controls — understated centered pills, not full-width bars */}
+            {/* Controls — understated centered pills in the scene's accent */}
             <div className="flex items-center gap-3">
               {isRunning ? (
-                <Button
+                <FocusButton
                   type="button"
-                  variant="secondary"
-                  className="min-w-[128px] px-5"
+                  variant="glass"
+                  size="lg"
+                  className="min-w-[132px]"
                   onClick={() => void pauseActiveTask()}
                 >
                   <Pause className="h-4 w-4 shrink-0" />
                   Pause
-                </Button>
+                </FocusButton>
               ) : (
-                <Button
+                <FocusButton
                   type="button"
-                  variant="primary"
-                  className="min-w-[128px] px-5"
+                  variant="accent"
+                  size="lg"
+                  className="min-w-[132px]"
                   onClick={() => void resumeTask(focusedTask.id)}
                 >
                   <RotateCcw className="h-4 w-4 shrink-0" />
                   Resume
-                </Button>
+                </FocusButton>
               )}
-              <Button
+              <FocusButton
                 type="button"
-                variant={isRunning ? "primary" : "secondary"}
-                className="min-w-[128px] px-5"
+                variant={isRunning ? "accent" : "glass"}
+                size="lg"
+                className="min-w-[132px]"
                 onClick={() => setStopOpen(true)}
               >
                 <Check className="h-4 w-4 shrink-0" />
                 Done
-              </Button>
+              </FocusButton>
             </div>
           </>
         ) : null}
@@ -279,7 +293,10 @@ function ZenStage({ onExit, reduce }: { onExit: () => void; reduce: boolean }) {
         open={stopOpen}
         onOpenChange={setStopOpen}
         getElapsedSeconds={() => elapsedRef.current}
-        onDone={(seconds) => setCelebration({ seconds })}
+        onDone={(seconds) => {
+          setCelebration({ seconds });
+          maybeAutoRestAfter(seconds);
+        }}
       />
     </>
   );

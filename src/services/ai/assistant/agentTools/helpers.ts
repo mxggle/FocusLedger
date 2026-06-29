@@ -37,10 +37,19 @@ export function resolveCategoryId(
 export function resolveDueDate(deps: AgentToolDeps, ref: string | null | undefined): string | null | undefined {
   if (ref === undefined) return undefined;
   if (ref === null || ref === "") return null;
-  if (ref.toLowerCase() === "today") return deps.ctx.today;
+  const normalized = ref.toLowerCase();
+  if (normalized === "today") return deps.ctx.today;
+  if (normalized === "yesterday") return shiftDate(deps.ctx.today, -1);
+  if (normalized === "tomorrow") return shiftDate(deps.ctx.today, 1);
   if (/^\d{4}-\d{2}-\d{2}$/.test(ref)) return ref;
-  throw new Error('due_date must be "today" or YYYY-MM-DD');
+  throw new Error('due_date must be "today", "yesterday", "tomorrow", or YYYY-MM-DD');
 }
 
 export const PRIORITIES: TaskPriority[] = ["low", "medium", "high"];
 export const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function shiftDate(ymd: string, days: number): string {
+  const [year, month, day] = ymd.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().slice(0, 10);
+}
