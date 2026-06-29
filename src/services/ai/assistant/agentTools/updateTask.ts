@@ -69,7 +69,7 @@ export const updateTaskTool: AgentTool = {
   description:
     'Change one or more fields of an existing task: title, description, category, priority, estimated_minutes, due_date, planned_start_time/planned_end_time ("HH:mm"), or status. Use this to recategorize, re-estimate, reschedule the day, or shift start/end times. A status change runs the same lifecycle as start/pause/complete/drop (closing open timers, stamping completion).',
   paramsHint:
-    'task_id (required) + any of: title, description, category, priority(low|medium|high), estimated_minutes, due_date("today"|YYYY-MM-DD|null), planned_start_time("HH:mm"|null), planned_end_time("HH:mm"|null), status',
+    'task_id (required) + any of: title, description, category, priority(low|medium|high), estimated_minutes, due_date("today"|"yesterday"|"tomorrow"|YYYY-MM-DD|null), planned_start_time("HH:mm"|null), planned_end_time("HH:mm"|null), status',
   parameters: schema,
   async execute(rawArgs, deps: AgentToolDeps): Promise<ToolResult> {
     const args = schema.parse(rawArgs);

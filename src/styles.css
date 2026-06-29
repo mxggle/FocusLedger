@@ -51,6 +51,11 @@ textarea,
   --primary-soft: 221 92% 96%;
   --primary-soft-foreground: 221 80% 45%;
 
+  /* Focus-stage accent — the active ambient scene overrides this (scoped to the
+     focus surface) so the ring, controls, and glow belong to the scene. Defaults
+     to the brand accent so "no scene" looks exactly as before. */
+  --focus-accent: var(--primary);
+
   /* Semantic */
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
@@ -114,6 +119,8 @@ textarea,
   --primary-hover: 217 91% 66%;
   --primary-soft: 221 60% 18%;
   --primary-soft-foreground: 213 96% 80%;
+
+  --focus-accent: var(--primary);
 
   /* Semantic */
   --destructive: 0 72% 58%;

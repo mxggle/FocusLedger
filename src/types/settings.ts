@@ -7,6 +7,14 @@ export type AiProvider = "anthropic" | "openai" | "gemini" | "custom";
 /** How task reminders reach the user when they need attention. */
 export type NotificationStyle = "system" | "fullscreen";
 
+/**
+ * What happens after a focus session is marked done.
+ * - `off`: nothing (the original behavior).
+ * - `ask`: offer a break via a non-blocking toast.
+ * - `auto`: drop straight into the rest screen.
+ */
+export type RestAfterTask = "off" | "ask" | "auto";
+
 export type AppSettings = {
   defaultCategoryId: string;
   dailyFocusTargetMinutes: number;
@@ -47,6 +55,44 @@ export type AppSettings = {
   debriefAutoEnabled: boolean;
   /** Local time of day (`HH:mm`) for the automatic debrief. */
   debriefAutoTime: string;
+  /**
+   * Ambient focus atmosphere. Visual scene and sound layers are independent
+   * axes; both default to off so the focus surfaces are unchanged out of the box.
+   */
+  /** Active procedural scene id (a `SCENES` entry) or `"none"`. */
+  ambientScene: string;
+  /**
+   * Per-sound layer prefs keyed by `SoundDef.id`. Default-merged against the
+   * live `SOUNDS` manifest on use, so adding/removing a sound never corrupts
+   * stored prefs (see `normalizeAmbientSounds`).
+   */
+  ambientSounds: Record<string, AmbientSoundPref>;
+  /** Master output volume applied across all layers, 0..1. */
+  ambientMasterVolume: number;
+  /** Master mute toggle, independent of master volume. */
+  ambientMuted: boolean;
+  /**
+   * Rest / break mode. Rest is never tracked as a task; these only control when
+   * and how the rest screen appears.
+   */
+  /** Master switch for the rest feature (entry points + auto-rest). */
+  restEnabled: boolean;
+  /** Default rest length in minutes for manual and offered breaks. */
+  restDefaultMinutes: number;
+  /** What to do once a focus session ends with "done". */
+  restAfterTask: RestAfterTask;
+  /**
+   * Only offer / start an after-task break when the finished session ran at
+   * least this long, so wrapping up a two-minute errand never nags you to rest.
+   */
+  restAfterTaskMinSessionMinutes: number;
+};
+
+/** Stored preference for a single ambient sound layer. */
+export type AmbientSoundPref = {
+  enabled: boolean;
+  /** Per-layer volume, 0..1. */
+  volume: number;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -72,5 +118,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   assistantMemoryEnabled: true,
   assistantMemoryModel: "",
   debriefAutoEnabled: false,
-  debriefAutoTime: "23:00"
+  debriefAutoTime: "23:00",
+  ambientScene: "none",
+  ambientSounds: {},
+  ambientMasterVolume: 0.6,
+  ambientMuted: false,
+  restEnabled: true,
+  restDefaultMinutes: 5,
+  restAfterTask: "ask",
+  restAfterTaskMinSessionMinutes: 15
 };

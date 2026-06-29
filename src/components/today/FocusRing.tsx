@@ -24,7 +24,7 @@ export function FocusRing({
   const clampedPct = Math.max(0, Math.min(100, pct));
   const offset = circumference * (1 - clampedPct / 100);
   const stroke = overrun ? "hsl(var(--warning))" : "url(#focusRingStroke)";
-  const accent = overrun ? "hsl(var(--warning))" : "hsl(var(--primary))";
+  const accent = overrun ? "hsl(var(--warning))" : "hsl(var(--focus-accent))";
   // Only animate a live, in-progress arc; a paused or overrun ring stays still.
   const animate = isRunning && !reduce;
   const showHead = animate && !overrun && clampedPct > 0 && clampedPct < 100;
@@ -40,7 +40,7 @@ export function FocusRing({
           cy="50"
           r={radius}
           fill="none"
-          stroke="hsl(var(--border))"
+          stroke="hsl(var(--focus-accent) / 0.22)"
           strokeWidth="3"
         />
       </svg>
@@ -55,8 +55,8 @@ export function FocusRing({
     >
       <defs>
         <linearGradient id="focusRingStroke" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="hsl(var(--primary))" />
-          <stop offset="100%" stopColor="hsl(var(--primary) / 0.65)" />
+          <stop offset="0%" stopColor="hsl(var(--focus-accent))" />
+          <stop offset="100%" stopColor="hsl(var(--focus-accent) / 0.62)" />
         </linearGradient>
         {/* Soft bloom so the live arc glows instead of sitting flat. */}
         <filter id="focusRingGlow" x="-30%" y="-30%" width="160%" height="160%">
@@ -69,13 +69,14 @@ export function FocusRing({
           />
         </filter>
       </defs>
-      {/* Track */}
+      {/* Track — a faint accent-tinted halo rather than flat grey, so the unfilled
+          arc reads as part of the scene's glow instead of a neutral gauge. */}
       <circle
         cx="50"
         cy="50"
         r={radius}
         fill="none"
-        stroke="hsl(var(--muted))"
+        stroke="hsl(var(--focus-accent) / 0.15)"
         strokeWidth="5"
       />
       {/* Progress */}

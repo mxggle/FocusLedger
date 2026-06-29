@@ -12,14 +12,17 @@ import { PlanPage } from "./components/plan/PlanPage";
 import { QuickAddDialog } from "./components/quick-add/QuickAddDialog";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { FocusZenOverlay } from "./components/today/FocusZenOverlay";
+import { RestOverlay } from "./components/today/RestOverlay";
 import { TodayPage } from "./components/today/TodayPage";
 import { ConfirmDialog } from "./components/ui/ConfirmDialog";
 import { SkeletonList } from "./components/ui/Skeleton";
 import { ToastViewport } from "./components/ui/ToastViewport";
 import { TooltipProvider } from "./components/ui/Tooltip";
+import { useAmbientAudio } from "./hooks/useAmbientAudio";
 import { useAssistantShortcut } from "./hooks/useAssistantShortcut";
 import { useDayRollover } from "./hooks/useDayRollover";
 import { useDebriefSchedule } from "./hooks/useDebriefSchedule";
+import { useExternalDataRefresh } from "./hooks/useExternalDataRefresh";
 import { useNotificationPermissionPrompt } from "./hooks/useNotificationPermission";
 import { useQuickAddShortcuts } from "./hooks/useQuickAddShortcuts";
 import { useTaskReminders } from "./hooks/useTaskReminders";
@@ -27,6 +30,7 @@ import { useTrayMenu } from "./hooks/useTrayMenu";
 import { useTrayStatus } from "./hooks/useTrayStatus";
 import { ensureNotifyCenter } from "./notify/notifyCenter";
 import { useAssistantStore } from "./stores/assistantStore";
+import { useRestStore } from "./stores/restStore";
 import { useSettingsStore } from "./stores/settingsStore";
 import { useTaskStore } from "./stores/taskStore";
 import { useUiStore } from "./stores/uiStore";
@@ -71,12 +75,16 @@ export default function App() {
   useNotificationPermissionPrompt();
   useTaskReminders({ onOpenToday: openToday });
   useDayRollover();
+  useExternalDataRefresh();
   useDebriefSchedule();
   useAssistantShortcut();
+  // Single owner of the ambient mixer — outlives both focus surfaces.
+  useAmbientAudio();
 
   useEffect(() => {
     void initialize();
     void useAssistantStore.getState().hydrate();
+    void useRestStore.getState().hydrate();
   }, [initialize]);
 
   // Wire the fullscreen notification action listeners once, so their buttons
@@ -146,6 +154,7 @@ export default function App() {
         )}
       </AppShell>
       <FocusZenOverlay />
+      <RestOverlay />
       <QuickAddDialog />
       <ConfirmDialog />
       <ToastViewport />

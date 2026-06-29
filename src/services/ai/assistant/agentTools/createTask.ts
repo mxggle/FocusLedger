@@ -27,7 +27,7 @@ export const createTaskTool: AgentTool = {
   description:
     'Create a genuinely new task the user wants tracked. Defaults to today when no due_date is given; pass due_date null to send it to the backlog instead. Do not use this as a fallback for unsupported requests or requests about existing tasks.',
   paramsHint:
-    'title (required), description, category, priority(low|medium|high), estimated_minutes, due_date("today"|YYYY-MM-DD|null; omit→today), planned_start_time("HH:mm"|null), planned_end_time("HH:mm"|null)',
+    'title (required), description, category, priority(low|medium|high), estimated_minutes, due_date("today"|"yesterday"|"tomorrow"|YYYY-MM-DD|null; omit→today), planned_start_time("HH:mm"|null), planned_end_time("HH:mm"|null)',
   parameters: schema,
   async execute(rawArgs, deps: AgentToolDeps): Promise<ToolResult> {
     try {

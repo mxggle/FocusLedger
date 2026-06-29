@@ -1,6 +1,8 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "../../utils/cn";
+import { Tooltip } from "./Tooltip";
 
 type CollapsiblePaneProps = {
   title: string;
@@ -8,7 +10,9 @@ type CollapsiblePaneProps = {
   onToggle: () => void;
   children: ReactNode;
   className?: string;
-  /** Content shown in the rail (icon or short text) when collapsed */
+  /** Icon shown centered in the collapsed rail */
+  icon?: LucideIcon;
+  /** Content shown in the rail when collapsed (overrides icon if provided) */
   railContent?: ReactNode;
 };
 
@@ -18,6 +22,7 @@ export function CollapsiblePane({
   onToggle,
   children,
   className,
+  icon: PaneIcon,
   railContent
 }: CollapsiblePaneProps) {
   if (collapsed) {
@@ -27,41 +32,44 @@ export function CollapsiblePane({
       // so that neighboring panes don't double-up borders.
       <div
         className={cn(
-          "flex w-11 shrink-0 flex-col",
+          "flex w-10 shrink-0 flex-col",
           className
         )}
       >
-        <button
-          type="button"
-          aria-label={`Expand ${title} pane`}
-          aria-expanded={false}
-          onClick={onToggle}
-          className={cn(
-            "flex h-full w-full flex-col items-center gap-3 py-4",
-            "cursor-pointer select-none outline-none",
-            "text-muted-foreground",
-            "hover:bg-muted/60 hover:text-foreground",
-            "focus-visible:bg-muted focus-visible:text-foreground",
-            "transition-colors duration-fast"
-          )}
-        >
-          {/* Expand chevron at top */}
-          <ChevronRight className="mt-1 h-3.5 w-3.5 shrink-0" />
-
-          {/* Vertical label — centered in remaining space */}
-          <div className="flex flex-1 items-center justify-center">
+        <Tooltip content={title} side="right">
+          <button
+            type="button"
+            aria-label={`Expand ${title} pane`}
+            aria-expanded={false}
+            onClick={onToggle}
+            className={cn(
+              "group flex h-full w-full flex-col items-center justify-center gap-2 py-4",
+              "cursor-pointer select-none outline-none",
+              "text-muted-foreground",
+              "hover:bg-muted/60 hover:text-foreground",
+              "focus-visible:bg-muted focus-visible:text-foreground",
+              "transition-colors duration-fast"
+            )}
+          >
             {railContent ? (
               railContent
+            ) : PaneIcon ? (
+              <>
+                <PaneIcon className="h-4 w-4 shrink-0" />
+                <ChevronRight
+                  className={cn(
+                    "h-3 w-3 shrink-0",
+                    "opacity-0 transition-opacity duration-fast",
+                    "group-hover:opacity-50 group-focus-visible:opacity-50"
+                  )}
+                />
+              </>
             ) : (
-              <span
-                className="text-xs font-semibold uppercase tracking-wide"
-                style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
-              >
-                {title}
-              </span>
+              // Fallback: chevron only when no icon provided
+              <ChevronRight className="h-3.5 w-3.5 shrink-0" />
             )}
-          </div>
-        </button>
+          </button>
+        </Tooltip>
       </div>
     );
   }

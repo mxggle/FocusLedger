@@ -159,6 +159,28 @@ describe("read tools", () => {
     }
   });
 
+  it("list_tasks can filter an explicit due date including yesterday", async () => {
+    const today = task({ id: "t1", title: "Today", due_date: "2026-06-23" });
+    const yesterday = task({ id: "t2", title: "Yesterday", due_date: "2026-06-22" });
+    const older = task({ id: "t3", title: "Older", due_date: "2026-06-21" });
+
+    const relative = await listTasksTool.execute({ due_date: "yesterday" }, deps([today, yesterday, older]));
+    expect(relative.ok).toBe(true);
+    if (relative.ok) {
+      expect(relative.summary).toContain('[t2] "Yesterday"');
+      expect(relative.summary).not.toContain("[t1]");
+      expect(relative.summary).not.toContain("[t3]");
+      expect(relative.data).toEqual([yesterday]);
+    }
+
+    const explicit = await listTasksTool.execute({ due_date: "2026-06-21" }, deps([today, yesterday, older]));
+    expect(explicit.ok).toBe(true);
+    if (explicit.ok) {
+      expect(explicit.summary).toContain('[t3] "Older"');
+      expect(explicit.data).toEqual([older]);
+    }
+  });
+
   it("search_tasks caps results and reports no-match (AI-TOOL-03)", async () => {
     const many = Array.from({ length: 12 }, (_, i) => task({ id: `t${i}`, title: `Launch ${i}` }));
     const capped = await searchTasksTool.execute({ query: "launch" }, deps(many));
