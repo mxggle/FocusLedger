@@ -7,8 +7,8 @@ import { LogoMark } from "./ui/Logo";
 
 const PLATFORMS: { icon: LucideIcon; name: string; note: string; href: string; primary?: boolean }[] = [
   { icon: Apple, name: "macOS", note: "Universal · .dmg", href: DOWNLOAD.mac, primary: true },
-  { icon: Monitor, name: "Windows", note: "x64 · .msi", href: DOWNLOAD.windows },
-  { icon: Terminal, name: "Linux", note: ".AppImage · .deb", href: DOWNLOAD.linux }
+  { icon: Monitor, name: "Windows", note: "x64 · .exe installer", href: DOWNLOAD.windows },
+  { icon: Terminal, name: "Linux", note: "All releases", href: DOWNLOAD.linux }
 ];
 
 export function Download() {
