@@ -33,7 +33,7 @@ export function Dialog({
       <RadixDialog.Portal>
         <RadixDialog.Overlay
           className={cn(
-            "fixed inset-0 z-50 bg-foreground/30 backdrop-blur-[3px]",
+            "fixed inset-0 z-50 bg-black/35 backdrop-blur-[3px] dark:bg-black/55",
             "data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out"
           )}
         />
@@ -47,7 +47,7 @@ export function Dialog({
             aria-label={ariaLabel}
             onClick={(e) => e.stopPropagation()}
             className={cn(
-              "relative w-full rounded-2xl border border-border bg-surface shadow-pop outline-none",
+              "relative w-full rounded-2xl border border-border bg-surface shadow-pop outline-none dark:ring-1 dark:ring-inset dark:ring-white/[0.05]",
               "data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out",
               sizes[size],
               className

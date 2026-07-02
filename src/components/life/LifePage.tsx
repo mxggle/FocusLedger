@@ -166,7 +166,7 @@ export function LifePage({ onNavigate }: LifePageProps) {
             </div>
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-primary transition-[width] duration-normal"
+                className="h-full rounded-full bg-primary bg-gradient-accent transition-[width] duration-normal"
                 style={{ width: `${progress.percentLived}%` }}
               />
             </div>

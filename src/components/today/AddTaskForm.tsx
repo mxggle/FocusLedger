@@ -65,7 +65,7 @@ export function AddTaskForm() {
         type="button"
         onClick={() => setAdvancedOpen((value) => !value)}
         aria-expanded={advancedOpen}
-        className="mt-3 flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+        className="mt-3 flex items-center gap-1 rounded text-xs font-medium text-muted-foreground outline-none transition-colors duration-fast hover:text-foreground focus-visible:shadow-ring"
       >
         <ChevronDown
           className={`h-3.5 w-3.5 transition-transform duration-fast ${

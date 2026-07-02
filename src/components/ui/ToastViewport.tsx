@@ -228,7 +228,7 @@ function ToastCard({
   const { icon: Icon, iconClass, accentClass, barClass } = kindConfig[toast.kind];
 
   return (
-    <div className="pointer-events-auto relative overflow-hidden rounded-xl border border-border bg-surface p-3.5 pl-4 shadow-pop">
+    <div className="pointer-events-auto relative overflow-hidden rounded-xl border border-border bg-surface p-3.5 pl-4 shadow-pop dark:ring-1 dark:ring-inset dark:ring-white/[0.05]">
       <span
         className={cn("absolute inset-y-0 left-0 w-1 rounded-r-full", barClass)}
         aria-hidden="true"

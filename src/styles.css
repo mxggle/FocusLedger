@@ -26,30 +26,45 @@ textarea,
 /* ─── Design Tokens ─────────────────────────────────────────────────────── */
 
 :root {
-  /* Backgrounds — cool, low-chroma canvas (Linear-style) */
-  --background: 220 23% 97%;
+  /* Backgrounds — cool porcelain with a whisper of blue */
+  --background: 218 28% 97%;
   --surface: 0 0% 100%;
-  --surface-2: 220 24% 98.5%;
+  --surface-2: 218 28% 98.5%;
   --elevated: 0 0% 100%;
 
-  /* Text */
-  --foreground: 222 24% 12%;
-  --muted: 220 20% 94.5%;
-  --muted-foreground: 220 9% 46%;
-  --subtle-foreground: 220 8% 58%;
+  /* Text — ink with a blue undertone */
+  --foreground: 222 26% 11%;
+  --muted: 219 22% 94%;
+  --muted-foreground: 220 10% 45%;
+  --subtle-foreground: 220 8% 57%;
 
   /* Borders — hairline, very low contrast */
-  --border: 220 18% 91%;
-  --border-strong: 220 16% 85%;
-  --input: 220 16% 86%;
+  --border: 219 20% 90.5%;
+  --border-strong: 219 16% 84%;
+  --input: 219 16% 85%;
 
-  /* Accent */
-  --ring: 221 83% 60%;
-  --primary: 221 83% 53%;
+  /* Accent — electric blue */
+  --ring: 219 92% 60%;
+  --primary: 221 85% 54%;
   --primary-foreground: 0 0% 100%;
   --primary-hover: 221 83% 48%;
-  --primary-soft: 221 92% 96%;
-  --primary-soft-foreground: 221 80% 45%;
+  --primary-soft: 219 100% 96.5%;
+  --primary-soft-foreground: 221 75% 46%;
+
+  /* Signature gradient — azure → cyan. Used for primary actions, active nav,
+     hero numbers. Always pair with bg-primary as the fallback. */
+  --gradient-accent: linear-gradient(
+    135deg,
+    hsl(226 84% 56%) 0%,
+    hsl(212 92% 54%) 55%,
+    hsl(197 92% 48%) 100%
+  );
+  --gradient-accent-hover: linear-gradient(
+    135deg,
+    hsl(226 82% 50%) 0%,
+    hsl(212 90% 48%) 55%,
+    hsl(197 90% 43%) 100%
+  );
 
   /* Focus-stage accent — the active ambient scene overrides this (scoped to the
      focus surface) so the ring, controls, and glow belong to the scene. Defaults
@@ -79,13 +94,16 @@ textarea,
   --radius-xl: 18px;
   --radius-full: 9999px;
 
-  /* Shadows — layered, soft, Linear-grade elevation */
-  --shadow-xs: 0 1px 2px rgba(17, 24, 39, 0.05);
-  --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.06), 0 1px 1px rgba(17, 24, 39, 0.04);
-  --shadow-card: 0 1px 2px rgba(17, 24, 39, 0.04), 0 4px 12px -2px rgba(17, 24, 39, 0.06);
-  --shadow-md: 0 2px 4px rgba(17, 24, 39, 0.05), 0 8px 20px -4px rgba(17, 24, 39, 0.1);
-  --shadow-pop: 0 4px 8px -2px rgba(17, 24, 39, 0.08), 0 16px 40px -8px rgba(17, 24, 39, 0.18);
+  /* Shadows — layered, soft, tinted with the canvas's blue ink so
+     elevation feels part of the palette instead of generic gray. */
+  --shadow-xs: 0 1px 2px hsl(220 30% 20% / 0.05);
+  --shadow-sm: 0 1px 2px hsl(220 30% 20% / 0.06), 0 1px 1px hsl(220 30% 20% / 0.04);
+  --shadow-card: 0 1px 2px hsl(220 30% 20% / 0.04), 0 4px 12px -2px hsl(220 30% 20% / 0.07);
+  --shadow-md: 0 2px 4px hsl(220 30% 20% / 0.05), 0 8px 20px -4px hsl(220 30% 20% / 0.11);
+  --shadow-pop: 0 4px 8px -2px hsl(220 30% 20% / 0.08), 0 16px 40px -8px hsl(220 30% 20% / 0.2);
   --ring-shadow: 0 0 0 3px hsl(var(--ring) / 0.18);
+  /* Accent glow — hover/active state for gradient (primary) surfaces. */
+  --shadow-glow: 0 1px 2px hsl(220 60% 25% / 0.2), 0 4px 16px -2px hsl(var(--primary) / 0.45);
 
   /* Motion */
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -95,30 +113,43 @@ textarea,
 }
 
 .dark {
-  /* Backgrounds — deep slate, layered */
-  --background: 224 28% 7%;
-  --surface: 222 22% 11%;
-  --surface-2: 222 20% 13%;
-  --elevated: 222 20% 14%;
+  /* Backgrounds — near-black navy ink, layered */
+  --background: 222 28% 6.5%;
+  --surface: 221 22% 9.5%;
+  --surface-2: 221 20% 12%;
+  --elevated: 220 19% 13%;
 
   /* Text */
-  --foreground: 220 18% 93%;
-  --muted: 222 18% 17%;
-  --muted-foreground: 220 11% 62%;
-  --subtle-foreground: 220 9% 50%;
+  --foreground: 218 22% 94%;
+  --muted: 221 18% 16%;
+  --muted-foreground: 220 12% 64%;
+  --subtle-foreground: 220 10% 50%;
 
   /* Borders */
-  --border: 220 16% 19%;
-  --border-strong: 220 14% 26%;
-  --input: 220 14% 24%;
+  --border: 221 16% 18%;
+  --border-strong: 221 14% 25%;
+  --input: 221 14% 23%;
 
-  /* Accent */
-  --ring: 213 90% 62%;
-  --primary: 217 91% 60%;
+  /* Accent — brighter electric blue for dark canvas */
+  --ring: 212 96% 64%;
+  --primary: 213 94% 62%;
   --primary-foreground: 0 0% 100%;
-  --primary-hover: 217 91% 66%;
-  --primary-soft: 221 60% 18%;
-  --primary-soft-foreground: 213 96% 80%;
+  --primary-hover: 213 96% 68%;
+  --primary-soft: 219 55% 18%;
+  --primary-soft-foreground: 210 100% 82%;
+
+  --gradient-accent: linear-gradient(
+    135deg,
+    hsl(222 92% 62%) 0%,
+    hsl(208 95% 60%) 55%,
+    hsl(194 95% 55%) 100%
+  );
+  --gradient-accent-hover: linear-gradient(
+    135deg,
+    hsl(222 94% 67%) 0%,
+    hsl(208 96% 65%) 55%,
+    hsl(194 96% 60%) 100%
+  );
 
   --focus-accent: var(--primary);
 
@@ -145,6 +176,7 @@ textarea,
   --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.4), 0 10px 24px -4px rgba(0, 0, 0, 0.6);
   --shadow-pop: 0 8px 16px -4px rgba(0, 0, 0, 0.5), 0 20px 48px -8px rgba(0, 0, 0, 0.7);
   --ring-shadow: 0 0 0 3px hsl(var(--ring) / 0.28);
+  --shadow-glow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 4px 18px -2px hsl(var(--primary) / 0.5);
 }
 
 /* ─── Base ──────────────────────────────────────────────────────────────── */
@@ -195,6 +227,33 @@ select {
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* ─── Master theme utilities ─────────────────────────────────────────────── */
+
+/* App canvas: the flat background plus two barely-there aurora washes anchored
+   to the top corners — azure on the left, cyan on the right. Fixed attachment
+   keeps the wash still while content scrolls, which reads as depth. */
+.app-canvas {
+  background-color: hsl(var(--background));
+  background-image:
+    radial-gradient(1100px 520px at 6% -12%, hsl(var(--primary) / 0.07), transparent 62%),
+    radial-gradient(900px 480px at 102% -6%, hsl(194 90% 52% / 0.05), transparent 58%);
+  background-attachment: fixed;
+}
+
+.dark .app-canvas {
+  background-image:
+    radial-gradient(1100px 520px at 6% -12%, hsl(var(--primary) / 0.1), transparent 62%),
+    radial-gradient(900px 480px at 102% -6%, hsl(194 92% 56% / 0.08), transparent 58%);
+}
+
+/* Signature gradient text — hero titles and stat numbers. */
+.text-gradient {
+  background-image: var(--gradient-accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 /* ─── Focus stage ────────────────────────────────────────────────────────── */

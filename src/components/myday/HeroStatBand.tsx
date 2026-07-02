@@ -52,13 +52,19 @@ function Stat({
   valueClassName?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface p-5 shadow-card">
-      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+    <div className="rounded-2xl border border-border bg-surface p-5 shadow-card dark:ring-1 dark:ring-inset dark:ring-white/[0.04]">
+      <div
+        className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl ${
+          primary
+            ? "bg-primary-soft text-primary-soft-foreground"
+            : "bg-muted text-muted-foreground"
+        }`}
+      >
         <Icon className="h-5 w-5" strokeWidth={1.75} />
       </div>
       <div
-        className={`tabular-nums tracking-tight ${primary ? "text-4xl font-bold" : "text-3xl font-semibold"} ${
-          valueClassName ?? "text-foreground"
+        className={`tabular-nums tracking-tight ${primary ? "text-gradient text-4xl font-bold" : "text-3xl font-semibold"} ${
+          valueClassName ?? (primary ? "" : "text-foreground")
         }`}
       >
         {value}

@@ -21,7 +21,7 @@ export function PageHeader({
       <div className="min-w-0">
         {eyebrow ? (
           <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+            {Icon ? <Icon className="h-3.5 w-3.5 text-primary" /> : null}
             {eyebrow}
           </div>
         ) : null}
@@ -52,7 +52,7 @@ export function SettingsSection({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-border bg-surface p-5 shadow-card">
+    <section className="rounded-xl border border-border bg-surface p-5 shadow-card dark:ring-1 dark:ring-inset dark:ring-white/[0.04]">
       <div className="flex items-center gap-2">
         {Icon ? (
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted text-muted-foreground">

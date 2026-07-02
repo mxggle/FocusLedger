@@ -64,7 +64,12 @@ const config: Config = {
         card: "var(--shadow-card)",
         md: "var(--shadow-md)",
         pop: "var(--shadow-pop)",
-        ring: "var(--ring-shadow)"
+        ring: "var(--ring-shadow)",
+        glow: "var(--shadow-glow)"
+      },
+      backgroundImage: {
+        "gradient-accent": "var(--gradient-accent)",
+        "gradient-accent-hover": "var(--gradient-accent-hover)"
       },
       fontFamily: {
         sans: [

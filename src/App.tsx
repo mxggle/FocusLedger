@@ -52,8 +52,8 @@ const routes = [
   { id: "plan" as const, label: "Plan", icon: CalendarDays },
   { id: "life" as const, label: "Life", icon: Hourglass },
   { id: "history" as const, label: "History", icon: BarChart3 },
-  { id: "settings" as const, label: "Settings", icon: Settings },
-  { id: "about" as const, label: "About", icon: Info }
+  { id: "settings" as const, label: "Settings", icon: Settings, group: "footer" as const },
+  { id: "about" as const, label: "About", icon: Info, group: "footer" as const }
 ];
 
 const ROUTE_IDS = new Set<string>(routes.map((entry) => entry.id));

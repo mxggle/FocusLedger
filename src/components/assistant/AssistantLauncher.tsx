@@ -25,7 +25,7 @@ export function AssistantLauncher() {
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.6 }}
           transition={{ type: "spring", damping: 18, stiffness: 320 }}
-          className="fixed bottom-5 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-pop outline-none transition-[transform,box-shadow] hover:scale-105 hover:shadow-md focus-visible:shadow-ring active:scale-95"
+          className="fixed bottom-5 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary bg-gradient-accent text-primary-foreground shadow-pop outline-none transition-[transform,box-shadow] hover:scale-105 hover:bg-gradient-accent-hover hover:shadow-glow focus-visible:shadow-ring active:scale-95"
         >
           <Sparkles className="h-5 w-5" />
         </motion.button>

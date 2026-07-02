@@ -10,13 +10,15 @@ const buttonVariants = cva(
     "outline-none focus-visible:shadow-ring focus-visible:border-ring",
     "active:scale-[0.97]",
     // A genuinely muted disabled state (not a faded primary).
-    "disabled:pointer-events-none disabled:scale-100 disabled:border-transparent disabled:bg-muted disabled:text-muted-foreground/70 disabled:shadow-none"
+    // bg-none also strips the primary variant's gradient image when disabled.
+    "disabled:pointer-events-none disabled:scale-100 disabled:border-transparent disabled:bg-muted disabled:bg-none disabled:text-muted-foreground/70 disabled:shadow-none"
   ],
   {
     variants: {
       variant: {
+        // bg-primary is the fallback under the signature gradient.
         primary:
-          "border-primary/0 bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover hover:shadow-md",
+          "border-primary/0 bg-primary bg-gradient-accent text-primary-foreground shadow-sm hover:bg-gradient-accent-hover hover:shadow-glow",
         secondary:
           "border-border bg-surface text-foreground shadow-xs hover:border-border-strong hover:bg-surface-2",
         ghost:

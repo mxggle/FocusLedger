@@ -79,7 +79,7 @@ function DayPicker({
               "h-9 w-11 rounded-lg border text-xs font-semibold outline-none",
               "transition-[background-color,border-color,box-shadow,transform] duration-fast active:scale-95 focus-visible:shadow-ring",
               selected
-                ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                ? "border-primary bg-primary bg-gradient-accent text-primary-foreground shadow-sm"
                 : "border-border bg-surface text-muted-foreground hover:border-border-strong hover:text-foreground"
             )}
           >

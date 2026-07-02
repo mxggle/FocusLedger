@@ -22,7 +22,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-xl border border-border bg-surface shadow-card",
+        "rounded-xl border border-border bg-surface shadow-card dark:ring-1 dark:ring-inset dark:ring-white/[0.04]",
         interactive &&
           "transition-[box-shadow,border-color,transform] duration-fast hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md",
         className
