@@ -77,30 +77,33 @@ export function CollapsiblePane({
   return (
     <div
       className={cn(
-        "flex min-w-0 flex-1 flex-col",
+        "group/pane relative flex min-w-0 flex-1 flex-col",
         className
       )}
     >
-      {/* Pane header */}
-      <div className="flex h-11 shrink-0 items-center justify-between border-b border-border bg-surface/40 px-3.5 backdrop-blur-sm">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          {title}
-        </span>
+      {/* Ghost collapse control — panes have no header bar, so this floats at
+          the top-right corner and only fades in on pane hover or keyboard
+          focus. z-20 keeps it above sticky pane content (the Log summary is
+          z-10); content that pins interactive elements to this corner must
+          reserve it (see TodaySummary). */}
+      <Tooltip content={`Collapse ${title}`} side="left">
         <button
           type="button"
           aria-label={`Collapse ${title} pane`}
           aria-expanded={true}
           onClick={onToggle}
           className={cn(
-            "flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground outline-none",
+            "absolute right-2 top-2 z-20 flex h-6 w-6 items-center justify-center rounded-md outline-none",
+            "border border-border/60 bg-surface/80 text-muted-foreground shadow-xs backdrop-blur-sm",
+            "opacity-0 focus-visible:opacity-100 group-hover/pane:opacity-100",
             "hover:bg-muted hover:text-foreground active:scale-90",
             "focus-visible:shadow-ring",
-            "transition-[background-color,color,transform] duration-fast"
+            "transition-[opacity,background-color,color,transform] duration-fast"
           )}
         >
           <ChevronLeft className="h-3.5 w-3.5" />
         </button>
-      </div>
+      </Tooltip>
 
       {/* Scrollable content — a query container so inner UI (task cards, the
           summary scorecard) can adapt to the pane's width rather than the

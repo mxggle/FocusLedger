@@ -54,8 +54,11 @@ export function TodaySummary() {
           "transition-colors duration-fast"
         )}
       >
-        {/* Row 1: badge + label + target progress + chevron */}
-        <div className="flex items-center gap-2.5">
+        {/* Row 1: badge + label + target progress + chevron.
+            pr-8 keeps the row's chevron clear of the pane's floating collapse
+            control (top-right corner, see CollapsiblePane) — without it the
+            hover-revealed control would intercept clicks aimed here. */}
+        <div className="flex items-center gap-2.5 pr-8">
           <span
             className={cn(
               "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset",

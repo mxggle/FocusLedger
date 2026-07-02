@@ -233,7 +233,14 @@ function BacklogTaskCard({ task, onEdit }: { task: Task; onEdit: () => void }) {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button type="button" size="sm" onClick={() => void actions.moveToToday()}>
+          {/* Soft emphasis only — the page-level Quick add is the lone gradient
+              moment; repeating it on every card turns the list into noise. */}
+          <Button
+            type="button"
+            size="sm"
+            variant="soft"
+            onClick={() => void actions.moveToToday()}
+          >
             <CalendarCheck className="h-3.5 w-3.5" />
             Today
           </Button>
@@ -268,25 +275,29 @@ function BacklogTaskCard({ task, onEdit }: { task: Task; onEdit: () => void }) {
             <Play className="h-3.5 w-3.5" />
             Start
           </Button>
-          {task.due_date ? (
+          {/* Destructive/rare actions stay out of the way until the card is
+              hovered or focused, matching the list view's reveal pattern. */}
+          <div className="flex items-center gap-1 opacity-0 transition-opacity duration-fast focus-within:opacity-100 group-hover:opacity-100">
+            {task.due_date ? (
+              <IconButton
+                icon={Inbox}
+                label="Move to backlog"
+                variant="secondary"
+                onClick={() => void actions.moveToBacklog()}
+              />
+            ) : null}
             <IconButton
-              icon={Inbox}
-              label="Move to backlog"
+              icon={Pencil}
+              label="Edit backlog task"
               variant="secondary"
-              onClick={() => void actions.moveToBacklog()}
+              onClick={onEdit}
             />
-          ) : null}
-          <IconButton
-            icon={Pencil}
-            label="Edit backlog task"
-            variant="secondary"
-            onClick={onEdit}
-          />
-          <IconButton
-            icon={Trash2}
-            label="Delete backlog task"
-            onClick={() => void actions.remove()}
-          />
+            <IconButton
+              icon={Trash2}
+              label="Delete backlog task"
+              onClick={() => void actions.remove()}
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -335,7 +346,7 @@ function BacklogTaskRow({ task, onEdit }: { task: Task; onEdit: () => void }) {
       </div>
 
       <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-fast focus-within:opacity-100 group-hover:opacity-100">
-        <Button type="button" size="sm" variant="secondary" onClick={() => void actions.moveToToday()}>
+        <Button type="button" size="sm" variant="soft" onClick={() => void actions.moveToToday()}>
           <CalendarCheck className="h-3.5 w-3.5" />
           Today
         </Button>

@@ -26,6 +26,10 @@ textarea,
 /* ─── Design Tokens ─────────────────────────────────────────────────────── */
 
 :root {
+  /* Native widgets (date/time pickers, scroll UI) follow the app theme instead
+     of always rendering light chrome. Overridden by .dark below. */
+  color-scheme: light;
+
   /* Backgrounds — cool porcelain with a whisper of blue */
   --background: 218 28% 97%;
   --surface: 0 0% 100%;
@@ -113,6 +117,8 @@ textarea,
 }
 
 .dark {
+  color-scheme: dark;
+
   /* Backgrounds — near-black navy ink, layered */
   --background: 222 28% 6.5%;
   --surface: 221 22% 9.5%;
