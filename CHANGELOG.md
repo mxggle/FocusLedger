@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.1 - 2026-07-02
+
+### Fixed
+
+- Windows release builds no longer open a console window alongside the app.
+  Closing that console previously terminated Yolo because it was attached to
+  the app's main process.
+
 ## 0.6.0 - 2026-06-29
 
 This release is about **focus and atmosphere**. Yolo gains immersive ambient
