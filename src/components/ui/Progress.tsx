@@ -39,7 +39,7 @@ export function Progress({
             "h-full rounded-full transition-[width] duration-500 ease-out",
             overrun
               ? "bg-gradient-to-r from-warning to-warning/80"
-              : "bg-primary bg-gradient-accent"
+              : "yolo-brand-gradient bg-primary"
           )}
           style={{ width: `${pct}%` }}
         />

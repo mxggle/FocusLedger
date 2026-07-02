@@ -56,14 +56,14 @@ textarea,
   --gradient-accent: linear-gradient(
     135deg,
     hsl(226 84% 56%) 0%,
-    hsl(212 92% 54%) 55%,
-    hsl(197 92% 48%) 100%
+    hsl(212 92% 45%) 55%,
+    hsl(197 92% 35%) 100%
   );
   --gradient-accent-hover: linear-gradient(
     135deg,
-    hsl(226 82% 50%) 0%,
-    hsl(212 90% 48%) 55%,
-    hsl(197 90% 43%) 100%
+    hsl(226 82% 47%) 0%,
+    hsl(212 90% 40%) 55%,
+    hsl(197 90% 31%) 100%
   );
 
   /* Focus-stage accent — the active ambient scene overrides this (scoped to the
@@ -140,15 +140,15 @@ textarea,
 
   --gradient-accent: linear-gradient(
     135deg,
-    hsl(222 92% 62%) 0%,
-    hsl(208 95% 60%) 55%,
-    hsl(194 95% 55%) 100%
+    hsl(222 92% 54%) 0%,
+    hsl(208 95% 43%) 55%,
+    hsl(194 95% 32%) 100%
   );
   --gradient-accent-hover: linear-gradient(
     135deg,
-    hsl(222 94% 67%) 0%,
-    hsl(208 96% 65%) 55%,
-    hsl(194 96% 60%) 100%
+    hsl(222 94% 50%) 0%,
+    hsl(208 96% 39%) 55%,
+    hsl(194 96% 29%) 100%
   );
 
   --focus-accent: var(--primary);
@@ -254,6 +254,18 @@ select {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/* Semantic gradient classes live in the stylesheet rather than Tailwind's
+   generated bg-* namespace. This keeps the solid bg-primary fallback intact
+   through tailwind-merge and lets Vite hot-reload theme changes reliably. */
+.yolo-brand-gradient,
+.yolo-brand-gradient-checked[data-state="checked"] {
+  background-image: var(--gradient-accent);
+}
+
+.yolo-brand-gradient-hover:hover {
+  background-image: var(--gradient-accent-hover);
 }
 
 /* ─── Focus stage ────────────────────────────────────────────────────────── */

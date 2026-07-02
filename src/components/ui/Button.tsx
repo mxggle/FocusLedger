@@ -16,9 +16,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // bg-primary is the fallback under the signature gradient.
+        // bg-primary remains a solid fallback if gradients are unavailable.
         primary:
-          "border-primary/0 bg-primary bg-gradient-accent text-primary-foreground shadow-sm hover:bg-gradient-accent-hover hover:shadow-glow",
+          "yolo-brand-gradient yolo-brand-gradient-hover border-primary/0 bg-primary text-primary-foreground shadow-sm hover:shadow-glow",
         secondary:
           "border-border bg-surface text-foreground shadow-xs hover:border-border-strong hover:bg-surface-2",
         ghost:

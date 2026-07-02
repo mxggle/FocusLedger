@@ -67,10 +67,6 @@ const config: Config = {
         ring: "var(--ring-shadow)",
         glow: "var(--shadow-glow)"
       },
-      backgroundImage: {
-        "gradient-accent": "var(--gradient-accent)",
-        "gradient-accent-hover": "var(--gradient-accent-hover)"
-      },
       fontFamily: {
         sans: [
           "Inter",

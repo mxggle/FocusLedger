@@ -78,7 +78,7 @@ export function TodaySummary() {
                     "h-full rounded-full",
                     targetMet
                       ? "bg-gradient-to-r from-success/80 to-success"
-                      : "bg-primary bg-gradient-accent"
+                      : "yolo-brand-gradient bg-primary"
                   )}
                   initial={false}
                   animate={{ width: `${targetProgress}%` }}

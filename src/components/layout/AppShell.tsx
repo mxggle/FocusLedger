@@ -91,7 +91,7 @@ export function AppShell<T extends string>({
             bar, which would clip against the card's rounded edge. */}
         {active && !isMac && (
           <span
-            className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary bg-gradient-accent"
+            className="yolo-brand-gradient absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary"
             aria-hidden="true"
           />
         )}

@@ -20,7 +20,7 @@ export function Switch({ checked, onChange, disabled, label }: SwitchProps) {
         "border border-transparent p-[2px] outline-none transition-colors duration-normal",
         "focus-visible:shadow-ring",
         "data-[state=unchecked]:bg-muted data-[state=unchecked]:shadow-[inset_0_1px_2px_rgba(17,24,39,0.12)]",
-        "data-[state=checked]:bg-primary data-[state=checked]:bg-gradient-accent data-[state=checked]:shadow-[inset_0_1px_2px_rgba(17,24,39,0.18)]",
+        "yolo-brand-gradient-checked data-[state=checked]:bg-primary data-[state=checked]:shadow-[inset_0_1px_2px_rgba(17,24,39,0.18)]",
         "disabled:cursor-not-allowed disabled:opacity-50"
       )}
     >
