@@ -14,21 +14,24 @@ describe("provider payload fixtures", () => {
   it("anthropic text payload parses to the reply text", () => {
     expect(parseAiResponse("anthropic", ANTHROPIC_TEXT_PAYLOAD)).toEqual({
       text: "Here is your plan for the day.",
-      toolCalls: []
+      toolCalls: [],
+      truncated: false
     });
   });
 
   it("openai text payload parses to the reply text", () => {
     expect(parseAiResponse("openai", OPENAI_TEXT_PAYLOAD)).toEqual({
       text: "Here is your plan for the day.",
-      toolCalls: []
+      toolCalls: [],
+      truncated: false
     });
   });
 
   it("gemini text payload parses to the reply text", () => {
     expect(parseAiResponse("gemini", GEMINI_TEXT_PAYLOAD)).toEqual({
       text: "Here is your plan for the day.",
-      toolCalls: []
+      toolCalls: [],
+      truncated: false
     });
   });
 
@@ -38,7 +41,8 @@ describe("provider payload fixtures", () => {
       toolCalls: [
         { name: "list_tasks", args: { scope: "today" } },
         { name: "update_task", args: { task_id: "task-1", planned_start_time: "09:30" } }
-      ]
+      ],
+      truncated: false
     });
   });
 

@@ -128,6 +128,18 @@ const MODE_LINE: Record<PermissionLevel, string> = {
   auto: "Permission: AUTO. Reversible changes apply immediately; destructive ones (drop_task) surface a confirmation card. The card is the confirmation — don't also ask in chat."
 };
 
+const INTENT_RULES = [
+  "Understanding the user:",
+  "- Reply in the language the user wrote in (e.g. Chinese → Chinese), regardless of the language of task titles or these instructions.",
+  "- Resolve references like \"it\", \"that one\", \"the second one\", \"这个/那个任务\" against the tasks most recently discussed or acted on. The app injects [Tool activity ...] notes into user turns listing exactly which tasks your earlier turns touched and their ids — use those before asking.",
+  "- Follow-ups inherit context: \"make it 30 minutes\" after discussing an estimate means that task's estimate; \"and tomorrow?\" after a daily summary means tomorrow's summary. Re-read the last few turns before concluding you lack information, and never re-ask for details the user already gave.",
+  "- If the user says \"yes\", \"do it\", \"apply\", \"确认\" right after your changes were queued on confirmation cards (status: queued in the [Tool activity] note), do NOT call the write tools again — that would queue duplicates. Tell them to press Apply on the card. If the changes already executed, there is nothing to redo — confirm they landed.",
+  "- Requests are often indirect. \"I'm swamped this afternoon\" usually means rebalance or defer; \"did I forget anything?\" means check today's plan and the backlog; \"how am I doing\" means summarize progress. Infer the productive action, state your reading in one short line, and proceed — reserve clarify for genuine forks (e.g. which of two similarly-named tasks, destructive actions).",
+  "- When the user asks to undo, revert, or roll back changes YOU made (\"revert that\", \"put them back\", \"撤销\"), call revert_changes (scope \"last\" unless they say everything) — it restores the exact prior state. Never conclude it's impossible by looking at the current task list, and never rebuild the inverse edits by hand.",
+  "- When the user confirms a clarify question you asked (\"yes\", \"do it\", \"好\"), immediately perform the action you offered, resolving the affected tasks from the conversation and [Tool activity] notes. Do not re-judge from the current context whether the action is still needed — the context already reflects your earlier changes.",
+  ""
+].join("\n");
+
 const TOOL_PROTOCOL = [
   "How to think before acting:",
   "- For anything beyond a one-shot lookup, take a beat first: name the goal in your own words, decide what you must look up to be sure, and sketch the order of operations — then act. Don't guess at ids, times, or estimates you could verify with a read.",
@@ -138,6 +150,7 @@ const TOOL_PROTOCOL = [
   "- You will receive tool results as the next message. Continue with more tool calls if needed, or give your final answer.",
   "- Final answers are plain Markdown. Do not append legacy actions JSON or wrap the reply in JSON.",
   "- Never show internal task ids, category ids, or tool names in final replies. Use task titles and human-readable times only.",
+  "- [Tool activity ...] notes in the conversation are injected by the app — NEVER write one yourself. Writing a description of tool calls does nothing: changes happen ONLY through actual tool calls. Never claim a change was made unless you called the write tool this turn and saw it succeed (or it was queued on a confirmation card — then say it awaits the user's Apply).",
   "- You know the current local time from Current context. For requests like 'from now', 'current time', or '剩下的时间', use that time with today's task list and schedule fields.",
   "- Reads can gather facts. Writes may execute or be queued depending on the permission level below.",
   "- When the user clearly asks for a write — including a destructive one like dropping a task — call the tool right away. Queued and destructive calls surface a confirmation card with an Apply button; that card IS the confirmation. Never ask a separate 'are you sure / please confirm' question in chat first — it makes the user confirm twice. Only pause to ask when the request is genuinely ambiguous (then use clarify).",
@@ -212,6 +225,7 @@ export function buildAssistantSystemPrompt(ctx: AssistantContext): string {
     "",
     permissionLine,
     "",
+    INTENT_RULES,
     TOOL_PROTOCOL,
     "",
     "Current context:",

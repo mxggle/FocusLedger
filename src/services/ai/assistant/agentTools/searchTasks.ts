@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { countTermHits, extractTerms } from "../normalizeKey";
 import { MAX_SEARCH_RESULTS } from "./readHelpers";
 import type { AgentTool, AgentToolDeps, ToolResult } from "./types";
 
@@ -14,13 +15,11 @@ export const searchTasksTool: AgentTool = {
   async execute(rawArgs, deps: AgentToolDeps): Promise<ToolResult> {
     try {
       const args = schema.parse(rawArgs);
-      const query = args.query.trim().toLowerCase();
-      const terms = query.split(/\s+/);
+      const terms = extractTerms(args.query);
       const scored = deps.store
         .getAllTasks()
         .map((task) => {
-          const haystack = `${task.title} ${task.description ?? ""}`.toLowerCase();
-          const score = terms.reduce((acc, term) => (haystack.includes(term) ? acc + 1 : acc), 0);
+          const score = countTermHits(`${task.title} ${task.description ?? ""}`, terms);
           return { task, score };
         })
         .filter((row) => row.score > 0)

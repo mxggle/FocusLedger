@@ -455,4 +455,223 @@ describe("runToolLoop", () => {
       listExecute.mockRestore();
     }
   });
+
+  it("replays native tool calls as structured turns with paired results", async () => {
+    const inputs: import("../providers").ChatInput[] = [];
+    let call = 0;
+    const v2 = async (_s: unknown, input: import("../providers").ChatInput) => {
+      inputs.push(input);
+      return call++ === 0
+        ? { text: "Checking.", toolCalls: [{ name: "list_tasks", args: { scope: "today" }, id: "toolu_9" }] }
+        : { text: "Done.", toolCalls: [] };
+    };
+    await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "what's on today?" }],
+        level: "auto",
+        deps: depsWith()
+      },
+      { generateChatV2: v2 as never }
+    );
+    const second = inputs[1].messages;
+    expect(second).toHaveLength(3);
+    expect(second[1].role).toBe("assistant");
+    expect(second[1].content).toBe("Checking.");
+    expect(second[1].toolCalls).toEqual([{ id: "toolu_9", name: "list_tasks", args: { scope: "today" } }]);
+    expect(second[2].role).toBe("user");
+    expect(second[2].toolResults?.[0].id).toBe("toolu_9");
+    expect(second[2].toolResults?.[0].content).toContain("list_tasks");
+  });
+
+  it("synthesizes call ids for native calls without provider ids (Gemini)", async () => {
+    const inputs: import("../providers").ChatInput[] = [];
+    let call = 0;
+    const v2 = async (_s: unknown, input: import("../providers").ChatInput) => {
+      inputs.push(input);
+      return call++ === 0
+        ? { text: "", toolCalls: [{ name: "list_tasks", args: { scope: "today" } }] }
+        : { text: "Done.", toolCalls: [] };
+    };
+    await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "x" }],
+        level: "auto",
+        deps: depsWith()
+      },
+      { generateChatV2: v2 as never }
+    );
+    const second = inputs[1].messages;
+    const callId = second[1].toolCalls?.[0].id;
+    expect(callId).toBeTruthy();
+    expect(second[2].toolResults?.[0].id).toBe(callId);
+  });
+
+  it("propagates a provider error when nothing was executed or queued yet", async () => {
+    const generateChat = vi.fn(async () => {
+      throw new Error("The AI provider rejected your API key — check it in Settings → AI");
+    });
+    await expect(
+      runToolLoop(
+        {
+          system: "sys",
+          messages: [{ role: "user", content: "hi" }],
+          level: "auto",
+          deps: depsWith()
+        },
+        { generateChat }
+      )
+    ).rejects.toThrow(/rejected your API key/i);
+    // No retry storm: the loop must not keep calling a failing provider.
+    expect(generateChat).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces already-executed writes when the provider fails mid-loop", async () => {
+    const update = vi.fn(async () => ({ ok: true }));
+    const replies: Array<() => string> = [
+      () => '{"tool_calls":[{"name":"update_task","args":{"task_id":"t1","planned_start_time":"09:30"}}]}',
+      () => {
+        throw new Error("HTTP 500");
+      },
+      () => "I moved the report, but then lost the connection."
+    ];
+    let i = 0;
+    const res = await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "shift it" }],
+        level: "auto",
+        deps: depsWith({ updateTask: update })
+      },
+      { generateChat: vi.fn(async () => replies[i++]()) }
+    );
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(res.toolCalls.find((call) => call.name === "update_task")?.status).toBe("executed");
+    expect(res.reply).toContain("moved the report");
+  });
+
+  it("still returns executed writes when the final fallback also fails", async () => {
+    const update = vi.fn(async () => ({ ok: true }));
+    const replies: Array<() => string> = [
+      () => '{"tool_calls":[{"name":"update_task","args":{"task_id":"t1","planned_start_time":"09:30"}}]}',
+      () => {
+        throw new Error("HTTP 500");
+      },
+      () => {
+        throw new Error("HTTP 500");
+      }
+    ];
+    let i = 0;
+    const res = await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "shift it" }],
+        level: "auto",
+        deps: depsWith({ updateTask: update })
+      },
+      { generateChat: vi.fn(async () => replies[i++]()) }
+    );
+    expect(res.toolCalls.find((call) => call.name === "update_task")?.status).toBe("executed");
+    expect(res.reply).toBe("");
+  });
+
+  it("does not execute tool calls from a truncated response and asks the model to re-issue", async () => {
+    const update = vi.fn(async () => ({ ok: true }));
+    const inputs: import("../providers").ChatInput[] = [];
+    let call = 0;
+    const v2 = async (_s: unknown, input: import("../providers").ChatInput) => {
+      inputs.push(input);
+      return call++ === 0
+        ? {
+            text: "",
+            toolCalls: [{ name: "update_task", args: { task_id: "t1", planned_start_time: "09:30" }, id: "c1" }],
+            truncated: true
+          }
+        : { text: "Done properly this time.", toolCalls: [] };
+    };
+    const res = await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "shift it" }],
+        level: "auto",
+        deps: depsWith({ updateTask: update })
+      },
+      { generateChatV2: v2 as never }
+    );
+    expect(update).not.toHaveBeenCalled();
+    expect(res.toolCalls).toHaveLength(0);
+    expect(inputs[1].messages.at(-1)?.toolResults?.[0].content).toMatch(/cut off|truncated/i);
+    expect(res.reply).toContain("Done properly");
+  });
+
+  it("refuses to execute calls whose streamed args did not parse (argsInvalid)", async () => {
+    const update = vi.fn(async () => ({ ok: true }));
+    const inputs: import("../providers").ChatInput[] = [];
+    let call = 0;
+    const v2 = async (_s: unknown, input: import("../providers").ChatInput) => {
+      inputs.push(input);
+      return call++ === 0
+        ? {
+            text: "",
+            // e.g. a garbled stream: args arrived as unparseable JSON → {}. For
+            // all-optional tools {} would validate and run with defaults.
+            toolCalls: [{ name: "update_task", args: {}, id: "c1", argsInvalid: true }]
+          }
+        : { text: "Let me retry.", toolCalls: [] };
+    };
+    const res = await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "shift it" }],
+        level: "auto",
+        deps: depsWith({ updateTask: update })
+      },
+      { generateChatV2: v2 as never }
+    );
+    expect(update).not.toHaveBeenCalled();
+    expect(res.toolCalls).toHaveLength(0);
+    expect(inputs[1].messages.at(-1)?.toolResults?.[0].content).toMatch(/not valid JSON/i);
+  });
+
+  it("sends a raised output-token budget on tool turns", async () => {
+    const generateChat = vi.fn(async () => "Done.");
+    await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "x" }],
+        level: "auto",
+        deps: depsWith()
+      },
+      { generateChat }
+    );
+    const firstInput = (generateChat.mock.calls[0] as unknown[])[1] as { maxTokens?: number };
+    expect(firstInput.maxTokens).toBeGreaterThanOrEqual(4096);
+  });
+
+  it("keeps the JSON text emulation for providers without native tool calling", async () => {
+    const seen: import("../providers").ChatInput[] = [];
+    const replies = [
+      '{"tool_calls":[{"name":"list_tasks","args":{"scope":"today"}}]}',
+      "All set."
+    ];
+    let i = 0;
+    const generateChat = vi.fn(async (_s: unknown, input: import("../providers").ChatInput) => {
+      seen.push(input);
+      return replies[i++];
+    });
+    await runToolLoop(
+      {
+        system: "sys",
+        messages: [{ role: "user", content: "x" }],
+        level: "auto",
+        deps: depsWith()
+      },
+      { generateChat: generateChat as never }
+    );
+    const second = seen[1].messages;
+    expect(second[1].toolCalls).toBeUndefined();
+    expect(second[2].content).toContain("Tool results:");
+    expect(second[2].toolResults).toBeUndefined();
+  });
 });

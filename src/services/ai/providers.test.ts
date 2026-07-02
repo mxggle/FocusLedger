@@ -93,7 +93,7 @@ describe("parseAiResponse", () => {
         { type: "text", text: "world" }
       ]
     };
-    expect(parseAiResponse("anthropic", payload)).toEqual({ text: "Hello world", toolCalls: [] });
+    expect(parseAiResponse("anthropic", payload)).toEqual({ text: "Hello world", toolCalls: [], truncated: false });
   });
 
   it("parses Anthropic native tool_use blocks", () => {
@@ -109,14 +109,15 @@ describe("parseAiResponse", () => {
       toolCalls: [
         { name: "list_tasks", args: { scope: "today" } },
         { name: "update_task", args: { task_id: "t1" } }
-      ]
+      ],
+      truncated: false
     });
   });
 
   it("parses OpenAI choices", () => {
     const payload = { choices: [{ message: { content: "Hi there" } }] };
-    expect(parseAiResponse("openai", payload)).toEqual({ text: "Hi there", toolCalls: [] });
-    expect(parseAiResponse("custom", payload)).toEqual({ text: "Hi there", toolCalls: [] });
+    expect(parseAiResponse("openai", payload)).toEqual({ text: "Hi there", toolCalls: [], truncated: false });
+    expect(parseAiResponse("custom", payload)).toEqual({ text: "Hi there", toolCalls: [], truncated: false });
   });
 
   it("parses OpenAI native tool_calls", () => {
@@ -140,24 +141,29 @@ describe("parseAiResponse", () => {
     expect(parseAiResponse("openai", payload)).toEqual({
       text: "",
       toolCalls: [
-        { name: "list_tasks", args: { scope: "today" } },
-        { name: "update_task", args: { task_id: "t1" } }
-      ]
+        { name: "list_tasks", args: { scope: "today" }, id: "c1" },
+        { name: "update_task", args: { task_id: "t1" }, id: "c2" }
+      ],
+      truncated: false
     });
   });
 
-  it("parses OpenAI tool_calls with malformed arguments as empty args", () => {
+  it("flags OpenAI tool_calls with malformed arguments as argsInvalid", () => {
     const payload = {
       choices: [{ message: { content: null, tool_calls: [{ type: "function", function: { name: "noop", arguments: "not-json" } }] } }]
     };
-    expect(parseAiResponse("openai", payload)).toEqual({ text: "", toolCalls: [{ name: "noop", args: {} }] });
+    expect(parseAiResponse("openai", payload)).toEqual({
+      text: "",
+      toolCalls: [{ name: "noop", args: {}, argsInvalid: true }],
+      truncated: false
+    });
   });
 
   it("parses Gemini candidates", () => {
     const payload = {
       candidates: [{ content: { parts: [{ text: "Part one. " }, { text: "Part two." }] } }]
     };
-    expect(parseAiResponse("gemini", payload)).toEqual({ text: "Part one. Part two.", toolCalls: [] });
+    expect(parseAiResponse("gemini", payload)).toEqual({ text: "Part one. Part two.", toolCalls: [], truncated: false });
   });
 
   it("parses Gemini native function calls as structured tool calls", () => {
@@ -184,7 +190,8 @@ describe("parseAiResponse", () => {
       toolCalls: [
         { name: "list_tasks", args: { scope: "today" } },
         { name: "update_task", args: { task_id: "t1", planned_start_time: "09:10" } }
-      ]
+      ],
+      truncated: false
     });
   });
 
@@ -354,5 +361,73 @@ describe("buildChatRequest native tools", () => {
     const toolsArr = body.tools as Array<{ type: string; function: { name: string } }>;
     expect(toolsArr[0].function.name).toBe("list_tasks");
     expect(body.tool_choice).toBe("auto");
+  });
+});
+
+describe("buildChatRequest structured tool turns", () => {
+  const toolTurns = [
+    { role: "user" as const, content: "shift my morning" },
+    {
+      role: "assistant" as const,
+      content: "Let me look.",
+      toolCalls: [{ id: "call_1", name: "list_tasks", args: { scope: "today" } }]
+    },
+    {
+      role: "user" as const,
+      content: "Continue.",
+      toolResults: [{ id: "call_1", name: "list_tasks", content: "list_tasks found 2: ..." }]
+    }
+  ];
+
+  it("openai: assistant tool calls become tool_calls, results become role:tool messages", () => {
+    const req = buildChatRequest(settings({ aiProvider: "openai" }), { system: "s", messages: toolTurns });
+    const msgs = req.body.messages as Array<Record<string, unknown>>;
+    // system, user, assistant(tool_calls), tool, user
+    expect(msgs.map((m) => m.role)).toEqual(["system", "user", "assistant", "tool", "user"]);
+    const assistant = msgs[2] as { content: unknown; tool_calls: Array<{ id: string; function: { name: string; arguments: string } }> };
+    expect(assistant.content).toBe("Let me look.");
+    expect(assistant.tool_calls[0].id).toBe("call_1");
+    expect(assistant.tool_calls[0].function.name).toBe("list_tasks");
+    expect(JSON.parse(assistant.tool_calls[0].function.arguments)).toEqual({ scope: "today" });
+    const toolMsg = msgs[3] as { tool_call_id: string; content: string };
+    expect(toolMsg.tool_call_id).toBe("call_1");
+    expect(toolMsg.content).toContain("list_tasks found 2");
+    expect(msgs[4]).toEqual({ role: "user", content: "Continue." });
+  });
+
+  it("anthropic: tool_use blocks on assistant, tool_result blocks lead the user turn", () => {
+    const req = buildChatRequest(settings({ aiProvider: "anthropic" }), { system: "s", messages: toolTurns });
+    const msgs = req.body.messages as Array<{ role: string; content: unknown }>;
+    expect(msgs).toHaveLength(3);
+    const assistantBlocks = msgs[1].content as Array<Record<string, unknown>>;
+    expect(assistantBlocks[0]).toEqual({ type: "text", text: "Let me look." });
+    expect(assistantBlocks[1]).toEqual({ type: "tool_use", id: "call_1", name: "list_tasks", input: { scope: "today" } });
+    const userBlocks = msgs[2].content as Array<Record<string, unknown>>;
+    expect(userBlocks[0]).toEqual({ type: "tool_result", tool_use_id: "call_1", content: "list_tasks found 2: ..." });
+    expect(userBlocks[1]).toEqual({ type: "text", text: "Continue." });
+  });
+
+  it("anthropic: omits the text block for an empty assistant tool turn", () => {
+    const req = buildChatRequest(settings({ aiProvider: "anthropic" }), {
+      system: "s",
+      messages: [{ role: "assistant", content: "", toolCalls: [{ id: "c", name: "list_tasks", args: {} }] }]
+    });
+    const blocks = (req.body.messages as Array<{ content: Array<{ type: string }> }>)[0].content;
+    expect(blocks.map((b) => b.type)).toEqual(["tool_use"]);
+  });
+
+  it("gemini: functionCall on model turn, functionResponse on user turn", () => {
+    const req = buildChatRequest(settings({ aiProvider: "gemini", aiModel: "gemini-2.5-flash" }), {
+      system: "s",
+      messages: toolTurns
+    });
+    const contents = req.body.contents as Array<{ role: string; parts: Array<Record<string, unknown>> }>;
+    expect(contents.map((c) => c.role)).toEqual(["user", "model", "user"]);
+    expect(contents[1].parts[0]).toEqual({ text: "Let me look." });
+    expect(contents[1].parts[1]).toEqual({ functionCall: { name: "list_tasks", args: { scope: "today" } } });
+    expect(contents[2].parts[0]).toEqual({
+      functionResponse: { name: "list_tasks", response: { result: "list_tasks found 2: ..." } }
+    });
+    expect(contents[2].parts[1]).toEqual({ text: "Continue." });
   });
 });

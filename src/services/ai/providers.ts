@@ -28,7 +28,21 @@ export type GenerateInput = {
 
 export type ChatRole = "user" | "assistant";
 
-export type ChatTurn = { role: ChatRole; content: string };
+/** A tool call the assistant made, carried in structured form so providers with
+ *  native tool calling see their own tool_use/tool_call format on replay. */
+export type ToolCallPart = { id: string; name: string; args: unknown };
+
+/** The result of one tool call, paired back to the call by id. */
+export type ToolResultPart = { id: string; name: string; content: string };
+
+export type ChatTurn = {
+  role: ChatRole;
+  content: string;
+  /** Assistant turns only: native tool calls made in this turn. */
+  toolCalls?: ToolCallPart[];
+  /** User turns only: results for the preceding assistant turn's tool calls. */
+  toolResults?: ToolResultPart[];
+};
 
 export type ChatToolSpec = {
   name: string;
@@ -144,6 +158,41 @@ export function buildAiRequest(settings: AiSettings, input: GenerateInput): AiRe
   }
 }
 
+function toolArgsObject(args: unknown): Record<string, unknown> {
+  return typeof args === "object" && args !== null && !Array.isArray(args)
+    ? (args as Record<string, unknown>)
+    : {};
+}
+
+/** Flatten structured turns into OpenAI chat messages: assistant tool calls become
+ *  `tool_calls`, and each tool result becomes its own `role:"tool"` message. */
+function toOpenAiMessages(messages: ChatTurn[]): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  for (const turn of messages) {
+    if (turn.role === "assistant" && turn.toolCalls && turn.toolCalls.length > 0) {
+      out.push({
+        role: "assistant",
+        content: turn.content.length > 0 ? turn.content : null,
+        tool_calls: turn.toolCalls.map((call) => ({
+          id: call.id,
+          type: "function",
+          function: { name: call.name, arguments: JSON.stringify(toolArgsObject(call.args)) }
+        }))
+      });
+      continue;
+    }
+    if (turn.role === "user" && turn.toolResults && turn.toolResults.length > 0) {
+      for (const result of turn.toolResults) {
+        out.push({ role: "tool", tool_call_id: result.id, content: result.content });
+      }
+      if (turn.content.length > 0) out.push({ role: "user", content: turn.content });
+      continue;
+    }
+    out.push({ role: turn.role, content: turn.content });
+  }
+  return out;
+}
+
 function buildOpenAiCompatibleChatRequest(
   baseUrl: string,
   settings: AiSettings,
@@ -159,7 +208,7 @@ function buildOpenAiCompatibleChatRequest(
       model: resolveModel(settings),
       messages: [
         { role: "system", content: input.system },
-        ...input.messages
+        ...toOpenAiMessages(input.messages)
       ],
       ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
       ...(input.stream ? { stream: true } : {}),
@@ -180,6 +229,56 @@ function buildOpenAiCompatibleChatRequest(
   };
 }
 
+/** Map structured turns to Anthropic content blocks: tool calls become tool_use
+ *  blocks on the assistant turn, results become tool_result blocks leading the
+ *  next user turn (Anthropic requires results first in the message). */
+function toAnthropicMessages(messages: ChatTurn[]): Record<string, unknown>[] {
+  return messages.map((turn) => {
+    if (turn.role === "assistant" && turn.toolCalls && turn.toolCalls.length > 0) {
+      const blocks: Record<string, unknown>[] = [];
+      if (turn.content.trim().length > 0) blocks.push({ type: "text", text: turn.content });
+      for (const call of turn.toolCalls) {
+        blocks.push({ type: "tool_use", id: call.id, name: call.name, input: toolArgsObject(call.args) });
+      }
+      return { role: "assistant", content: blocks };
+    }
+    if (turn.role === "user" && turn.toolResults && turn.toolResults.length > 0) {
+      const blocks: Record<string, unknown>[] = turn.toolResults.map((result) => ({
+        type: "tool_result",
+        tool_use_id: result.id,
+        content: result.content
+      }));
+      if (turn.content.trim().length > 0) blocks.push({ type: "text", text: turn.content });
+      return { role: "user", content: blocks };
+    }
+    return { role: turn.role, content: turn.content };
+  });
+}
+
+/** Map structured turns to Gemini parts: functionCall on model turns,
+ *  functionResponse (name-matched — Gemini has no call ids) on user turns. */
+function toGeminiContents(messages: ChatTurn[]): Record<string, unknown>[] {
+  return messages.map((turn) => {
+    const role = turn.role === "assistant" ? "model" : "user";
+    if (turn.role === "assistant" && turn.toolCalls && turn.toolCalls.length > 0) {
+      const parts: Record<string, unknown>[] = [];
+      if (turn.content.trim().length > 0) parts.push({ text: turn.content });
+      for (const call of turn.toolCalls) {
+        parts.push({ functionCall: { name: call.name, args: toolArgsObject(call.args) } });
+      }
+      return { role, parts };
+    }
+    if (turn.role === "user" && turn.toolResults && turn.toolResults.length > 0) {
+      const parts: Record<string, unknown>[] = turn.toolResults.map((result) => ({
+        functionResponse: { name: result.name, response: { result: result.content } }
+      }));
+      if (turn.content.trim().length > 0) parts.push({ text: turn.content });
+      return { role, parts };
+    }
+    return { role, parts: [{ text: turn.content }] };
+  });
+}
+
 export function buildChatRequest(settings: AiSettings, input: ChatInput): AiRequest {
   switch (settings.aiProvider) {
     case "anthropic":
@@ -194,7 +293,7 @@ export function buildChatRequest(settings: AiSettings, input: ChatInput): AiRequ
           model: resolveModel(settings),
           max_tokens: input.maxTokens ?? DEFAULT_MAX_TOKENS,
           system: input.system,
-          messages: input.messages,
+          messages: toAnthropicMessages(input.messages),
           ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
           ...(input.stream ? { stream: true } : {}),
           ...(input.tools && input.tools.length > 0
@@ -222,10 +321,7 @@ export function buildChatRequest(settings: AiSettings, input: ChatInput): AiRequ
         },
         body: {
           systemInstruction: { parts: [{ text: input.system }] },
-          contents: input.messages.map((turn) => ({
-            role: turn.role === "assistant" ? "model" : "user",
-            parts: [{ text: turn.content }]
-          })),
+          contents: toGeminiContents(input.messages),
           ...(input.tools && input.tools.length > 0
             ? {
                 tools: [
@@ -255,9 +351,11 @@ export function buildChatRequest(settings: AiSettings, input: ChatInput): AiRequ
 }
 
 type AnthropicResponse = {
+  stop_reason?: string;
   content?: Array<{
     type: string;
     text?: string;
+    id?: string;
     name?: string;
     input?: Record<string, unknown>;
   }>;
@@ -265,9 +363,11 @@ type AnthropicResponse = {
 
 type OpenAiResponse = {
   choices?: Array<{
+    finish_reason?: string;
     message?: {
       content?: string | null;
       tool_calls?: Array<{
+        id?: string;
         function?: { name?: string; arguments?: string };
       }>;
     };
@@ -276,6 +376,7 @@ type OpenAiResponse = {
 
 type GeminiResponse = {
   candidates?: Array<{
+    finishReason?: string;
     content?: {
       parts?: Array<{
         text?: string;
@@ -288,13 +389,15 @@ type GeminiResponse = {
 export function parseAiResponse(
   provider: AiProvider,
   payload: unknown
-): { text: string; toolCalls: ParsedToolCall[] } {
+): { text: string; toolCalls: ParsedToolCall[]; truncated: boolean } {
   let text = "";
+  let truncated = false;
   const toolCalls: ParsedToolCall[] = [];
 
   switch (provider) {
     case "anthropic": {
       const response = payload as AnthropicResponse;
+      truncated = response.stop_reason === "max_tokens";
       const blocks = response.content ?? [];
       text = blocks
         .filter((b) => b.type === "text")
@@ -302,7 +405,11 @@ export function parseAiResponse(
         .join("");
       for (const b of blocks) {
         if (b.type === "tool_use" && typeof b.name === "string") {
-          toolCalls.push({ name: b.name, args: b.input ?? {} });
+          toolCalls.push({
+            name: b.name,
+            args: b.input ?? {},
+            ...(typeof b.id === "string" ? { id: b.id } : {})
+          });
         }
       }
       break;
@@ -310,19 +417,27 @@ export function parseAiResponse(
     case "openai":
     case "custom": {
       const response = payload as OpenAiResponse;
-      const msg = response.choices?.[0]?.message;
+      const choice = response.choices?.[0];
+      truncated = choice?.finish_reason === "length";
+      const msg = choice?.message;
       text = msg?.content ?? "";
       const calls = msg?.tool_calls;
       if (Array.isArray(calls)) {
         for (const c of calls) {
           if (typeof c?.function?.name === "string") {
             let args: Record<string, unknown> = {};
+            let argsInvalid = false;
             try {
               args = c.function.arguments ? JSON.parse(c.function.arguments) : {};
             } catch {
-              args = {};
+              argsInvalid = true;
             }
-            toolCalls.push({ name: c.function.name, args });
+            toolCalls.push({
+              name: c.function.name,
+              args,
+              ...(typeof c.id === "string" ? { id: c.id } : {}),
+              ...(argsInvalid ? { argsInvalid: true } : {})
+            });
           }
         }
       }
@@ -330,6 +445,7 @@ export function parseAiResponse(
     }
     case "gemini": {
       const response = payload as GeminiResponse;
+      truncated = response.candidates?.[0]?.finishReason === "MAX_TOKENS";
       const parts = response.candidates?.[0]?.content?.parts ?? [];
       const calls = parts
         .map((p) => p.functionCall)
@@ -347,10 +463,32 @@ export function parseAiResponse(
   }
 
   const trimmed = text.trim();
-  if (trimmed.length === 0 && toolCalls.length === 0) {
+  if (trimmed.length === 0 && toolCalls.length === 0 && !truncated) {
     throw new Error("The AI provider returned an empty response");
   }
-  return { text: trimmed, toolCalls };
+  return { text: trimmed, toolCalls, truncated };
+}
+
+/** True for a 400 caused by a model that only supports its default temperature
+ *  (OpenAI GPT-5 / o-series reasoning models, including via compatible proxies). */
+export function isUnsupportedTemperatureError(status: number, detail: string | null): boolean {
+  return (
+    status === 400 &&
+    detail !== null &&
+    /temperature/i.test(detail) &&
+    /unsupported|not support|only the default|invalid/i.test(detail)
+  );
+}
+
+/** Map a provider HTTP failure to the user-facing error the UI shows. */
+export function providerHttpError(status: number, detail: string | null): Error {
+  if (status === 401 || status === 403) {
+    return new Error(detail ?? "The AI provider rejected your API key — check it in Settings → AI");
+  }
+  if (status === 429) {
+    return new Error(detail ?? "The AI provider is rate-limiting you — try again in a moment");
+  }
+  return new Error(detail ?? `The AI provider returned an error (HTTP ${status})`);
 }
 
 /** Pulls a human-readable message out of a provider error payload, if any. */

@@ -33,6 +33,15 @@ describe("rankSkills", () => {
     expect(rankSkills(all, "task planning", 5)).toHaveLength(5);
   });
 
+  it("matches Chinese messages against Chinese skills (CJK bigrams)", () => {
+    const all = [
+      skill({ id: "cn", name: "整理任务", trigger: "当用户要求整理或重新安排任务", steps: "列出任务并重新排序" }),
+      skill({ id: "b", name: "Cook pasta", trigger: "when user wants to cook pasta", steps: "boil water" })
+    ];
+    const ranked = rankSkills(all, "帮我整理一下今天的任务", 5);
+    expect(ranked[0]?.id).toBe("cn");
+  });
+
   it("always includes pinned skills even with no keyword match", () => {
     const all = [
       skill({ id: "pin", name: "Special ritual", trigger: "pinned special skill", steps: "do it", pinned: true }),

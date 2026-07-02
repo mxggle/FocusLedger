@@ -54,12 +54,19 @@ export type ConversationRecallEntry = {
   createdAt: string;
 };
 
+/** One write executed earlier in this conversation, eligible for revert. */
+export type SessionToolCall = { messageId: string; call: ToolCallRecord };
+
 export type AgentToolDeps = {
   store: AgentTaskStore;
   ctx: AssistantContext;
   insights: RetrospectiveInsights | null;
   history: RecallEntry[];
   conversations?: ConversationRecallEntry[];
+  /** Executed writes from earlier in this conversation (oldest first), for revert_changes. */
+  sessionToolCalls?: SessionToolCall[];
+  /** Notifies the UI that a past tool-call card was reverted by the assistant. */
+  onReverted?: (messageId: string, toolCallId: string) => void;
   now: () => string;
 };
 

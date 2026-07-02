@@ -12,6 +12,7 @@ import { moveToBacklogTool } from "./moveToBacklog";
 import { pauseTaskTool } from "./pauseTask";
 import { recallTool } from "./recall";
 import { recallConversationsTool } from "./recallConversations";
+import { revertChangesTool } from "./revertChanges";
 import { searchTasksTool } from "./searchTasks";
 import { startTaskTool } from "./startTask";
 import type { AgentTool } from "./types";
@@ -35,7 +36,8 @@ export const AGENT_TOOLS: AgentTool[] = [
   pauseTaskTool,
   completeTaskTool,
   moveToBacklogTool,
-  dropTaskTool
+  dropTaskTool,
+  revertChangesTool
 ];
 
 const BY_NAME = new Map(AGENT_TOOLS.map((tool) => [tool.name, tool]));
@@ -174,6 +176,10 @@ const NATIVE_PARAMETERS: Record<string, Record<string, unknown>> = {
     type: "object",
     properties: { task_id: STRING },
     required: ["task_id"]
+  },
+  revert_changes: {
+    type: "object",
+    properties: { scope: { type: "string", enum: ["last", "all"] } }
   }
 };
 
