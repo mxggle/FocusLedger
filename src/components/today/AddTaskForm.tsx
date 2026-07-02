@@ -1,8 +1,11 @@
-import { ChevronDown, Plus } from "lucide-react";
+import { ChevronDown, Plus, Sparkles } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
+import { hasAiKey } from "../../services/ai/aiClient";
+import { smartCaptureTask } from "../../services/ai/smartCapture";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
-import type { TaskPriority } from "../../types";
+import { useUiStore } from "../../stores/uiStore";
+import type { CreateTaskInput, TaskPriority } from "../../types";
 import { toDateKey } from "../../utils/date";
 import { Button } from "../ui/Button";
 import { Field, Input, Select } from "../ui/Field";
@@ -10,15 +13,20 @@ import { Field, Input, Select } from "../ui/Field";
 export function AddTaskForm() {
   const categories = useTaskStore((state) => state.categories);
   const createTask = useTaskStore((state) => state.createTask);
-  const defaultCategoryId = useSettingsStore(
-    (state) => state.settings.defaultCategoryId
-  );
+  const settings = useSettingsStore((state) => state.settings);
+  const addToast = useUiStore((state) => state.addToast);
+  const defaultCategoryId = settings.defaultCategoryId;
   const [title, setTitle] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [pending, setPending] = useState(false);
   const [categoryId, setCategoryId] = useState("inbox");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [estimatedMinutes, setEstimatedMinutes] = useState("");
   const [dueDate, setDueDate] = useState(toDateKey());
+
+  // AI fills in the details from the title alone; opening the advanced
+  // fields switches to fully manual entry.
+  const aiEnabled = hasAiKey(settings) && !advancedOpen;
 
   useEffect(() => {
     setCategoryId(defaultCategoryId || "inbox");
@@ -26,14 +34,48 @@ export function AddTaskForm() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const result = await createTask({
+    // Guard against re-entry: AI capture takes seconds, and a second submit
+    // (e.g. Enter in the input) would create a duplicate task.
+    if (pending) return;
+    let input: CreateTaskInput = {
       title,
       category_id: categoryId || "inbox",
       priority,
       estimated_minutes: estimatedMinutes ? Number(estimatedMinutes) : null,
       due_date: dueDate || toDateKey()
-    });
+    };
+
+    let aiError: string | null = null;
+    if (aiEnabled) {
+      setPending(true);
+      try {
+        const captured = await smartCaptureTask(settings, {
+          text: title,
+          categories,
+          today: toDateKey(),
+          defaultDueDate: toDateKey()
+        });
+        input = {
+          ...captured,
+          category_id: captured.category_id ?? (defaultCategoryId || "inbox")
+        };
+      } catch (error) {
+        aiError = error instanceof Error ? error.message : "AI capture failed";
+      } finally {
+        setPending(false);
+      }
+    }
+
+    const result = await createTask(input);
     if (!result.ok) return;
+    if (aiError) {
+      // Only claim "added" once the create actually succeeded.
+      addToast({
+        kind: "error",
+        title: "Added without AI details",
+        description: aiError
+      });
+    }
     setTitle("");
     setEstimatedMinutes("");
     setPriority("medium");
@@ -53,11 +95,17 @@ export function AddTaskForm() {
         <Input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          placeholder="What needs to get done?"
+          placeholder={
+            aiEnabled ? "What needs to get done? AI fills in the details" : "What needs to get done?"
+          }
           className="min-w-0 flex-1"
         />
-        <Button type="submit" disabled={!title.trim()}>
-          <Plus className="h-4 w-4" />
+        <Button type="submit" loading={pending} disabled={!title.trim()}>
+          {pending ? null : aiEnabled ? (
+            <Sparkles className="h-4 w-4" />
+          ) : (
+            <Plus className="h-4 w-4" />
+          )}
           Add
         </Button>
       </div>

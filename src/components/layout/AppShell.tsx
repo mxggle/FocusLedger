@@ -48,16 +48,16 @@ export function AppShell<T extends string>({
   const brand = (
     <div
       className={cn(
-        "flex h-14 shrink-0 items-center gap-3 px-3",
+        "flex h-12 shrink-0 items-center gap-2.5 px-3",
         sidebarCollapsed && "justify-center"
       )}
     >
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center">
-        <img src={logoSrc} alt="Yolo logo" className="h-8 w-8 object-contain" />
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center">
+        <img src={logoSrc} alt="Yolo logo" className="h-7 w-7 object-contain" />
       </div>
       {!sidebarCollapsed && (
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold tracking-tight text-foreground">
+          <div className="truncate text-[13px] font-semibold tracking-tight text-foreground">
             {title}
           </div>
           <div className="truncate text-[11px] text-muted-foreground">
@@ -79,11 +79,11 @@ export function AppShell<T extends string>({
         aria-label={route.label}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "group relative flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium outline-none",
+          "group relative flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium outline-none",
           "transition-colors duration-fast focus-visible:shadow-ring",
           sidebarCollapsed && "justify-center",
           active
-            ? "bg-primary-soft text-primary-soft-foreground shadow-xs ring-1 ring-inset ring-primary/10"
+            ? "bg-primary-soft text-primary-soft-foreground"
             : "text-muted-foreground hover:bg-muted hover:text-foreground"
         )}
       >
@@ -97,7 +97,7 @@ export function AppShell<T extends string>({
         )}
         <Icon
           className={cn(
-            "h-[18px] w-[18px] shrink-0 transition-transform duration-fast",
+            "h-4 w-4 shrink-0 transition-transform duration-fast",
             !active && "group-hover:scale-110"
           )}
         />
@@ -118,21 +118,24 @@ export function AppShell<T extends string>({
   const footerRoutes = routes.filter((route) => route.group === "footer");
 
   const nav = (
-    <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2.5">
+    <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-2.5 pt-1.5">
       {primaryRoutes.map(renderRoute)}
     </nav>
   );
 
+  // Inset hairline divider (not full-bleed) so it doesn't collide with the
+  // floating card's rounded corners.
   const footerNav = footerRoutes.length ? (
-    <nav className="shrink-0 space-y-1 border-t border-border px-3 py-2.5">
-      {footerRoutes.map(renderRoute)}
-    </nav>
+    <div className="shrink-0 px-3 pb-2.5">
+      <div className="mb-2 h-px bg-border/70" aria-hidden="true" />
+      <nav className="space-y-0.5">{footerRoutes.map(renderRoute)}</nav>
+    </div>
   ) : null;
 
   // Shared styling for the floating-sidebar collapse/expand toggle so both
   // states render an identical control (only the icon + position differ).
   const toggleButtonClass =
-    "inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors duration-fast hover:bg-muted hover:text-foreground active:bg-muted focus-visible:shadow-ring";
+    "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors duration-fast hover:bg-muted hover:text-foreground active:bg-muted focus-visible:shadow-ring";
 
   // ── macOS: floating sidebar ───────────────────────────────────────────────
   // An inset card with rounded corners and a shadow. The native traffic lights
@@ -143,10 +146,10 @@ export function AppShell<T extends string>({
       <div className="app-canvas flex h-screen overflow-hidden text-foreground">
         <aside
           className={cn(
-            "my-2 ml-2 mr-2 flex shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-card",
+            "m-2 flex shrink-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-surface shadow-card",
             "motion-safe:transition-[width] motion-safe:duration-normal",
             // Collapsed stays wide enough to hold the native traffic lights.
-            sidebarCollapsed ? "w-[84px]" : "w-[232px]"
+            sidebarCollapsed ? "w-[84px]" : "w-[224px]"
           )}
         >
           {/* Header: a drag region that also clears the native traffic lights
@@ -167,7 +170,7 @@ export function AppShell<T extends string>({
                   onClick={toggleSidebar}
                   className={cn(toggleButtonClass, "relative z-10")}
                 >
-                  <PanelLeftClose className="h-[18px] w-[18px]" />
+                  <PanelLeftClose className="h-4 w-4" />
                 </button>
               </Tooltip>
             )}
@@ -184,7 +187,7 @@ export function AppShell<T extends string>({
                   onClick={toggleSidebar}
                   className={toggleButtonClass}
                 >
-                  <PanelLeftOpen className="h-[18px] w-[18px]" />
+                  <PanelLeftOpen className="h-4 w-4" />
                 </button>
               </Tooltip>
             </div>
@@ -218,7 +221,7 @@ export function AppShell<T extends string>({
           className={cn(
             "flex shrink-0 flex-col border-r border-border bg-surface/60 backdrop-blur-sm",
             "motion-safe:transition-[width] motion-safe:duration-normal",
-            sidebarCollapsed ? "w-[60px]" : "w-[232px]"
+            sidebarCollapsed ? "w-[60px]" : "w-[224px]"
           )}
         >
           {brand}
@@ -240,15 +243,15 @@ export function AppShell<T extends string>({
                 aria-expanded={!sidebarCollapsed}
                 onClick={toggleSidebar}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground outline-none",
+                  "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-muted-foreground outline-none",
                   "transition-colors duration-fast hover:bg-muted hover:text-foreground focus-visible:shadow-ring",
                   sidebarCollapsed && "justify-center"
                 )}
               >
                 {sidebarCollapsed ? (
-                  <PanelLeftOpen className="h-[18px] w-[18px] shrink-0" />
+                  <PanelLeftOpen className="h-4 w-4 shrink-0" />
                 ) : (
-                  <PanelLeftClose className="h-[18px] w-[18px] shrink-0" />
+                  <PanelLeftClose className="h-4 w-4 shrink-0" />
                 )}
                 {!sidebarCollapsed && <span>Collapse</span>}
               </button>

@@ -16,7 +16,6 @@ const BREAK_TASKS = 820;
 
 export function TodayPage() {
   const todayPanes = useUiStore((state) => state.todayPanes);
-  const setTodayPaneCollapsed = useUiStore((state) => state.setTodayPaneCollapsed);
   const toggleTodayPane = useUiStore((state) => state.toggleTodayPane);
   const setFocusZen = useUiStore((state) => state.setFocusZen);
 
@@ -24,11 +23,13 @@ export function TodayPage() {
   useEffect(() => {
     function handleResize() {
       const w = window.innerWidth;
-      // Only auto-collapse, never auto-expand (respect user choice)
-      if (w < BREAK_LOG && !todayPanes.log) {
+      // Read fresh pane state — a mount-time snapshot would go stale as the
+      // user toggles panes. Only auto-collapse, never auto-expand.
+      const { todayPanes: panes, setTodayPaneCollapsed } = useUiStore.getState();
+      if (w < BREAK_LOG && !panes.log) {
         setTodayPaneCollapsed("log", true);
       }
-      if (w < BREAK_TASKS && !todayPanes.tasks) {
+      if (w < BREAK_TASKS && !panes.tasks) {
         setTodayPaneCollapsed("tasks", true);
       }
     }
@@ -37,7 +38,6 @@ export function TodayPage() {
     // Check on mount
     handleResize();
     return () => window.removeEventListener("resize", handleResize);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
