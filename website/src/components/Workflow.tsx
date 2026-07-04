@@ -7,7 +7,7 @@ const STEPS = [
     icon: CalendarCheck,
     step: "01",
     title: "Plan the day",
-    body: "Lay out today with estimates, categories, and priorities. Carry overdue work forward without losing its context.",
+    body: "Type a task the way you'd say it — AI fills in the estimate, category, priority, and due date. Carry overdue work forward without losing its context.",
     tone: "text-primary",
     ring: "ring-primary/20 bg-primary-soft"
   },

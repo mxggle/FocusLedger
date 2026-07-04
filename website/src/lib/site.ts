@@ -8,16 +8,16 @@ export const SITE = {
   description:
     "An AI-native desktop productivity app that turns your tasks into honest time records — so you always know where your day actually went.",
   throughline: "Plan the day. Run one focus. Review the truth.",
-  version: "0.6.0",
+  version: "0.7.0",
   repo: "https://github.com/mxggle/yolo"
 } as const;
 
-/** Download entry points — wired to the v0.6.0 release assets. */
-const REL = "https://github.com/mxggle/yolo/releases/download/v0.6.0";
+/** Download entry points — wired to the v0.7.0 release assets. */
+const REL = "https://github.com/mxggle/yolo/releases/download/v0.7.0";
 export const DOWNLOAD = {
   releases: "https://github.com/mxggle/yolo/releases/latest",
-  mac: `${REL}/Yolo_0.6.0_universal.dmg`,
-  windows: `${REL}/Yolo_0.6.0_x64-setup.exe`,
+  mac: `${REL}/Yolo_0.7.0_universal.dmg`,
+  windows: `${REL}/Yolo_0.7.0_x64-setup.exe`,
   // No Linux artifact is published yet — send Linux users to the releases page.
   linux: "https://github.com/mxggle/yolo/releases/latest"
 } as const;

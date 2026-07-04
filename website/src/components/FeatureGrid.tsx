@@ -3,10 +3,13 @@ import {
   CalendarRange,
   Coffee,
   ListChecks,
+  ListFilter,
+  MenuSquare,
   MoonStar,
   Moon,
   NotebookPen,
   Share2,
+  Sparkles,
   Zap
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -35,9 +38,24 @@ const ITEMS: { icon: LucideIcon; title: string; body: string }[] = [
     body: "Move work between today, tomorrow, next week, and backlog. Carry overdue forward with its original context intact."
   },
   {
+    icon: Sparkles,
+    title: "AI smart capture",
+    body: "Type a task the way you'd say it — “review the deck tomorrow, high prio, ~30m” — and AI fills in the category, priority, estimate, and due date. Your text is never lost."
+  },
+  {
     icon: Bell,
     title: "Quick add from anywhere",
-    body: "A global capture dialog drops an idea into Today or Backlog with category, priority, and estimate in one keystroke."
+    body: "A global capture dialog drops an idea into Today or Backlog in one keystroke — smart capture included."
+  },
+  {
+    icon: ListFilter,
+    title: "A backlog you can triage",
+    body: "Group, sort, and shape the backlog with view preferences that persist — a real workspace, not a flat list."
+  },
+  {
+    icon: MenuSquare,
+    title: "Menu-bar timer",
+    body: "On macOS, the running timer lives in your menu bar in steady fixed-width digits — glanceable even when the app is hidden."
   },
   {
     icon: Coffee,
@@ -56,8 +74,8 @@ const ITEMS: { icon: LucideIcon; title: string; body: string }[] = [
   },
   {
     icon: MoonStar,
-    title: "Light & dark, by design",
-    body: "A calm, Linear-grade interface that's beautiful in both themes and tuned for long focus sessions."
+    title: "Calm, by design",
+    body: "A Linear-grade interface in light and dark, with a single shared motion language — quiet fades and glides that respect reduced-motion preferences."
   }
 ];
 
