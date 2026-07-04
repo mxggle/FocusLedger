@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { formatDurationCompact, formatTimer } from "./duration";
+import { formatDurationCompact, formatTimer, formatTimerCompact } from "./duration";
 
 describe("duration formatting", () => {
   it("formats timer values as HH:MM:SS", () => {
     expect(formatTimer(0)).toBe("00:00:00");
     expect(formatTimer(3723)).toBe("01:02:03");
+  });
+
+  it("formats compact timer values without a zero hour block", () => {
+    expect(formatTimerCompact(0)).toBe("0:00");
+    expect(formatTimerCompact(34)).toBe("0:34");
+    expect(formatTimerCompact(25 * 60 + 34)).toBe("25:34");
+    expect(formatTimerCompact(3723)).toBe("1:02:03");
   });
 
   it("formats compact durations for summaries", () => {

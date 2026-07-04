@@ -93,6 +93,7 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
 
   if (!focusedTask && !celebration) {
     return (
+      <div className="h-full p-4">
       <EmptyState
         icon={Timer}
         title="Nothing running — your time's just ticking."
@@ -113,6 +114,7 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
           ) : undefined
         }
       />
+      </div>
     );
   }
 
@@ -123,8 +125,10 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
   const commitMinutes = commit?.minutes ?? null;
 
   return (
+    // Frameless: the Today Focus pane supplies the card chrome, so the stage
+    // and its ambient scene run edge-to-edge inside it.
     <div
-      className="relative flex h-full min-h-[460px] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-card"
+      className="relative flex h-full min-h-[460px] flex-col overflow-hidden"
       style={focusAccentStyle(sceneId)}
     >
       {focusedTask ? (
@@ -151,8 +155,9 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
               }`}
             />
           </span>
+          {/* Status, not a title — the pane header already says "Focus". */}
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {isRunning ? "Current Focus" : "Paused"}
+            {isRunning ? "In session" : "Paused"}
           </span>
           <div className="ml-auto -my-1 -mr-1.5 flex items-center gap-0.5">
             <AmbientControls align="end" />
@@ -162,7 +167,7 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
                 onClick={onExpand}
                 aria-label="Expand focus to full screen"
                 title="Full-screen focus"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:shadow-ring"
               >
                 <Maximize2 className="h-4 w-4" />
               </button>

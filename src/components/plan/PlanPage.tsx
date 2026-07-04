@@ -5,7 +5,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { RecurrenceType, TaskPriority, TaskTemplate } from "../../types";
-import { formatDurationCompact } from "../../utils/duration";
+import { formatDurationCompact, parseEstimateMinutes } from "../../utils/duration";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { CategoryDot } from "../ui/CategoryDot";
@@ -51,11 +51,6 @@ function toggleDay(days: number[], day: number): number[] {
   return days.includes(day)
     ? days.filter((value) => value !== day)
     : [...days, day].sort((a, b) => a - b);
-}
-
-function parseEstimate(value: string): number | null {
-  const parsed = Number(value);
-  return value && Number.isFinite(parsed) ? parsed : null;
 }
 
 function DayPicker({
@@ -115,7 +110,7 @@ export function PlanPage() {
           title,
           planned_start_time: startTime || null,
           planned_end_time: endTime || null,
-          estimated_minutes: parseEstimate(estimate),
+          estimated_minutes: parseEstimateMinutes(estimate),
           recurrence_type: recurrenceType,
           recurrence_days: recurrenceType === "weekly" ? recurrenceDays : []
         },
@@ -134,7 +129,7 @@ export function PlanPage() {
       title,
       category_id: categoryId || "inbox",
       priority,
-      estimated_minutes: parseEstimate(estimate),
+      estimated_minutes: parseEstimateMinutes(estimate),
       planned_start_time: startTime || null,
       planned_end_time: endTime || null,
       recurrence_type: recurrenceType,
@@ -323,7 +318,7 @@ function PlanItem({ template }: { template: TaskTemplate }) {
           title,
           planned_start_time: startTime || null,
           planned_end_time: endTime || null,
-          estimated_minutes: parseEstimate(estimate),
+          estimated_minutes: parseEstimateMinutes(estimate),
           recurrence_type: recurrenceType,
           recurrence_days: recurrenceType === "weekly" ? recurrenceDays : []
         },
@@ -347,7 +342,7 @@ function PlanItem({ template }: { template: TaskTemplate }) {
       title,
       category_id: categoryId,
       priority,
-      estimated_minutes: parseEstimate(estimate),
+      estimated_minutes: parseEstimateMinutes(estimate),
       planned_start_time: startTime || null,
       planned_end_time: endTime || null,
       recurrence_type: recurrenceType,

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Coffee, Plus, X } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { getRestElapsedSeconds, useRestStore } from "../../stores/restStore";
 import { useTimerStore } from "../../stores/timerStore";
 import { formatDurationCompact, formatTimer } from "../../utils/duration";
@@ -24,6 +24,9 @@ export function RestOverlay() {
   useEffect(() => {
     if (!rest) return;
     function onKey(event: KeyboardEvent) {
+      // A Radix layer (e.g. the ambient menu) that just consumed this Escape
+      // marks it defaultPrevented — closing it must not also end the rest.
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") void endRest();
     }
     window.addEventListener("keydown", onKey);
@@ -44,6 +47,13 @@ function RestStage() {
   const now = useTimerStore((state) => state.now);
   const reduce = useReducedMotion();
 
+  // Move focus onto the stage while the app shell behind it is inert, so
+  // keyboard users land inside the overlay rather than on a blurred body.
+  const stageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    stageRef.current?.focus();
+  }, []);
+
   if (!rest) return null;
 
   const elapsed = getRestElapsedSeconds(rest, now);
@@ -55,10 +65,12 @@ function RestStage() {
 
   return (
     <motion.div
+      ref={stageRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-label="Rest"
-      className="fixed inset-0 z-50 flex flex-col bg-background"
+      className="fixed inset-0 z-50 flex flex-col bg-background outline-none"
       style={restAccentStyle()}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -89,7 +101,7 @@ function RestStage() {
           onClick={() => void endRest()}
           aria-label="End rest"
           title="End rest (Esc)"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:shadow-ring"
         >
           <X className="h-5 w-5" />
         </button>

@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useTaskStore } from "../../stores/taskStore";
 import { Button } from "../ui/Button";
 import { Dialog, DialogDescription, DialogTitle } from "../ui/Dialog";
@@ -9,7 +9,8 @@ export function StopSessionDialog({
   onOpenChange,
   taskId,
   getElapsedSeconds,
-  onDone
+  onDone,
+  hasSession = true
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -19,6 +20,9 @@ export function StopSessionDialog({
   getElapsedSeconds?: () => number;
   /** Fires after a successful "done" save, with the session length in seconds. */
   onDone?: (seconds: number) => void;
+  /** False when the task was never worked on — the copy drops the "session"
+   *  framing and pausing (meaningless for an unstarted task) is hidden. */
+  hasSession?: boolean;
 }) {
   const stopActiveTask = useTaskStore((state) => state.stopActiveTask);
   const [note, setNote] = useState("");
@@ -26,6 +30,18 @@ export function StopSessionDialog({
   const [nextAction, setNextAction] = useState("");
   const [completionRate, setCompletionRate] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Start each stop flow clean. The shared focus-pane instance serves whatever
+  // task is focused, so a draft abandoned for task A must never resurface when
+  // task B is stopped.
+  useEffect(() => {
+    if (!open) return;
+    setNote("");
+    setBlocker("");
+    setNextAction("");
+    setCompletionRate("");
+    setSaving(false);
+  }, [open]);
 
   const hasCompletionRate = completionRate.trim() !== "";
   const parsedCompletionRate = Number(completionRate);
@@ -75,9 +91,13 @@ export function StopSessionDialog({
       className="p-6"
     >
       <form onSubmit={handleSubmit}>
-        <DialogTitle className="text-lg">What did this time buy you?</DialogTitle>
+        <DialogTitle className="text-lg">
+          {hasSession ? "What did this time buy you?" : "Mark as done"}
+        </DialogTitle>
         <DialogDescription className="mt-1 text-sm">
-          A quick, honest note before you stop.
+          {hasSession
+            ? "A quick, honest note before you stop."
+            : "No time tracked yet — add an optional note for the record."}
         </DialogDescription>
         <div className="mt-5 grid gap-4">
           <Field label="What did you work on?">
@@ -121,7 +141,18 @@ export function StopSessionDialog({
             />
           </Field>
         </div>
+        {/* Destructive path sits alone on the left, visually demoted; the
+            primary "Mark as done" holds the conventional rightmost slot. */}
         <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => void save("dropped")}
+            disabled={!completionRateValid || saving}
+            className="mr-auto text-destructive hover:bg-destructive-soft hover:text-destructive"
+          >
+            Drop task
+          </Button>
           <Button
             type="button"
             variant="ghost"
@@ -130,28 +161,22 @@ export function StopSessionDialog({
           >
             Cancel
           </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => void save("paused")}
-            disabled={!completionRateValid || saving}
-            loading={saving}
-          >
-            Save &amp; pause
-          </Button>
+          {hasSession ? (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void save("paused")}
+              disabled={!completionRateValid || saving}
+              loading={saving}
+            >
+              Save &amp; pause
+            </Button>
+          ) : null}
           <Button
             type="submit"
             disabled={!completionRateValid || saving}
           >
             Mark as done
-          </Button>
-          <Button
-            type="button"
-            variant="danger"
-            onClick={() => void save("dropped")}
-            disabled={!completionRateValid || saving}
-          >
-            Drop task
           </Button>
         </div>
       </form>

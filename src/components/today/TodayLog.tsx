@@ -61,6 +61,23 @@ export function TodayLog() {
     return seconds >= MIN_GAP_SECONDS ? seconds : 0;
   };
 
+  // Running total per task as of each entry, so a task worked in several
+  // sessions reads as one tally advancing toward its estimate ("43m / 50m",
+  // then "45m / 50m") instead of every session restarting against the full
+  // estimate ("2m / 50m").
+  const cumulativeByEntry = new Map<string, number>();
+  {
+    const taskTotals = new Map<string, number>();
+    for (const item of timeline) {
+      if (item.kind !== "entry") continue;
+      const total =
+        (taskTotals.get(item.entry.task_id) ?? 0) +
+        splitEntrySecondsByDate(item.entry, today, now);
+      taskTotals.set(item.entry.task_id, total);
+      cumulativeByEntry.set(item.entry.id, total);
+    }
+  }
+
   return (
     <div>
       <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -105,6 +122,7 @@ export function TodayLog() {
                     today={today}
                     now={now}
                     isLast={isLast}
+                    cumulativeSeconds={cumulativeByEntry.get(item.entry.id) ?? 0}
                     onOpen={() => setDetailEntryId(item.entry.id)}
                   />
                 )}
@@ -127,17 +145,23 @@ function EntryRow({
   today,
   now,
   isLast,
+  cumulativeSeconds,
   onOpen
 }: {
   item: Extract<TimelineItem, { kind: "entry" }>;
   today: string;
   now: Date;
   isLast: boolean;
+  /** Total time on this entry's task today, up to and including this entry. */
+  cumulativeSeconds: number;
   onOpen: () => void;
 }) {
   const { entry, start, end, ongoing } = item;
   const duration = splitEntrySecondsByDate(entry, today, now);
   const estimateSeconds = (entry.task_estimated_minutes ?? 0) * 60;
+  // Earlier sessions exist when the running total exceeds this session alone.
+  const hasEarlierSessions = cumulativeSeconds > duration;
+  const overEstimate = estimateSeconds > 0 && cumulativeSeconds > estimateSeconds;
   const dotColor = resolveCategoryColor(entry.category_color);
 
   return (
@@ -195,8 +219,18 @@ function EntryRow({
               {formatDurationCompact(duration)}
             </div>
             {estimateSeconds > 0 ? (
-              <div className="mt-0.5 text-xs tabular-nums text-muted-foreground">
-                / {formatDurationCompact(estimateSeconds)}
+              <div
+                title="Time on this task today vs. its estimate"
+                className={cn(
+                  "mt-0.5 text-xs tabular-nums",
+                  overEstimate
+                    ? "font-medium text-warning-soft-foreground"
+                    : "text-muted-foreground"
+                )}
+              >
+                {hasEarlierSessions
+                  ? `${formatDurationCompact(cumulativeSeconds)} / ${formatDurationCompact(estimateSeconds)}`
+                  : `/ ${formatDurationCompact(estimateSeconds)}`}
               </div>
             ) : null}
           </div>

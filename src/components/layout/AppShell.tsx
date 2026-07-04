@@ -1,3 +1,4 @@
+import { motion, useReducedMotion } from "framer-motion";
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -7,6 +8,7 @@ import logoSrc from "../../assets/logo.png";
 import type { ReactNode } from "react";
 import { useUiStore } from "../../stores/uiStore";
 import { cn } from "../../utils/cn";
+import { settle } from "../../utils/motion";
 import { isMac } from "../../utils/platform";
 import { Tooltip } from "../ui/Tooltip";
 
@@ -43,6 +45,7 @@ export function AppShell<T extends string>({
 }: AppShellProps<T>) {
   const sidebarCollapsed = useUiStore((state) => state.sidebarCollapsed);
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
+  const reduceMotion = useReducedMotion();
 
   // ── Brand (shared) ──────────────────────────────────────────────────────
   const brand = (
@@ -83,10 +86,25 @@ export function AppShell<T extends string>({
           "transition-colors duration-fast focus-visible:shadow-ring",
           sidebarCollapsed && "justify-center",
           active
-            ? "bg-primary-soft text-primary-soft-foreground"
+            ? "text-primary-soft-foreground"
             : "text-muted-foreground hover:bg-muted hover:text-foreground"
         )}
       >
+        {/* Shared-layout pill: one element glides between routes instead of
+            each button toggling its own background. Icon/label are `relative`
+            so they paint above it without extra z-index. */}
+        {active && (
+          <motion.span
+            layoutId="nav-active-pill"
+            className="absolute inset-0 rounded-lg bg-primary-soft"
+            // settle, shortened: the pill glides and stops dead — no bounce,
+            // matching the app's no-overshoot arrival language.
+            transition={
+              reduceMotion ? { duration: 0 } : { ...settle, duration: 0.25 }
+            }
+            aria-hidden="true"
+          />
+        )}
         {/* Floating (macOS) variant uses a filled pill only — no left accent
             bar, which would clip against the card's rounded edge. */}
         {active && !isMac && (
@@ -97,11 +115,13 @@ export function AppShell<T extends string>({
         )}
         <Icon
           className={cn(
-            "h-4 w-4 shrink-0 transition-transform duration-fast",
+            "relative h-4 w-4 shrink-0 transition-transform duration-fast",
             !active && "group-hover:scale-110"
           )}
         />
-        {!sidebarCollapsed && <span className="truncate">{route.label}</span>}
+        {!sidebarCollapsed && (
+          <span className="relative truncate">{route.label}</span>
+        )}
       </button>
     );
 

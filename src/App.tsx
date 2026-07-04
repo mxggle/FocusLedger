@@ -1,5 +1,6 @@
+import { motion, useReducedMotion } from "framer-motion";
 import { AlertCircle, BarChart3, CalendarDays, CheckSquare, Hourglass, Inbox, Info, Settings, Sparkles } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AboutPage } from "./components/about/AboutPage";
 import { AssistantDock } from "./components/assistant/AssistantDock";
 import { AssistantLauncher } from "./components/assistant/AssistantLauncher";
@@ -34,6 +35,7 @@ import { useRestStore } from "./stores/restStore";
 import { useSettingsStore } from "./stores/settingsStore";
 import { useTaskStore } from "./stores/taskStore";
 import { useUiStore } from "./stores/uiStore";
+import { settle } from "./utils/motion";
 
 type RouteId =
   | "today"
@@ -67,7 +69,19 @@ export default function App() {
   const theme = useSettingsStore((state) => state.settings.theme);
   const requestedRoute = useUiStore((state) => state.requestedRoute);
   const clearRequestedRoute = useUiStore((state) => state.clearRequestedRoute);
+  const focusZen = useUiStore((state) => state.focusZen);
+  const resting = useRestStore((state) => Boolean(state.rest));
+  const reduceMotion = useReducedMotion();
   const openToday = useCallback(() => setRoute("today"), []);
+
+  // While a full-screen overlay (zen focus / rest) is up, the shell behind it
+  // is decoration: make it inert so Tab and screen readers can't reach it.
+  // Attribute (not prop) keeps this compatible with React 18's typings.
+  const overlayActive = focusZen || resting;
+  const shellRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    shellRef.current?.toggleAttribute("inert", overlayActive);
+  }, [overlayActive]);
 
   useTrayStatus();
   useTrayMenu();
@@ -115,6 +129,7 @@ export default function App() {
 
   return (
     <TooltipProvider>
+      <div ref={shellRef} className="contents">
       <AppShell
         routes={routes}
         activeRoute={route}
@@ -135,30 +150,44 @@ export default function App() {
             </div>
             <p className="text-sm text-muted-foreground">{error}</p>
           </div>
-        ) : route === "today" ? (
-          <TodayPage />
-        ) : route === "my-day" ? (
-          <MyDayPage />
-        ) : route === "backlog" ? (
-          <BacklogPage />
-        ) : route === "plan" ? (
-          <PlanPage />
-        ) : route === "life" ? (
-          <LifePage onNavigate={setRoute} />
-        ) : route === "history" ? (
-          <HistoryPage />
-        ) : route === "settings" ? (
-          <SettingsPage />
         ) : (
-          <AboutPage />
+          // Keyed by route: a barely-there fade with a 4px rise. This is the
+          // *only* entrance layer on navigation — inner panes and lists stay
+          // still so the page reads as one calm surface, not stacked effects.
+          <motion.div
+            key={route}
+            className="h-full"
+            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...settle, duration: 0.2 }}
+          >
+            {route === "today" ? (
+              <TodayPage />
+            ) : route === "my-day" ? (
+              <MyDayPage />
+            ) : route === "backlog" ? (
+              <BacklogPage />
+            ) : route === "plan" ? (
+              <PlanPage />
+            ) : route === "life" ? (
+              <LifePage onNavigate={setRoute} />
+            ) : route === "history" ? (
+              <HistoryPage />
+            ) : route === "settings" ? (
+              <SettingsPage />
+            ) : (
+              <AboutPage />
+            )}
+          </motion.div>
         )}
       </AppShell>
+      <AssistantLauncher />
+      </div>
       <FocusZenOverlay />
       <RestOverlay />
       <QuickAddDialog />
       <ConfirmDialog />
       <ToastViewport />
-      <AssistantLauncher />
     </TooltipProvider>
   );
 }

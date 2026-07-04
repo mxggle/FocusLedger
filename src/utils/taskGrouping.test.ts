@@ -41,17 +41,12 @@ describe("partitionTodayTasks", () => {
     expect(today).toEqual([]);
   });
 
-  it("keeps the actively running task in today even when its due date is in the past", () => {
+  it("keeps a past-due task in overdue regardless of status, so pause/resume never moves it", () => {
     const running = makeTask({ id: "run", due_date: "2026-05-30", status: "doing" });
-    const { overdue, today } = partitionTodayTasks([running], TODAY);
-    expect(overdue).toEqual([]);
-    expect(today).toEqual([running]);
-  });
-
-  it("treats overdue paused tasks as overdue", () => {
     const paused = makeTask({ id: "p", due_date: "2026-05-31", status: "paused" });
-    const { overdue } = partitionTodayTasks([paused], TODAY);
-    expect(overdue).toEqual([paused]);
+    const { overdue, today } = partitionTodayTasks([running, paused], TODAY);
+    expect(overdue).toEqual([running, paused]);
+    expect(today).toEqual([]);
   });
 
   it("keeps backlog (no due date) and future tasks in today", () => {
@@ -81,8 +76,8 @@ describe("isTaskOverdue", () => {
     expect(isTaskOverdue(makeTask({ due_date: TODAY }), TODAY)).toBe(false);
   });
 
-  it("is false for the running task", () => {
-    expect(isTaskOverdue(makeTask({ due_date: "2026-05-30", status: "doing" }), TODAY)).toBe(false);
+  it("is true for a past-due task even while it is running", () => {
+    expect(isTaskOverdue(makeTask({ due_date: "2026-05-30", status: "doing" }), TODAY)).toBe(true);
   });
 
   it("is false for backlog tasks", () => {

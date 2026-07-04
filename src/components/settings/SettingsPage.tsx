@@ -3,13 +3,15 @@ import {
   Bot,
   Brain,
   Coffee,
+  Eye,
+  EyeOff,
   Keyboard,
   MonitorCog,
   SlidersHorizontal,
   Sparkles,
   Tags
 } from "lucide-react";
-import { ChangeEvent, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNotificationPermission } from "../../hooks/useNotificationPermission";
 import { showStyledNotification } from "../../notify/notifyCenter";
 import { AI_LANGUAGES } from "../../services/ai/languages";
@@ -49,14 +51,7 @@ export function SettingsPage() {
   const categories = useTaskStore((state) => state.categories);
   const notificationPermission = useNotificationPermission();
   const addToast = useUiStore((state) => state.addToast);
-
-  function updateNumber(event: ChangeEvent<HTMLInputElement>) {
-    const value = Number(event.target.value);
-    void updateSetting(
-      "dailyFocusTargetMinutes",
-      Number.isFinite(value) ? value : 240
-    );
-  }
+  const [showApiKey, setShowApiKey] = useState(false);
 
   async function enableSystemNotifications() {
     const result = await notificationPermission.request();
@@ -175,11 +170,13 @@ export function SettingsPage() {
                   label="Daily focus target"
                   hint="Focus minutes per day"
                 >
-                  <Input
-                    type="number"
-                    min="0"
+                  <DeferredNumberInput
+                    min={0}
+                    fallback={240}
                     value={settings.dailyFocusTargetMinutes}
-                    onChange={updateNumber}
+                    onCommit={(value) =>
+                      void updateSetting("dailyFocusTargetMinutes", value)
+                    }
                   />
                 </Field>
               </div>
@@ -217,36 +214,28 @@ export function SettingsPage() {
                 <div className="mt-1 space-y-4 border-t border-border pt-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Field label="Default break length" hint="Minutes per break">
-                      <Input
-                        type="number"
-                        min="1"
-                        max="120"
+                      <DeferredNumberInput
+                        min={1}
+                        max={120}
+                        fallback={5}
                         value={settings.restDefaultMinutes}
-                        onChange={(event) => {
-                          const value = Number(event.target.value);
-                          void updateSetting(
-                            "restDefaultMinutes",
-                            Number.isFinite(value) && value > 0 ? Math.round(value) : 5
-                          );
-                        }}
+                        onCommit={(value) =>
+                          void updateSetting("restDefaultMinutes", value)
+                        }
                       />
                     </Field>
                     <Field
                       label="Minimum session to offer a break"
                       hint="Skip the break prompt after very short sessions"
                     >
-                      <Input
-                        type="number"
-                        min="0"
-                        max="240"
+                      <DeferredNumberInput
+                        min={0}
+                        max={240}
+                        fallback={15}
                         value={settings.restAfterTaskMinSessionMinutes}
-                        onChange={(event) => {
-                          const value = Number(event.target.value);
-                          void updateSetting(
-                            "restAfterTaskMinSessionMinutes",
-                            Number.isFinite(value) && value >= 0 ? Math.round(value) : 15
-                          );
-                        }}
+                        onCommit={(value) =>
+                          void updateSetting("restAfterTaskMinSessionMinutes", value)
+                        }
                       />
                     </Field>
                   </div>
@@ -288,13 +277,29 @@ export function SettingsPage() {
                   </Select>
                 </Field>
                 <Field label="API key">
-                  <Input
-                    type="password"
-                    autoComplete="off"
-                    placeholder="Paste your API key"
-                    value={settings.aiApiKey}
-                    onChange={(event) => void updateSetting("aiApiKey", event.target.value)}
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showApiKey ? "text" : "password"}
+                      autoComplete="off"
+                      placeholder="Paste your API key"
+                      value={settings.aiApiKey}
+                      onChange={(event) => void updateSetting("aiApiKey", event.target.value)}
+                      className="pr-9"
+                    />
+                    <button
+                      type="button"
+                      aria-label={showApiKey ? "Hide API key" : "Show API key"}
+                      title={showApiKey ? "Hide API key" : "Show API key"}
+                      onClick={() => setShowApiKey((value) => !value)}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground outline-none transition-colors duration-fast hover:text-foreground focus-visible:shadow-ring"
+                    >
+                      {showApiKey ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
                 </Field>
                 <Field
                   label="Model"
@@ -570,6 +575,63 @@ export function SettingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * A number input that commits on blur/Enter instead of every keystroke, so
+ * clearing the field to retype doesn't instantly write 0 (or snap back to a
+ * clamped value) mid-edit. Invalid or empty input falls back on commit.
+ */
+function DeferredNumberInput({
+  value,
+  min,
+  max,
+  fallback,
+  onCommit
+}: {
+  value: number;
+  min?: number;
+  max?: number;
+  fallback: number;
+  onCommit: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+
+  // Follow external changes (e.g. another surface updates the setting), but
+  // never while the user is typing.
+  useEffect(() => {
+    if (!focused) setDraft(String(value));
+  }, [value, focused]);
+
+  function commit() {
+    setFocused(false);
+    const parsed = Number(draft);
+    let next =
+      draft.trim() !== "" && Number.isFinite(parsed) ? Math.round(parsed) : fallback;
+    if (min !== undefined) next = Math.max(min, next);
+    if (max !== undefined) next = Math.min(max, next);
+    setDraft(String(next));
+    if (next !== value) onCommit(next);
+  }
+
+  return (
+    <Input
+      type="number"
+      min={min}
+      max={max}
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onFocus={() => setFocused(true)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
+      }}
+    />
   );
 }
 

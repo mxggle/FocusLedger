@@ -26,7 +26,7 @@ import {
 import { resolveCategoryColor } from "../../utils/category";
 import { cn } from "../../utils/cn";
 import { formatDateLabel, toDateKey } from "../../utils/date";
-import { formatDurationCompact } from "../../utils/duration";
+import { formatDurationCompact, parseEstimateMinutes } from "../../utils/duration";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { CategoryDot } from "../ui/CategoryDot";
@@ -39,11 +39,6 @@ const priorityBadge: Record<TaskPriority, "neutral" | "primary" | "warning"> = {
   medium: "primary",
   high: "warning"
 };
-
-function parseEstimate(value: string): number | null {
-  const parsed = Number(value);
-  return value && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
 
 /** Shared schedule/edit/delete handlers for a backlog task. */
 function useBacklogTaskActions(task: Task) {
@@ -69,7 +64,7 @@ function useBacklogTaskActions(task: Task) {
       if (
         await confirm({
           title: "Delete task",
-          message: "Delete this backlog task?",
+          message: "Permanently delete this backlog task?",
           confirmLabel: "Delete",
           danger: true
         })
@@ -385,7 +380,7 @@ function BacklogTaskEditor({
       title,
       category_id: categoryId || "inbox",
       priority,
-      estimated_minutes: parseEstimate(estimate),
+      estimated_minutes: parseEstimateMinutes(estimate),
       due_date: dueDate || null
     });
     if (result.ok) onClose();

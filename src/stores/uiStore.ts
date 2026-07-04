@@ -15,6 +15,8 @@ export type ToastMessage = {
   title: string;
   description?: string;
   actions?: ToastAction[];
+  /** Set by addToast; used to time-box duplicate suppression. */
+  createdAt?: number;
 };
 
 export type ConfirmOptions = {
@@ -165,7 +167,13 @@ type UiState = {
   todaySummaryExpanded: boolean;
   toggleSidebar: () => void;
   toggleTodayPane: (pane: keyof TodayPanes) => void;
-  setTodayPaneCollapsed: (pane: keyof TodayPanes, collapsed: boolean) => void;
+  /** `persist: false` applies the change without saving it — used for
+   *  responsive auto-collapse, which must not rewrite the user's layout. */
+  setTodayPaneCollapsed: (
+    pane: keyof TodayPanes,
+    collapsed: boolean,
+    options?: { persist?: boolean }
+  ) => void;
   toggleTodaySummary: () => void;
 
   // Focus zen mode — fills the whole app with just the focus stage. Ephemeral
@@ -208,16 +216,25 @@ export const useUiStore = create<UiState>((set) => ({
   closeQuickAdd: () => set({ quickAddOpen: false }),
 
   addToast: (toast) => {
-    const { durationMs = 5000, ...message } = toast;
+    const { durationMs, ...message } = toast;
+    // Toasts carrying actions stay until acted on or dismissed — auto-dismissing
+    // a reminder the user is supposed to click defeats its purpose. Plain
+    // feedback toasts keep the 5s default. Explicit durations always win.
+    const resolvedDurationMs =
+      durationMs ?? (message.actions?.length ? 0 : 5000);
+    const now = Date.now();
 
-    // Skip if an identical toast is already visible (prevents duplicates from
-    // double-fired effects, e.g. StrictMode mounting an effect twice).
+    // Skip if an identical toast just appeared (prevents duplicates from
+    // double-fired effects, e.g. StrictMode mounting an effect twice) — but
+    // only within a short window, so a deliberate repeat (clicking "Copy"
+    // twice) still gives visible feedback.
     const existing = useUiStore.getState().toasts;
     const isDuplicate = existing.some(
       (t) =>
         t.kind === message.kind &&
         t.title === message.title &&
-        t.description === message.description
+        t.description === message.description &&
+        now - (t.createdAt ?? 0) < 1000
     );
     if (isDuplicate) {
       return undefined;
@@ -225,12 +242,12 @@ export const useUiStore = create<UiState>((set) => ({
 
     const id = createId("toast");
     set((state) => ({
-      toasts: [...state.toasts, { ...message, id }].slice(-4)
+      toasts: [...state.toasts, { ...message, id, createdAt: now }].slice(-4)
     }));
-    if (durationMs > 0) {
+    if (resolvedDurationMs > 0) {
       window.setTimeout(() => {
         useUiStore.getState().dismissToast(id);
-      }, durationMs);
+      }, resolvedDurationMs);
     }
     return id;
   },
@@ -284,10 +301,12 @@ export const useUiStore = create<UiState>((set) => ({
       return { todayPanes: next };
     }),
 
-  setTodayPaneCollapsed: (pane, collapsed) =>
+  setTodayPaneCollapsed: (pane, collapsed, options) =>
     set((state) => {
       const next: TodayPanes = { ...state.todayPanes, [pane]: collapsed };
-      writeTodayPanes(next);
+      if (options?.persist !== false) {
+        writeTodayPanes(next);
+      }
       return { todayPanes: next };
     }),
 

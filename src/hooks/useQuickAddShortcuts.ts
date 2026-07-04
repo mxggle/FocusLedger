@@ -47,6 +47,27 @@ async function focusMainWindow() {
   }
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target.isContentEditable ||
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement
+  );
+}
+
+// ShortcutInput now requires a real modifier, but previously-saved settings may
+// hold a bare key ("A") or Shift-only combo — those must never fire mid-typing.
+function hasRealModifier(shortcut: string): boolean {
+  const parts = shortcut.toLowerCase().split("+").map((part) => part.trim());
+  return (
+    parts.includes("cmdorctrl") ||
+    parts.includes("commandorcontrol") ||
+    parts.includes("alt")
+  );
+}
+
 function matchesShortcut(event: KeyboardEvent, shortcut: string): boolean {
   const parts = shortcut.split("+").map((p) => p.trim().toLowerCase());
   const key = parts[parts.length - 1];
@@ -70,6 +91,9 @@ export function useQuickAddShortcuts() {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (shortcut && matchesShortcut(event, shortcut)) {
+        if (!hasRealModifier(shortcut) && isEditableTarget(event.target)) {
+          return;
+        }
         event.preventDefault();
         openQuickAdd();
       }

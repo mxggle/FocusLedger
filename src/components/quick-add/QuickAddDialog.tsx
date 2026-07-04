@@ -15,6 +15,7 @@ import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { CreateTaskInput, TaskPriority } from "../../types";
 import { toDateKey } from "../../utils/date";
+import { parseEstimateMinutes } from "../../utils/duration";
 import { Button } from "../ui/Button";
 import {
   Dialog,
@@ -27,11 +28,6 @@ import { IconButton } from "../ui/IconButton";
 import { SegmentedControl } from "../ui/SegmentedControl";
 
 type Destination = "backlog" | "today";
-
-function parseEstimate(value: string): number | null {
-  const parsed = Number(value);
-  return value && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
 
 export function QuickAddDialog() {
   const open = useUiStore((state) => state.quickAddOpen);
@@ -52,6 +48,13 @@ export function QuickAddDialog() {
   const [estimatedMinutes, setEstimatedMinutes] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Tracks the dialog's open state across the async AI capture, so a task
+  // that lands after the user closed the dialog still gets visible feedback.
+  const openRef = useRef(open);
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
+
   // AI fills in the details from the captured text alone; opening the
   // advanced fields switches to fully manual entry.
   const aiEnabled = hasAiKey(settings) && !advancedOpen;
@@ -71,7 +74,7 @@ export function QuickAddDialog() {
       title,
       category_id: categoryId || "inbox",
       priority,
-      estimated_minutes: parseEstimate(estimatedMinutes),
+      estimated_minutes: parseEstimateMinutes(estimatedMinutes),
       due_date: destination === "today" ? toDateKey() : null
     };
 
@@ -101,6 +104,10 @@ export function QuickAddDialog() {
         title: "Added without AI details",
         description: aiError
       });
+    } else if (!openRef.current) {
+      // The dialog was closed while AI capture ran — the task was still
+      // created, so say so rather than finishing silently.
+      addToast({ kind: "success", title: "Task added", description: input.title });
     }
 
     setTitle("");
@@ -157,19 +164,28 @@ export function QuickAddDialog() {
           </Button>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setAdvancedOpen((value) => !value)}
-          aria-expanded={advancedOpen}
-          className="mt-3 flex items-center gap-1 rounded px-5 pb-4 text-xs font-medium text-muted-foreground outline-none transition-colors duration-fast hover:text-foreground focus-visible:shadow-ring"
-        >
-          <ChevronDown
-            className={`h-3.5 w-3.5 transition-transform duration-fast ${
-              advancedOpen ? "rotate-180" : ""
-            }`}
-          />
-          Advanced fields
-        </button>
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 px-5 pb-4">
+          <button
+            type="button"
+            onClick={() => setAdvancedOpen((value) => !value)}
+            aria-expanded={advancedOpen}
+            className="flex items-center gap-1 rounded text-xs font-medium text-muted-foreground outline-none transition-colors duration-fast hover:text-foreground focus-visible:shadow-ring"
+          >
+            <ChevronDown
+              className={`h-3.5 w-3.5 transition-transform duration-fast ${
+                advancedOpen ? "rotate-180" : ""
+              }`}
+            />
+            Advanced fields
+          </button>
+          {/* Opening advanced fields switches to fully manual entry — say so,
+              instead of only swapping the sparkle icon. */}
+          {hasAiKey(settings) && advancedOpen ? (
+            <span className="text-xs text-subtle">
+              Manual mode — AI autofill is off while advanced fields are open.
+            </span>
+          ) : null}
+        </div>
 
         {advancedOpen ? (
           <div className="grid gap-4 border-t border-border bg-surface-2/60 px-5 py-4 md:grid-cols-[auto_1fr_140px_120px]">

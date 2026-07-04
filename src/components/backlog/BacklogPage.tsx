@@ -1,3 +1,4 @@
+import { AnimatePresence } from "framer-motion";
 import { Package, Plus, SearchX } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useShortcutLabel } from "../../hooks/useShortcutLabel";
@@ -13,6 +14,7 @@ import {
   type BacklogGroup
 } from "../../utils/backlogView";
 import { toDateKey } from "../../utils/date";
+import { AnimatedListItem } from "../ui/AnimatedListItem";
 import { Button } from "../ui/Button";
 import { CategoryDot } from "../ui/CategoryDot";
 import { EmptyState } from "../ui/EmptyState";
@@ -176,15 +178,23 @@ function BacklogGroupSection({
 
       {viewMode === "cards" ? (
         <div className="grid gap-3">
-          {group.tasks.map((task) => (
-            <BacklogTaskItem key={task.id} task={task} view="cards" />
-          ))}
+          <AnimatePresence initial={false}>
+            {group.tasks.map((task) => (
+              <AnimatedListItem key={task.id}>
+                <BacklogTaskItem task={task} view="cards" />
+              </AnimatedListItem>
+            ))}
+          </AnimatePresence>
         </div>
       ) : (
         <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface shadow-card">
-          {group.tasks.map((task) => (
-            <BacklogTaskItem key={task.id} task={task} view="list" />
-          ))}
+          <AnimatePresence initial={false}>
+            {group.tasks.map((task) => (
+              <AnimatedListItem key={task.id}>
+                <BacklogTaskItem task={task} view="list" />
+              </AnimatedListItem>
+            ))}
+          </AnimatePresence>
         </div>
       )}
     </section>

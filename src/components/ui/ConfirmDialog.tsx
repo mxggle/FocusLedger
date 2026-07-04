@@ -1,5 +1,4 @@
 import { AlertTriangle, Info } from "lucide-react";
-import { useEffect } from "react";
 import { useUiStore } from "../../stores/uiStore";
 import { Button } from "./Button";
 import { Dialog, DialogDescription, DialogTitle } from "./Dialog";
@@ -7,18 +6,6 @@ import { Dialog, DialogDescription, DialogTitle } from "./Dialog";
 export function ConfirmDialog() {
   const request = useUiStore((state) => state.confirmRequest);
   const resolveConfirm = useUiStore((state) => state.resolveConfirm);
-
-  useEffect(() => {
-    if (!request) return;
-
-    function handleKeyDown(event: KeyboardEvent) {
-      // Radix handles Esc; we add Enter-to-confirm.
-      if (event.key === "Enter") resolveConfirm(true);
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [request, resolveConfirm]);
 
   const Icon = request?.danger ? AlertTriangle : Info;
 
@@ -50,9 +37,13 @@ export function ConfirmDialog() {
             </div>
           </div>
           <div className="mt-6 flex justify-end gap-2">
+            {/* Enter activates whichever button is focused (native behavior).
+                Danger dialogs focus Cancel so a stray Enter can't destroy data;
+                benign ones focus Confirm to keep the flow fast. */}
             <Button
               type="button"
               variant="secondary"
+              autoFocus={request.danger}
               onClick={() => resolveConfirm(false)}
             >
               {request.cancelLabel ?? "Cancel"}
@@ -60,7 +51,7 @@ export function ConfirmDialog() {
             <Button
               type="button"
               variant={request.danger ? "danger" : "primary"}
-              autoFocus
+              autoFocus={!request.danger}
               onClick={() => resolveConfirm(true)}
             >
               {request.confirmLabel ?? "Confirm"}

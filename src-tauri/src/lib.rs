@@ -87,6 +87,92 @@ fn apply_main_traffic_lights(app: &AppHandle) {
     }
 }
 
+/// Depth-first search for an `NSButton` (in practice the private
+/// `NSStatusBarButton`) inside a status-bar window's view hierarchy.
+#[cfg(target_os = "macos")]
+fn find_ns_button(view: cocoa::base::id) -> cocoa::base::id {
+    use cocoa::base::{id, nil};
+    use objc::runtime::YES;
+    use objc::{class, msg_send, sel, sel_impl};
+
+    // SAFETY: AppKit calls on views we just obtained from AppKit itself; every
+    // handle is null-checked before use, on the main thread (Tauri setup).
+    unsafe {
+        if view.is_null() {
+            return nil;
+        }
+        let is_button: objc::runtime::BOOL = msg_send![view, isKindOfClass: class!(NSButton)];
+        if is_button == YES {
+            return view;
+        }
+        let subviews: id = msg_send![view, subviews];
+        if subviews.is_null() {
+            return nil;
+        }
+        let count: usize = msg_send![subviews, count];
+        for index in 0..count {
+            let child: id = msg_send![subviews, objectAtIndex: index];
+            let found = find_ns_button(child);
+            if !found.is_null() {
+                return found;
+            }
+        }
+        nil
+    }
+}
+
+/// Give the tray status item's button monospaced *digits* (the regular system
+/// font otherwise renders digits proportionally), so the menu-bar timer keeps
+/// a fixed width instead of jittering every second. This is what
+/// `NSFont.monospacedDigitSystemFont` exists for; Tauri doesn't expose the
+/// underlying `NSStatusItem`, so we locate our status-bar window among the
+/// app's windows and set the font on its button directly. Fails soft: if
+/// AppKit's private classes ever change, the timer just keeps the old font.
+#[cfg(target_os = "macos")]
+fn apply_tray_monospaced_digits() {
+    use cocoa::base::id;
+    use objc::runtime::{Class, YES};
+    use objc::{class, msg_send, sel, sel_impl};
+
+    // Private AppKit class backing status items; resolved at runtime so a
+    // future rename degrades to "no font tweak" instead of a crash.
+    let Some(status_window_class) = Class::get("NSStatusBarWindow") else {
+        return;
+    };
+
+    // SAFETY: standard AppKit calls on the main thread (Tauri setup); every
+    // handle is null-checked before use.
+    unsafe {
+        let ns_app: id = msg_send![class!(NSApplication), sharedApplication];
+        let windows: id = msg_send![ns_app, windows];
+        if windows.is_null() {
+            return;
+        }
+        let count: usize = msg_send![windows, count];
+        for index in 0..count {
+            let window: id = msg_send![windows, objectAtIndex: index];
+            let is_status: objc::runtime::BOOL =
+                msg_send![window, isKindOfClass: status_window_class];
+            if is_status != YES {
+                continue;
+            }
+            let content: id = msg_send![window, contentView];
+            let button = find_ns_button(content);
+            if button.is_null() {
+                continue;
+            }
+            // Match the menu bar's size but with fixed-width digits.
+            let menu_bar_font: id = msg_send![class!(NSFont), menuBarFontOfSize: 0.0f64];
+            let size: f64 = msg_send![menu_bar_font, pointSize];
+            let font: id =
+                msg_send![class!(NSFont), monospacedDigitSystemFontOfSize: size weight: 0.0f64];
+            if !font.is_null() {
+                let _: () = msg_send![button, setFont: font];
+            }
+        }
+    }
+}
+
 /// How often the native heartbeat nudges the webview to re-evaluate reminders.
 /// Kept below the JS tick so a throttled webview timer never sets the cadence.
 const REMINDER_HEARTBEAT_SECS: u64 = 20;
@@ -138,6 +224,11 @@ fn update_tray_status(app: AppHandle, title: Option<String>, tooltip: String) ->
         .ok_or_else(|| "Yolo tray icon was not initialized".to_string())?;
 
     // Windows does not display tray titles, but macOS shows this in the menu bar.
+    // On macOS the status item has no icon (see setup), so the title *is* the
+    // item — fall back to the app name when idle or it would vanish entirely.
+    #[cfg(target_os = "macos")]
+    let title = title.or_else(|| Some("Yolo".to_string()));
+
     tray.set_title(title.as_deref()).map_err(|error| error.to_string())?;
     tray.set_tooltip(Some(tooltip)).map_err(|error| error.to_string())
 }
@@ -403,11 +494,26 @@ pub fn run() {
                     _ => {}
                 });
 
+            // macOS: text-only status item to keep the menu bar compact — the
+            // title carries the timer while focusing and the app name when
+            // idle (kept truthful by `update_tray_status`). No icon at all.
+            #[cfg(target_os = "macos")]
+            {
+                tray = tray.title("Yolo");
+            }
+
+            // Windows/Linux don't render tray titles, so the icon is the item.
+            #[cfg(not(target_os = "macos"))]
             if let Some(icon) = app.default_window_icon().cloned() {
                 tray = tray.icon(icon);
             }
 
             tray.build(app)?;
+
+            // The status item's window exists now; pin its button to
+            // monospaced digits so the timer title doesn't jitter.
+            #[cfg(target_os = "macos")]
+            apply_tray_monospaced_digits();
 
             // Inset the native traffic lights so they sit inside the floating
             // sidebar (macOS only). Re-applied on resize in `on_window_event`.

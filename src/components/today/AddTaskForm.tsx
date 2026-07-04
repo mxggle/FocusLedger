@@ -7,6 +7,7 @@ import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { CreateTaskInput, TaskPriority } from "../../types";
 import { toDateKey } from "../../utils/date";
+import { parseEstimateMinutes } from "../../utils/duration";
 import { Button } from "../ui/Button";
 import { Field, Input, Select } from "../ui/Field";
 
@@ -41,7 +42,7 @@ export function AddTaskForm() {
       title,
       category_id: categoryId || "inbox",
       priority,
-      estimated_minutes: estimatedMinutes ? Number(estimatedMinutes) : null,
+      estimated_minutes: parseEstimateMinutes(estimatedMinutes),
       due_date: dueDate || toDateKey()
     };
 
@@ -109,19 +110,28 @@ export function AddTaskForm() {
           Add
         </Button>
       </div>
-      <button
-        type="button"
-        onClick={() => setAdvancedOpen((value) => !value)}
-        aria-expanded={advancedOpen}
-        className="mt-3 flex items-center gap-1 rounded text-xs font-medium text-muted-foreground outline-none transition-colors duration-fast hover:text-foreground focus-visible:shadow-ring"
-      >
-        <ChevronDown
-          className={`h-3.5 w-3.5 transition-transform duration-fast ${
-            advancedOpen ? "rotate-180" : ""
-          }`}
-        />
-        Advanced fields
-      </button>
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <button
+          type="button"
+          onClick={() => setAdvancedOpen((value) => !value)}
+          aria-expanded={advancedOpen}
+          className="flex items-center gap-1 rounded text-xs font-medium text-muted-foreground outline-none transition-colors duration-fast hover:text-foreground focus-visible:shadow-ring"
+        >
+          <ChevronDown
+            className={`h-3.5 w-3.5 transition-transform duration-fast ${
+              advancedOpen ? "rotate-180" : ""
+            }`}
+          />
+          Advanced fields
+        </button>
+        {/* Opening advanced fields switches to fully manual entry — say so,
+            instead of only swapping the sparkle icon. */}
+        {hasAiKey(settings) && advancedOpen ? (
+          <span className="text-xs text-subtle">
+            Manual mode — AI autofill is off while advanced fields are open.
+          </span>
+        ) : null}
+      </div>
       {advancedOpen ? (
         <div className="mt-3 grid grid-cols-2 gap-3">
           <Field label="Category">
