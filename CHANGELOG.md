@@ -1,5 +1,75 @@
 # Changelog
 
+## 0.7.0 - 2026-07-04
+
+This release makes capturing tasks effortless and the day itself visible.
+Quick-add learns to fill in the details for you with **AI smart capture**, the
+Today page gains a **day line** that paints where your time actually went, the
+backlog becomes a real workspace with views and sorting, and the whole app
+moves with a calmer, more deliberate motion language.
+
+### Added
+
+- **AI smart capture.** Type a task the way you'd say it — "review the deck
+  tomorrow, high prio, ~30m" — and quick-add fills in the category, priority,
+  estimate, and due date with one low-temperature AI call. Your text is never
+  lost: if the model's answer doesn't validate, the task is created as plain
+  text exactly as typed. Opening the advanced fields switches to fully manual
+  entry, and says so.
+- **Day header with a day line.** Today now opens with the date, a live clock,
+  and a midnight-to-midnight timeline where every tracked session paints a
+  segment in its category color — where your time went, in one glance. A knob
+  rides the present moment, and the header counts total focused time.
+- **Backlog views.** The backlog gets a toolbar with grouping, sorting, and
+  view preferences that persist, plus reworked task rows — turning it from a
+  flat list into a place you can actually triage.
+- **macOS menu-bar timer.** The tray is now a text-only status item showing
+  the running timer in fixed-width digits (no more jitter every second) and a
+  compact format — "25:34" instead of "00:25:34". When nothing is running it
+  reads "Yolo" instead of vanishing.
+- **A shared motion language.** Navigating between pages is a barely-there
+  fade, the sidebar's active pill glides between destinations, and list items
+  settle in and reflow with one shared choreography. Motion is single-layer by
+  design — one calm surface, no stacked effects — and every animation respects
+  reduced-motion preferences.
+
+### Changed
+
+- **Settings reorganized.** The settings page is regrouped into clearer
+  sections; the API key field can be shown/hidden, and number fields (daily
+  target, rest lengths) commit when you leave the field instead of on every
+  keystroke.
+- **Assistant reliability.** The tool loop got sturdier: better handling of
+  provider quirks, tool-call tracing for debugging, deduplicated memory keys,
+  and stream handling fixes — with substantial new test coverage.
+- **Overdue is now a date fact.** A task counts as carried-over purely by its
+  due date, so pausing or resuming a focus session never shuffles cards
+  between groups mid-day.
+- **Sharper theme.** Refined surface colors, sidebar navigation, and restored
+  primary button gradients across the app.
+- Toasts that carry actions (like reminders) now stay until you act on or
+  dismiss them, instead of auto-dismissing after five seconds.
+
+### Fixed
+
+- Quick-add shortcuts saved without a real modifier (a bare "A" or a
+  Shift-combo) no longer fire while you're typing in a text field.
+- Shrinking the window auto-collapses Today's side panes without overwriting
+  your saved layout — and they re-open on their own when the window grows
+  back.
+- Clearing an assistant conversation now asks for confirmation; the clear
+  button sits one slot from Close, and the action is irreversible.
+- The assistant's resize handle is keyboard-operable (arrows nudge, Enter
+  resets) and exposes its size to screen readers.
+- While the full-screen focus or rest overlay is up, the app behind it is
+  inert — Tab and screen readers can no longer reach the hidden shell.
+
+### Validation
+
+- `yarn build` (tsc + vite), `yarn test` (96 files, 693 tests), and
+  `cargo check` all pass. Smart capture, backlog views, quick-add dialog,
+  tool loop, and toast behavior are unit-tested.
+
 ## 0.6.1 - 2026-07-02
 
 ### Fixed
