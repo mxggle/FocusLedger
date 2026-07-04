@@ -32,8 +32,16 @@ function formatShortcut(shortcut: string): string[] {
   });
 }
 
+const FUNCTION_KEY = /^F([1-9]|1[0-9]|2[0-4])$/;
+
 function eventToShortcut(event: KeyboardEvent): string | null {
   if (MODIFIER_KEYS.has(event.key)) return null;
+
+  // A bare key (or Shift-only combo) would hijack normal typing — both the
+  // in-app listener and the OS-wide registration would swallow it. Require a
+  // real modifier; function keys are the conventional exception.
+  const hasRealModifier = event.ctrlKey || event.metaKey || event.altKey;
+  if (!hasRealModifier && !FUNCTION_KEY.test(event.key)) return null;
 
   const parts: string[] = [];
   if (event.ctrlKey || event.metaKey) parts.push("CmdOrCtrl");
@@ -58,6 +66,19 @@ export function ShortcutInput({ value, onChange }: Props) {
       event.stopPropagation();
 
       if (event.key === "Escape") {
+        setRecording(false);
+        return;
+      }
+
+      // Bare Backspace/Delete clears the shortcut (with modifiers they can
+      // still be recorded as a combo, e.g. Cmd+Backspace).
+      if (
+        (event.key === "Backspace" || event.key === "Delete") &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey
+      ) {
+        onChange("");
         setRecording(false);
         return;
       }
@@ -106,7 +127,7 @@ export function ShortcutInput({ value, onChange }: Props) {
     >
       {recording ? (
         <span className="animate-pulse text-xs text-muted-foreground">
-          Press shortcut keys…
+          Press a key with ⌘/Ctrl/Alt… (⌫ clears, Esc cancels)
         </span>
       ) : parts.length > 0 ? (
         parts.map((part, i) => (

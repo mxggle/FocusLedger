@@ -110,6 +110,14 @@ export function describeToolCallForDisplay(name: string, args: unknown, tasks: T
     return { action: "Pause", summary: "Pause current focus" };
   }
 
+  if (name === "revert_changes") {
+    const scope = stringArg(args, "scope") ?? "last";
+    return {
+      action: "Revert",
+      summary: scope === "all" ? "Revert all my changes from this chat" : "Revert my latest changes"
+    };
+  }
+
   return { action: humanizeToolName(name), targetTitle, summary: targetTitle ? `${humanizeToolName(name)} "${targetTitle}"` : humanizeToolName(name) };
 }
 

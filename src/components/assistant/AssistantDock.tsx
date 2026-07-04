@@ -2,7 +2,12 @@ import { Eraser, SquarePen, Sparkles, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PROVIDER_LABELS, resolveModel } from "../../services/ai/providers";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { useUiStore } from "../../stores/uiStore";
+import {
+  ASSISTANT_DEFAULT_WIDTH,
+  ASSISTANT_MAX_WIDTH,
+  ASSISTANT_MIN_WIDTH,
+  useUiStore
+} from "../../stores/uiStore";
 import { cn } from "../../utils/cn";
 import { IconButton } from "../ui/IconButton";
 import { useAssistantStore } from "../../stores/assistantStore";
@@ -21,6 +26,7 @@ export function AssistantDock() {
   const close = useUiStore((s) => s.closeAssistant);
   const width = useUiStore((s) => s.assistantWidth);
   const setWidth = useUiStore((s) => s.setAssistantWidth);
+  const confirm = useUiStore((s) => s.confirm);
   const clear = useAssistantStore((s) => s.clear);
   const newSession = useAssistantStore((s) => s.newSession);
   const hasMessages = useAssistantStore((s) => s.messages.length > 0);
@@ -34,6 +40,23 @@ export function AssistantDock() {
 
   const [dragging, setDragging] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+
+  // Clearing is irreversible and the button sits one slot away from Close —
+  // a misclick must not destroy the conversation.
+  const confirmClear = useCallback(() => {
+    void (async () => {
+      if (
+        await confirm({
+          title: "Clear conversation",
+          message: "Clear this conversation? This can't be undone.",
+          confirmLabel: "Clear",
+          danger: true
+        })
+      ) {
+        clear();
+      }
+    })();
+  }, [clear, confirm]);
 
   // Keep the collapsed rail out of the tab order / off the pointer, without
   // unmounting it (preserves chat state + the width transition on both sides).
@@ -74,21 +97,42 @@ export function AssistantDock() {
         !dragging && "motion-safe:transition-[width] motion-safe:duration-normal"
       )}
     >
-      {/* Resize handle — a wide invisible hit area over a thin accent rule. */}
+      {/* Resize handle — a wide invisible hit area over a thin accent rule.
+          Keyboard-operable too: arrows nudge, Enter/double-click resets. */}
       {open ? (
         <div
           role="separator"
           aria-orientation="vertical"
           aria-label="Resize assistant"
+          aria-valuemin={ASSISTANT_MIN_WIDTH}
+          aria-valuemax={ASSISTANT_MAX_WIDTH}
+          aria-valuenow={width}
+          tabIndex={0}
+          title="Drag to resize · double-click to reset"
           onMouseDown={startResize}
-          onDoubleClick={() => setWidth(420)}
-          className="group absolute inset-y-0 left-0 z-20 w-1.5 cursor-col-resize"
+          onDoubleClick={() => setWidth(ASSISTANT_DEFAULT_WIDTH)}
+          onKeyDown={(event) => {
+            // The rail is right-anchored: moving the handle left widens it.
+            if (event.key === "ArrowLeft") {
+              event.preventDefault();
+              setWidth(width + 24);
+            } else if (event.key === "ArrowRight") {
+              event.preventDefault();
+              setWidth(width - 24);
+            } else if (event.key === "Enter") {
+              event.preventDefault();
+              setWidth(ASSISTANT_DEFAULT_WIDTH);
+            }
+          }}
+          className="group absolute inset-y-0 left-0 z-20 w-1.5 cursor-col-resize outline-none"
         >
           <span
             aria-hidden="true"
             className={cn(
               "absolute inset-y-0 left-0 w-px transition-colors",
-              dragging ? "bg-primary" : "bg-transparent group-hover:bg-primary/60"
+              dragging
+                ? "bg-primary"
+                : "bg-transparent group-hover:bg-primary/60 group-focus-visible:bg-primary"
             )}
           />
         </div>
@@ -126,7 +170,7 @@ export function AssistantDock() {
             />
             <SessionHistoryMenu />
             {hasMessages ? (
-              <IconButton icon={Eraser} label="Clear conversation" variant="ghost" size="sm" onClick={clear} />
+              <IconButton icon={Eraser} label="Clear conversation" variant="ghost" size="sm" onClick={confirmClear} />
             ) : null}
             <IconButton icon={X} label="Close assistant" variant="ghost" size="sm" onClick={close} />
           </div>

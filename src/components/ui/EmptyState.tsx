@@ -23,6 +23,10 @@ export function EmptyState({
     <div
       className={cn(
         "flex flex-col items-center justify-center rounded-xl px-6 py-12 text-center",
+        // Fade only — no movement. On navigation this overlaps the route-level
+        // fade (same direction, reads as one); when a list empties it softens
+        // the swap without adding a competing slide.
+        "motion-safe:animate-fade-in",
         dashed ? "border border-dashed border-border-strong" : "bg-muted/30",
         className
       )}

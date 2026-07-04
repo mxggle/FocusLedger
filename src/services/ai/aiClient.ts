@@ -2,7 +2,9 @@ import { fetch } from "@tauri-apps/plugin-http";
 import {
   buildAiRequest,
   extractErrorMessage,
+  isUnsupportedTemperatureError,
   parseAiResponse,
+  providerHttpError,
   type AiSettings,
   type GenerateInput
 } from "./providers";
@@ -44,13 +46,11 @@ export async function generateText(settings: AiSettings, input: GenerateInput): 
 
   if (!response.ok) {
     const detail = extractErrorMessage(payload);
-    if (response.status === 401 || response.status === 403) {
-      throw new Error(detail ?? "The AI provider rejected your API key — check it in Settings → AI");
+    // Some models reject any non-default temperature; retry once without it.
+    if (isUnsupportedTemperatureError(response.status, detail) && input.temperature !== undefined) {
+      return generateText(settings, { ...input, temperature: undefined });
     }
-    if (response.status === 429) {
-      throw new Error(detail ?? "The AI provider is rate-limiting you — try again in a moment");
-    }
-    throw new Error(detail ?? `The AI provider returned an error (HTTP ${response.status})`);
+    throw providerHttpError(response.status, detail);
   }
 
   const { text } = parseAiResponse(settings.aiProvider, payload);

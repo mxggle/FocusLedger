@@ -27,7 +27,7 @@ export function Menu({
           side={side}
           sideOffset={6}
           className={cn(
-            "z-50 min-w-[200px] rounded-xl border border-border bg-surface p-1.5 shadow-pop",
+            "z-50 min-w-[200px] rounded-xl border border-border bg-surface p-1.5 shadow-pop dark:ring-1 dark:ring-inset dark:ring-white/[0.05]",
             "data-[state=open]:animate-scale-in",
             "data-[side=top]:origin-bottom data-[side=bottom]:origin-top",
             className

@@ -2,7 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { useEffect } from "react";
 import { useTaskStore } from "../stores/taskStore";
 import { getLiveTaskSeconds, useTimerStore } from "../stores/timerStore";
-import { formatTimer } from "../utils/duration";
+import { formatTimerCompact } from "../utils/duration";
 
 export function useTrayStatus() {
   const activeTask = useTaskStore((state) => state.activeTask);
@@ -17,7 +17,7 @@ export function useTrayStatus() {
 
     const elapsedSeconds =
       activeTask && activeEntry ? getLiveTaskSeconds(activeTask.id, activeEntry, closedTaskDurations, now) : 0;
-    const elapsed = formatTimer(elapsedSeconds);
+    const elapsed = formatTimerCompact(elapsedSeconds);
     const title = activeTask && activeEntry ? elapsed : null;
     const tooltip =
       activeTask && activeEntry ? `${activeTask.title} - ${elapsed}` : "Yolo - no active focus session";

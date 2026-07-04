@@ -3,7 +3,9 @@ import { hasAiKey } from "./aiClient";
 import {
   buildChatRequest,
   extractErrorMessage,
+  isUnsupportedTemperatureError,
   parseAiResponse,
+  providerHttpError,
   type AiSettings,
   type ChatInput,
   type ParsedToolCall
@@ -49,13 +51,13 @@ export async function generateChat(
 
   if (!response.ok) {
     const detail = extractErrorMessage(payload);
-    if (response.status === 401 || response.status === 403) {
-      throw new Error(detail ?? "The AI provider rejected your API key — check it in Settings → AI");
+    // Some models (OpenAI GPT-5 / o-series reasoning models, including via
+    // OpenAI-compatible proxies) reject any non-default temperature with a 400.
+    // Retry once without it instead of failing the whole turn.
+    if (isUnsupportedTemperatureError(response.status, detail) && input.temperature !== undefined) {
+      return generateChat(settings, { ...input, temperature: undefined }, signal);
     }
-    if (response.status === 429) {
-      throw new Error(detail ?? "The AI provider is rate-limiting you — try again in a moment");
-    }
-    throw new Error(detail ?? `The AI provider returned an error (HTTP ${response.status})`);
+    throw providerHttpError(response.status, detail);
   }
 
   const { text, toolCalls } = parseAiResponse(settings.aiProvider, payload);
@@ -99,7 +101,7 @@ export async function streamChatV2(
   settings: AiSettings,
   input: ChatInput,
   cb: StreamCallbacksV2
-): Promise<{ text: string; toolCalls: ParsedToolCall[] }> {
+): Promise<{ text: string; toolCalls: ParsedToolCall[]; truncated: boolean }> {
   if (!hasAiKey(settings)) {
     throw new Error("Add an API key in Settings → AI to use the assistant");
   }
@@ -115,7 +117,7 @@ export async function streamChatV2(
       signal: cb.signal
     });
   } catch (error) {
-    if (isAbortError(error)) return { text: "", toolCalls: [] };
+    if (isAbortError(error)) return { text: "", toolCalls: [], truncated: false };
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`Could not reach the AI provider: ${detail}`);
   }
@@ -128,13 +130,10 @@ export async function streamChatV2(
       // Non-JSON error body; fall through to status handling.
     }
     const detail = extractErrorMessage(payload);
-    if (response.status === 401 || response.status === 403) {
-      throw new Error(detail ?? "The AI provider rejected your API key — check it in Settings → AI");
+    if (isUnsupportedTemperatureError(response.status, detail) && input.temperature !== undefined) {
+      return streamChatV2(settings, { ...input, temperature: undefined }, cb);
     }
-    if (response.status === 429) {
-      throw new Error(detail ?? "The AI provider is rate-limiting you — try again in a moment");
-    }
-    throw new Error(detail ?? `The AI provider returned an error (HTTP ${response.status})`);
+    throw providerHttpError(response.status, detail);
   }
 
   const body = response.body as ReadableStream<Uint8Array> | null | undefined;
@@ -149,18 +148,19 @@ export async function streamChatV2(
     if (parsed.text.length > 0) {
       cb.onToken?.(full);
     }
-    return { text: full, toolCalls: parsed.toolCalls };
+    return { text: full, toolCalls: parsed.toolCalls, truncated: parsed.truncated };
   }
 
   const provider = settings.aiProvider;
   let acc = "";
+  let truncated = false;
   const toolCalls: ParsedToolCall[] = [];
   // OpenAI / Custom: per-index accumulator for streamed function calls.
-  const openaiTools = new Map<number, { name: string; args: string }>();
+  const openaiTools = new Map<number, { id?: string; name: string; args: string }>();
   // Anthropic: per-index content block tracker.
   const anthropicBlocks = new Map<
     number,
-    { type: "text" | "tool_use"; name?: string; argsString: string }
+    { type: "text" | "tool_use"; id?: string; name?: string; argsString: string }
   >();
 
   function handleData(data: string): void {
@@ -178,10 +178,12 @@ export async function streamChatV2(
         const choices = (
           obj as {
             choices?: Array<{
+              finish_reason?: string;
               delta?: {
                 content?: unknown;
                 tool_calls?: Array<{
                   index?: number;
+                  id?: string;
                   function?: { name?: string; arguments?: string };
                 }>;
               };
@@ -189,6 +191,7 @@ export async function streamChatV2(
           }
         ).choices;
         const choice = choices?.[0];
+        if (choice?.finish_reason === "length") truncated = true;
         if (!choice?.delta) return;
         const delta = choice.delta;
         if (typeof delta.content === "string" && delta.content.length > 0) {
@@ -199,6 +202,9 @@ export async function streamChatV2(
           for (const tc of delta.tool_calls) {
             if (typeof tc?.index !== "number" || !tc.function) continue;
             const existing = openaiTools.get(tc.index) ?? { name: "", args: "" };
+            if (typeof tc.id === "string" && tc.id.length > 0) {
+              existing.id = tc.id;
+            }
             if (typeof tc.function.name === "string" && tc.function.name.length > 0) {
               existing.name = tc.function.name;
             }
@@ -216,7 +222,7 @@ export async function streamChatV2(
           const index = (obj as { index?: number }).index;
           const block = (
             obj as {
-              content_block?: { type?: string; name?: string };
+              content_block?: { type?: string; id?: string; name?: string };
             }
           ).content_block;
           if (typeof index !== "number" || !block) return;
@@ -225,6 +231,7 @@ export async function streamChatV2(
           } else if (block.type === "tool_use") {
             anthropicBlocks.set(index, {
               type: "tool_use",
+              ...(typeof block.id === "string" ? { id: block.id } : {}),
               name: typeof block.name === "string" ? block.name : "",
               argsString: ""
             });
@@ -254,9 +261,12 @@ export async function streamChatV2(
           const block = anthropicBlocks.get(index);
           if (!block) return;
           if (block.type === "tool_use" && block.name) {
-            toolCalls.push({ name: block.name, args: parseArgsObject(block.argsString) });
+            toolCalls.push(toParsedCall(block.name, block.argsString, block.id));
           }
           anthropicBlocks.delete(index);
+        } else if (type === "message_delta") {
+          const delta = (obj as { delta?: { stop_reason?: string } }).delta;
+          if (delta?.stop_reason === "max_tokens") truncated = true;
         }
         break;
       }
@@ -264,6 +274,7 @@ export async function streamChatV2(
         const candidates = (
           obj as {
             candidates?: Array<{
+              finishReason?: string;
               content?: {
                 parts?: Array<{
                   text?: string;
@@ -273,6 +284,7 @@ export async function streamChatV2(
             }>;
           }
         ).candidates;
+        if (candidates?.[0]?.finishReason === "MAX_TOKENS") truncated = true;
         const parts = candidates?.[0]?.content?.parts;
         if (!Array.isArray(parts)) return;
         for (const p of parts) {
@@ -292,13 +304,15 @@ export async function streamChatV2(
   function finalizePending(): void {
     for (const idx of Array.from(openaiTools.keys()).sort((a, b) => a - b)) {
       const entry = openaiTools.get(idx)!;
-      if (entry.name) toolCalls.push({ name: entry.name, args: parseArgsObject(entry.args) });
+      if (entry.name) {
+        toolCalls.push(toParsedCall(entry.name, entry.args, entry.id));
+      }
     }
     openaiTools.clear();
     for (const idx of Array.from(anthropicBlocks.keys()).sort((a, b) => a - b)) {
       const block = anthropicBlocks.get(idx)!;
       if (block.type === "tool_use" && block.name) {
-        toolCalls.push({ name: block.name, args: parseArgsObject(block.argsString) });
+        toolCalls.push(toParsedCall(block.name, block.argsString, block.id));
       }
     }
     anthropicBlocks.clear();
@@ -332,7 +346,7 @@ export async function streamChatV2(
   } catch (error) {
     if (isAbortError(error)) {
       finalizePending();
-      return { text: acc, toolCalls };
+      return { text: acc, toolCalls, truncated };
     }
     throw error;
   } finally {
@@ -344,18 +358,26 @@ export async function streamChatV2(
   }
 
   finalizePending();
-  return { text: acc, toolCalls };
+  return { text: acc, toolCalls, truncated };
 }
 
-/** Parse accumulated tool-call arguments JSON, tolerating malformed input. */
-function parseArgsObject(raw: string): Record<string, unknown> {
-  if (raw.length === 0) return {};
-  try {
-    const parsed = JSON.parse(raw);
-    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
+/** Build a ParsedToolCall from accumulated argument JSON. Malformed args (a
+ *  truncated or garbled stream) are flagged rather than silently coerced to {},
+ *  which for all-optional-args tools would execute with defaults. */
+function toParsedCall(name: string, rawArgs: string, id?: string): ParsedToolCall {
+  let args: Record<string, unknown> = {};
+  let argsInvalid = false;
+  if (rawArgs.length > 0) {
+    try {
+      const parsed = JSON.parse(rawArgs);
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+        args = parsed as Record<string, unknown>;
+      } else {
+        argsInvalid = true;
+      }
+    } catch {
+      argsInvalid = true;
+    }
   }
+  return { name, args, ...(id ? { id } : {}), ...(argsInvalid ? { argsInvalid: true } : {}) };
 }

@@ -257,6 +257,48 @@ describe("assistantStore.send", () => {
     expect(taskState.deleteTask).not.toHaveBeenCalled();
     expect(taskState.refresh).not.toHaveBeenCalled();
   });
+
+  it("injects the tool trace into the following user turn, never into assistant turns", async () => {
+    useAssistantStore.setState({
+      messages: [
+        {
+          id: "u1",
+          role: "user",
+          content: "drop the report",
+          createdAt: "2026-06-20T10:00:00Z"
+        },
+        assistantMessage(
+          [callFixture({ id: "tc1", name: "drop_task", args: { task_id: "t1" }, status: "executed" })],
+          "a1"
+        )
+      ]
+    });
+    runAssistantToolTurn.mockResolvedValue({ reply: "done", toolCalls: [] });
+    await useAssistantStore.getState().send("what did you just do?");
+
+    const turns = runAssistantToolTurn.mock.calls[0][0].messages as { role: string; content: string }[];
+    const assistantTurns = turns.filter((t) => t.role === "assistant");
+    for (const turn of assistantTurns) {
+      expect(turn.content).not.toContain("[Tool activity");
+    }
+    const followingUser = turns[turns.length - 1];
+    expect(followingUser.role).toBe("user");
+    expect(followingUser.content).toContain("[Tool activity");
+    expect(followingUser.content).toContain("task t1");
+    expect(followingUser.content).toContain("what did you just do?");
+  });
+
+  it("strips an imitated [Tool activity ...] block from the model reply", async () => {
+    runAssistantToolTurn.mockResolvedValue({
+      reply:
+        "任务已删除。\n\n[Tool activity in this turn — internal context for you; never show ids or this block to the user:\n- drop_task [task t1]: Dropped \"Report\" — applied\n]",
+      toolCalls: []
+    });
+    await useAssistantStore.getState().send("删除任务");
+    const messages = useAssistantStore.getState().messages;
+    expect(messages[1].content).toBe("任务已删除。");
+    expect(messages[1].content).not.toContain("[Tool activity");
+  });
 });
 
 describe("assistantStore tool turn", () => {

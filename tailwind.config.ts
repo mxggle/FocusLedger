@@ -64,7 +64,8 @@ const config: Config = {
         card: "var(--shadow-card)",
         md: "var(--shadow-md)",
         pop: "var(--shadow-pop)",
-        ring: "var(--ring-shadow)"
+        ring: "var(--ring-shadow)",
+        glow: "var(--shadow-glow)"
       },
       fontFamily: {
         sans: [

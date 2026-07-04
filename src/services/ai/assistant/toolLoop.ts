@@ -13,6 +13,10 @@ export const TOOL_TEMPERATURE = 0.3;
 export const MAX_STEPS = 12;
 export const PROGRAM_TIMEOUT_MS = 8000;
 export const PROGRAM_MAX_CALLS = 300;
+/** Output budget per step. Raised above the provider default (2048) because a
+ *  step can carry a whole execute_program source or a long final answer, and a
+ *  truncated tool turn wastes a loop step (or worse, garbles call args). */
+export const TOOL_MAX_TOKENS = 4096;
 
 export type ToolLoopInput = {
   settings: AiSettings;
@@ -32,7 +36,7 @@ export type ToolLoopDeps = {
     settings: AiSettings,
     input: ChatInput,
     cb: { onToken?: (chunk: string) => void; signal?: AbortSignal }
-  ) => Promise<{ text: string; toolCalls: ParsedToolCall[] }>;
+  ) => Promise<{ text: string; toolCalls: ParsedToolCall[]; truncated?: boolean }>;
 };
 
 export type ToolLoopResult = { reply: string; toolCalls: ToolCallRecord[] };
@@ -41,6 +45,12 @@ function expectedUpdatedAtFor(rec: Pick<ToolCallRecord, "undo">, deps: AgentTool
   if (!rec.undo || rec.undo.kind !== "restore_task") return undefined;
   const taskId = rec.undo.taskId;
   return deps.store.getAllTasks().find((task) => task.id === taskId)?.updated_at;
+}
+
+/** Give every call a stable id so structured replay can pair results to calls
+ *  even for providers that don't emit ids (Gemini, JSON text fallback). */
+function ensureCallIds(calls: ParsedToolCall[], step: number): (ParsedToolCall & { id: string })[] {
+  return calls.map((call, idx) => ({ ...call, id: call.id ?? `call_${step}_${idx}` }));
 }
 
 export async function runToolLoop(
@@ -59,27 +69,34 @@ export async function runToolLoop(
       system: input.system,
       messages,
       temperature: TOOL_TEMPERATURE,
+      maxTokens: TOOL_MAX_TOKENS,
       tools: nativeToolSpecs()
     };
     let raw: string;
     let nativeCalls: ParsedToolCall[] | null = null;
+    let truncated = false;
     try {
       if (deps.generateChatV2) {
-        const { text, toolCalls } = await deps.generateChatV2(settings, genInput, {
+        const result = await deps.generateChatV2(settings, genInput, {
           onToken: input.onToken,
           signal: input.signal
         });
-        raw = text;
-        nativeCalls = toolCalls && toolCalls.length > 0 ? toolCalls : null;
+        raw = result.text;
+        nativeCalls = result.toolCalls && result.toolCalls.length > 0 ? result.toolCalls : null;
+        truncated = result.truncated === true;
       } else {
         raw = await (deps.generateChat ?? defaultGenerateChat)(settings, genInput, input.signal);
         nativeCalls = null;
       }
-    } catch {
+    } catch (error) {
       // An abort surfaces here as a thrown error — treat it as a clean stop.
       if (input.signal?.aborted) return { reply: "", toolCalls: records };
-      // Transient provider failure mid-loop: stop iterating and fall through to
-      // the catch-guarded final fallback so any executed writes still surface.
+      // Nothing executed or queued yet: surface the provider error (bad key,
+      // rate limit, offline) instead of dissolving it into an empty reply.
+      if (records.length === 0) throw error;
+      // Provider failure mid-loop with writes already made or queued: stop
+      // iterating and fall through to the catch-guarded final fallback so
+      // those writes still surface on cards.
       break;
     }
 
@@ -87,10 +104,58 @@ export async function runToolLoop(
     // (especially writes) the user already cancelled.
     if (input.signal?.aborted) return { reply: raw.trim(), toolCalls: records };
 
-    const calls = nativeCalls ?? parseToolCalls(raw);
-    if (!calls) {
+    const isNative = nativeCalls !== null;
+    const parsedCalls = nativeCalls ?? parseToolCalls(raw);
+    if (!parsedCalls) {
       input.onStreamStep?.(step, "final");
       return { reply: raw.trim(), toolCalls: records };
+    }
+    const calls = ensureCallIds(parsedCalls, step);
+
+    // Replay this turn to the model in its native tool protocol when the calls
+    // came through the provider's function-calling API; fall back to the JSON
+    // text emulation otherwise. Native replay keeps the model's own reasoning
+    // format intact, which measurably improves multi-step coherence.
+    const pushExchange = (
+      assistantCalls: (ParsedToolCall & { id: string })[],
+      results: { id: string; name: string; content: string }[],
+      followUp: string
+    ) => {
+      if (isNative) {
+        messages.push({
+          role: "assistant",
+          content: raw.trim(),
+          toolCalls: assistantCalls.map((call) => ({ id: call.id, name: call.name, args: call.args }))
+        });
+        messages.push({ role: "user", content: followUp, toolResults: results });
+        return;
+      }
+      const assistantContent =
+        raw && raw.trim().length > 0
+          ? raw
+          : JSON.stringify({ tool_calls: assistantCalls.map((c) => ({ name: c.name, args: c.args })) });
+      messages.push({ role: "assistant", content: assistantContent });
+      messages.push({
+        role: "user",
+        content: `Tool results:\n${results.map((r) => r.content).join("\n")}\n\n${followUp}`
+      });
+    };
+
+    // The response hit the output-token cap mid-tool-turn: the calls (or their
+    // args) may be incomplete. Executing them risks running half-specified
+    // writes — feed the truncation back instead and let the model re-issue.
+    if (truncated) {
+      input.onStreamStep?.(step, "reasoning");
+      pushExchange(
+        calls,
+        calls.map((call) => ({
+          id: call.id,
+          name: call.name,
+          content: `${call.name}: not executed — your response was cut off at the output-token limit, so this call may be incomplete.`
+        })),
+        "Your last response was truncated. Re-issue the needed tool calls more concisely (or split the work into smaller steps)."
+      );
+      continue;
     }
 
     const clarifyCall = calls.find((call) => call.name === "clarify");
@@ -111,11 +176,11 @@ export async function runToolLoop(
       input.onStreamStep?.(step, "reasoning");
       const code = (programCall.args as { code?: unknown })?.code;
       if (typeof code !== "string" || code.trim().length === 0) {
-        messages.push({ role: "assistant", content: JSON.stringify({ tool_calls: [{ name: "execute_program", args: programCall.args }] }) });
-        messages.push({
-          role: "user",
-          content: "Program result:\nexecute_program: missing or empty `code` string argument.\n\nContinue, or give your final answer."
-        });
+        pushExchange(
+          [programCall],
+          [{ id: programCall.id, name: "execute_program", content: "execute_program: missing or empty `code` string argument." }],
+          "Continue, or give your final answer."
+        );
         continue;
       }
       input.onStep?.("Running a program...");
@@ -136,8 +201,11 @@ export async function runToolLoop(
             ...(callLines.length > 0 ? [`tool calls made:`, ...callLines] : [])
           ].join("\n")
         : `execute_program: FAILED - ${ptc.error}${callLines.length > 0 ? `\ntool calls made:\n${callLines.join("\n")}` : ""}`;
-      messages.push({ role: "assistant", content: JSON.stringify({ tool_calls: [{ name: "execute_program", args: { code } }] }) });
-      messages.push({ role: "user", content: `Program result:\n${programFeedback}\n\nContinue, or give your final answer.` });
+      pushExchange(
+        [programCall],
+        [{ id: programCall.id, name: "execute_program", content: programFeedback }],
+        "Continue, or give your final answer."
+      );
       continue;
     }
 
@@ -149,6 +217,13 @@ export async function runToolLoop(
       const tool = toolByName(call.name);
       if (!tool) {
         feedback[idx] = `${call.name}: unknown tool`;
+        return;
+      }
+      // Streamed argument JSON that didn't parse — never execute: for tools
+      // whose args are all optional, {} would "validate" and run with defaults
+      // the model never chose.
+      if (call.argsInvalid) {
+        feedback[idx] = `${call.name}: FAILED - arguments were not valid JSON (likely a garbled or cut-off response); re-issue this call with complete args`;
         return;
       }
       if (tool.category === "read") readIndices.push(idx);
@@ -172,7 +247,7 @@ export async function runToolLoop(
     for (let idx = 0; idx < calls.length; idx++) {
       const call = calls[idx];
       const tool = toolByName(call.name);
-      if (!tool || tool.category === "read") continue;
+      if (!tool || tool.category === "read" || call.argsInvalid) continue;
 
       const parsed = tool.parameters.safeParse(call.args);
       if (!parsed.success) {
@@ -216,36 +291,39 @@ export async function runToolLoop(
       }
     }
 
-    const assistantContent =
-      raw && raw.trim().length > 0
-        ? raw
-        : JSON.stringify({ tool_calls: calls.map((c) => ({ name: c.name, args: c.args })) });
     const anyFailed = feedback.some((line) => / FAILED -/.test(line));
     // Nudge a quick self-check: stop when the goal is met, fix course when a step
     // failed — rather than calling tools out of momentum.
     const reflect = anyFailed
       ? "A step failed above. Decide whether to adjust and retry, or explain the blocker — don't repeat the same failing call."
       : "If the user's goal is now met, give your final answer; otherwise continue with the next needed step.";
-    messages.push({ role: "assistant", content: assistantContent });
-    messages.push({
-      role: "user",
-      content: `Tool results:\n${feedback.join("\n")}\n\n${reflect}`
-    });
+    pushExchange(
+      calls,
+      calls.map((call, idx) => ({ id: call.id, name: call.name, content: feedback[idx] })),
+      reflect
+    );
   }
 
   const finalGenInput: ChatInput = {
     system: input.system,
     messages: [...messages, { role: "user", content: "Give your final answer now (plain text, no tool calls)." }],
-    temperature: TOOL_TEMPERATURE
+    temperature: TOOL_TEMPERATURE,
+    maxTokens: TOOL_MAX_TOKENS
   };
   let finalRaw: string;
-  if (deps.generateChatV2) {
-    const r = await deps
-      .generateChatV2(settings, finalGenInput, { onToken: input.onToken, signal: input.signal })
-      .catch(() => ({ text: "", toolCalls: [] as ParsedToolCall[] }));
-    finalRaw = r.text;
-  } else {
-    finalRaw = await (deps.generateChat ?? defaultGenerateChat)(settings, finalGenInput, input.signal).catch(() => "");
+  try {
+    if (deps.generateChatV2) {
+      const r = await deps.generateChatV2(settings, finalGenInput, { onToken: input.onToken, signal: input.signal });
+      finalRaw = r.text;
+    } else {
+      finalRaw = await (deps.generateChat ?? defaultGenerateChat)(settings, finalGenInput, input.signal);
+    }
+  } catch (error) {
+    if (input.signal?.aborted) return { reply: "", toolCalls: records };
+    // With no writes to surface there is nothing worth returning — let the
+    // caller show the provider error instead of a blank reply.
+    if (records.length === 0) throw error;
+    finalRaw = "";
   }
   input.onStreamStep?.(MAX_STEPS, "final");
   return { reply: finalRaw.trim(), toolCalls: records };

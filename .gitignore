@@ -8,6 +8,7 @@ src-tauri/gen
 *.db
 *.sqlite
 .commandcode/
+.claude/
 *.tsbuildinfo
 !src/**/*.d.ts
 .superpowers/

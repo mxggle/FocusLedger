@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { countTermHits, extractTerms } from "../normalizeKey";
 import { MAX_SEARCH_RESULTS } from "./readHelpers";
 import type { AgentTool, AgentToolDeps, ConversationRecallEntry, ToolResult } from "./types";
 
@@ -26,13 +27,9 @@ export const recallConversationsTool: AgentTool = {
       if (conversations.length === 0) {
         return { ok: true, summary: "recall_conversations: no earlier conversations to search yet." };
       }
-      const terms = args.query.trim().toLowerCase().split(/\s+/);
+      const terms = extractTerms(args.query);
       const scored = conversations
-        .map((entry) => {
-          const haystack = entry.content.toLowerCase();
-          const score = terms.reduce((acc, term) => (haystack.includes(term) ? acc + 1 : acc), 0);
-          return { entry, score };
-        })
+        .map((entry) => ({ entry, score: countTermHits(entry.content, terms) }))
         .filter((row) => row.score > 0)
         .sort((a, b) => b.score - a.score)
         .slice(0, MAX_SEARCH_RESULTS);

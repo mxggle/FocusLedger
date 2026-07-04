@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { countTermHits, extractTerms } from "../normalizeKey";
 import type { RecallEntry } from "../recallHistory";
 import { MAX_SEARCH_RESULTS } from "./readHelpers";
 import type { AgentTool, AgentToolDeps, ToolResult } from "./types";
@@ -25,13 +26,11 @@ export const recallTool: AgentTool = {
     try {
       const args = schema.parse(rawArgs);
       if (deps.history.length === 0) return { ok: true, summary: "recall: no logged reflections yet to search." };
-      const terms = args.query.trim().toLowerCase().split(/\s+/);
+      const terms = extractTerms(args.query);
       const scored = deps.history
         .map((entry) => {
-          const haystack =
-            `${entry.taskTitle} ${entry.category ?? ""} ${entry.note ?? ""} ${entry.blocker ?? ""} ${entry.nextAction ?? ""}`.toLowerCase();
-          const score = terms.reduce((acc, term) => (haystack.includes(term) ? acc + 1 : acc), 0);
-          return { entry, score };
+          const haystack = `${entry.taskTitle} ${entry.category ?? ""} ${entry.note ?? ""} ${entry.blocker ?? ""} ${entry.nextAction ?? ""}`;
+          return { entry, score: countTermHits(haystack, terms) };
         })
         .filter((row) => row.score > 0)
         .sort((a, b) => b.score - a.score)

@@ -20,7 +20,7 @@ import { getLiveTaskSeconds, useTimerStore } from "../../stores/timerStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { Task, TaskPriority } from "../../types";
 import { formatDateLabel, toDateKey } from "../../utils/date";
-import { formatDurationCompact } from "../../utils/duration";
+import { formatDurationCompact, parseEstimateMinutes } from "../../utils/duration";
 import { isTaskOverdue } from "../../utils/taskGrouping";
 import { useTaskHighlight } from "../../hooks/useTaskHighlight";
 import { Badge } from "../ui/Badge";
@@ -60,11 +60,6 @@ function timeToSortOrder(time: string): number {
   return Number(hours) * 60 + Number(minutes);
 }
 
-function parseEstimate(value: string): number | null {
-  const parsed = Number(value);
-  return value && Number.isFinite(parsed) ? parsed : null;
-}
-
 function minimumEstimateMinutes(elapsedSeconds: number): number {
   return Math.max(1, Math.ceil(elapsedSeconds / 60));
 }
@@ -100,7 +95,7 @@ export function TaskCard({ task }: { task: Task }) {
   const categoryColor = resolveCategoryColor(category?.color);
   const elapsedSeconds = getLiveTaskSeconds(task.id, activeEntry, closedTaskDurations, now);
   const estimateSeconds = (task.estimated_minutes ?? 0) * 60;
-  const parsedEstimate = parseEstimate(estimate);
+  const parsedEstimate = parseEstimateMinutes(estimate);
   const minimumEstimate = minimumEstimateMinutes(elapsedSeconds);
   const estimateTooSmall = parsedEstimate !== null && parsedEstimate < minimumEstimate;
   const isTodayPlanTask = Boolean(task.template_id && task.due_date === toDateKey());
@@ -116,7 +111,7 @@ export function TaskCard({ task }: { task: Task }) {
               ...task,
               planned_start_time: plannedStart,
               planned_end_time: plannedEnd || null,
-              estimated_minutes: parseEstimate(estimate)
+              estimated_minutes: parseEstimateMinutes(estimate)
             },
             tasks,
             task.id
@@ -125,22 +120,29 @@ export function TaskCard({ task }: { task: Task }) {
     [estimate, isTodayPlanTask, plannedEnd, plannedStart, task, tasks]
   );
 
-  useEffect(() => {
+  // Seed the edit form from the task on demand (entering edit mode) rather
+  // than on every task change: an external update (assistant, rollover) while
+  // the user is typing must not clobber their in-progress edits.
+  function seedEditForm() {
     setTitle(task.title);
     setEstimate(task.estimated_minutes?.toString() ?? "");
     setPriority(task.priority);
     setCategoryId(task.category_id ?? "inbox");
     setPlannedStart(task.planned_start_time ?? "");
     setPlannedEnd(task.planned_end_time ?? "");
-  }, [
-    task.id,
-    task.title,
-    task.estimated_minutes,
-    task.priority,
-    task.category_id,
-    task.planned_start_time,
-    task.planned_end_time
-  ]);
+  }
+
+  function startEditing() {
+    seedEditForm();
+    setEditing(true);
+  }
+
+  // Defensive: if this mounted card is ever re-pointed at a different task,
+  // abandon any stale edit state.
+  useEffect(() => {
+    setEditing(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.id]);
 
   // ── Handlers (logic unchanged) ────────────────────────────────────────────
 
@@ -156,7 +158,7 @@ export function TaskCard({ task }: { task: Task }) {
   async function saveEdit() {
     const result = await updateTask(task.id, {
       title,
-      estimated_minutes: parseEstimate(estimate),
+      estimated_minutes: parseEstimateMinutes(estimate),
       priority,
       category_id: categoryId || "inbox",
       ...(isTodayPlanTask
@@ -176,8 +178,8 @@ export function TaskCard({ task }: { task: Task }) {
       title: "Delete task",
       message:
         elapsedSeconds > 0
-          ? "Remove this task from today? Its time records will be kept."
-          : "Delete this task?",
+          ? "Permanently delete this task? Its recorded time will be kept in your history."
+          : "Permanently delete this task?",
       confirmLabel: "Delete",
       danger: true
     });
@@ -218,7 +220,7 @@ export function TaskCard({ task }: { task: Task }) {
 
   if (editing) {
     return (
-      <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
+      <div className="rounded-xl border border-border bg-surface p-4 shadow-card motion-safe:animate-fade-in">
         <div className="grid gap-3">
           <Field label="Title">
             <Input
@@ -330,6 +332,27 @@ export function TaskCard({ task }: { task: Task }) {
         aria-hidden="true"
       />
 
+      {/* Progress strip — elapsed vs. estimate as a hairline along the card's
+          bottom edge, so effort is visible without opening the task. */}
+      {estimateSeconds > 0 && elapsedSeconds > 0 ? (
+        <span
+          className="absolute bottom-0 left-1 right-0 h-[3px] overflow-hidden bg-muted/50"
+          aria-hidden="true"
+        >
+          <span
+            className={cn(
+              "absolute inset-y-0 left-0 rounded-r-full",
+              elapsedSeconds > estimateSeconds
+                ? "bg-warning"
+                : "yolo-brand-gradient bg-primary"
+            )}
+            style={{
+              width: `${Math.min(100, (elapsedSeconds / estimateSeconds) * 100)}%`
+            }}
+          />
+        </span>
+      ) : null}
+
       {/* Header row */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -436,7 +459,7 @@ export function TaskCard({ task }: { task: Task }) {
               />
             }
           >
-            <MenuItem icon={Pencil} onSelect={() => setEditing(true)}>
+            <MenuItem icon={Pencil} onSelect={startEditing}>
               Edit
             </MenuItem>
             <MenuItem
@@ -483,7 +506,8 @@ export function TaskCard({ task }: { task: Task }) {
                   if (
                     await confirm({
                       title: "Drop task",
-                      message: "Drop this task?",
+                      message:
+                        "Drop this task? It will be marked as abandoned and kept in your history.",
                       confirmLabel: "Drop",
                       danger: true
                     })
@@ -507,6 +531,7 @@ export function TaskCard({ task }: { task: Task }) {
         onOpenChange={setStopOpen}
         taskId={task.id}
         getElapsedSeconds={() => elapsedSeconds}
+        hasSession={elapsedSeconds > 0 || task.status !== "todo"}
       />
     </>
   );

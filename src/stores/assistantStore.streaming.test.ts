@@ -317,3 +317,33 @@ describe("assistantStore streaming no-leak contract", () => {
     expect(useAssistantStore.getState().streamingMessageId).toBeNull();
   });
 });
+
+describe("provider failure surfacing", () => {
+  it("shows the provider error instead of a silent empty bubble when the first call fails", async () => {
+    streamChatV2Stub.mockImplementation(async () => {
+      throw new Error("The AI provider rejected your API key — check it in Settings → AI");
+    });
+
+    await useAssistantStore.getState().send("hi");
+
+    const state = useAssistantStore.getState();
+    expect(state.status).toBe("error");
+    expect(state.error).toMatch(/rejected your API key/i);
+    // No blank assistant message may be appended or persisted.
+    expect(state.messages.filter((m) => m.role === "assistant")).toHaveLength(0);
+    expect(uiState.addToast).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "error", description: expect.stringMatching(/API key/i) })
+    );
+  });
+
+  it("surfaces an empty final response as an error, not a blank assistant bubble", async () => {
+    streamChatV2Stub.mockImplementation(async () => ({ text: "", toolCalls: [] }));
+
+    await useAssistantStore.getState().send("hi");
+
+    const state = useAssistantStore.getState();
+    expect(state.status).toBe("error");
+    expect(state.error).toMatch(/empty response/i);
+    expect(state.messages.filter((m) => m.role === "assistant")).toHaveLength(0);
+  });
+});

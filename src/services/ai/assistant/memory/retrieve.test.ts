@@ -60,6 +60,15 @@ describe("rankMemories", () => {
     expect(second).toEqual(first);
   });
 
+  it("matches Chinese queries against Chinese memories (CJK bigrams)", () => {
+    const all = [
+      mem({ id: "cn", text: "用户习惯在早上安排深度工作" }),
+      mem({ id: "en", text: "Likes spicy food" })
+    ];
+    const ranked = rankMemories(all, "帮我安排早上的深度工作", 5);
+    expect(ranked[0]?.id).toBe("cn");
+  });
+
   it("AI-MEM-08: breaks score ties stably by preserving input order", () => {
     const all = [
       mem({ id: "first", text: "planning task A", useCount: 0 }),

@@ -32,7 +32,7 @@ export function EstimateVsActual({ stats }: { stats: TodayStats }) {
           label="Planned"
           value={formatDurationCompact(planned)}
           widthPct={(planned / max) * 100}
-          color="hsl(var(--muted-foreground) / 0.35)"
+          color="hsl(var(--muted-foreground) / 0.25)"
         />
         <Bar
           label="Actual"

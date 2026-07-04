@@ -15,8 +15,9 @@ import { createAgentTaskStore } from "../services/ai/assistant/agentTools/storeA
 import { hasDrifted, revertToolCall as revertExecutedToolCall } from "../services/ai/assistant/agentTools/revert";
 import { isDestructive } from "../services/ai/assistant/agentTools/permissions";
 import { toolByName } from "../services/ai/assistant/agentTools/registry";
-import type { ConversationRecallEntry, ToolCallRecord } from "../services/ai/assistant/agentTools/types";
+import type { ConversationRecallEntry, SessionToolCall, ToolCallRecord } from "../services/ai/assistant/agentTools/types";
 import { runAssistantToolTurn } from "../services/ai/assistant/assistantRunner";
+import { renderToolTrace, stripToolTraceBlocks } from "../services/ai/assistant/toolTrace";
 import { streamChatV2 } from "../services/ai/chatClient";
 import { loadRecallEntries, type RecallEntry } from "../services/ai/assistant/recallHistory";
 import { buildAssistantContext, type AssistantStoreSnapshot } from "../services/ai/assistant/contextBuilder";
@@ -206,7 +207,41 @@ function snapshot(): AssistantStoreSnapshot {
 }
 
 function toChatTurns(messages: ChatMessage[]): ChatTurn[] {
-  return messages.map((message) => ({ role: message.role, content: message.modelContent ?? message.content }));
+  // Re-attach what tools actually did in past turns, so follow-ups ("move it
+  // to 3pm", "yes apply that") resolve against concrete outcomes. The trace is
+  // injected into the user turn AFTER the assistant turn it describes — never
+  // into assistant content, where the model would learn to imitate it as text
+  // instead of actually calling tools.
+  const turns: ChatTurn[] = [];
+  let pendingTrace = "";
+  for (const message of messages) {
+    const base = message.modelContent ?? message.content;
+    if (message.role === "assistant") {
+      // Strip trace blocks a previous app version appended (or the model once
+      // leaked) so history stops teaching the model to reproduce them.
+      turns.push({ role: "assistant", content: stripToolTraceBlocks(base) });
+      pendingTrace = message.toolCalls ? renderToolTrace(message.toolCalls) : "";
+    } else {
+      turns.push({
+        role: message.role,
+        content: pendingTrace.length > 0 ? `${pendingTrace}\n\n${base}` : base
+      });
+      pendingTrace = "";
+    }
+  }
+  return turns;
+}
+
+/** Executed, undoable writes from this conversation (oldest first) — the pool
+ *  revert_changes draws from. */
+function collectSessionToolCalls(messages: ChatMessage[]): SessionToolCall[] {
+  return messages.flatMap((message) =>
+    message.role === "assistant" && message.toolCalls
+      ? message.toolCalls
+          .filter((call) => call.status === "executed" && call.undo)
+          .map((call) => ({ messageId: message.id, call }))
+      : []
+  );
 }
 
 function patchToolCall(
@@ -271,6 +306,9 @@ async function attemptToolCallApply(
       ctx,
       insights: get().insights,
       history: get().history ?? [],
+      sessionToolCalls: collectSessionToolCalls(get().messages),
+      onReverted: (revertedMessageId, revertedCallId) =>
+        set({ messages: patchToolCall(get().messages, revertedMessageId, revertedCallId, { status: "reverted" }) }),
       now: () => new Date().toISOString()
     });
     if (!result.ok) return { ok: false, error: result.error };
@@ -743,7 +781,8 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
     }
   };
 
-  function finalizeAbort(partialContent: string, toolCalls: ToolCallRecord[]): void {
+  function finalizeAbort(rawPartialContent: string, toolCalls: ToolCallRecord[]): void {
+    const partialContent = stripToolTraceBlocks(rawPartialContent);
     const hasExecuted = toolCalls.some((call) => call.status === "executed");
     const hasContent = partialContent.trim().length > 0;
     const shouldPersist = hasContent || hasExecuted;
@@ -807,6 +846,11 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
         insights: store.getState().insights,
         history: store.getState().history ?? [],
         conversations: store.getState().conversations ?? [],
+        sessionToolCalls: collectSessionToolCalls(history),
+        onReverted: (messageId, toolCallId) =>
+          store.setState((state) => ({
+            messages: patchToolCall(state.messages, messageId, toolCallId, { status: "reverted" })
+          })),
         onStep,
         onToken,
         onStreamStep,
@@ -826,14 +870,38 @@ async function runStreamFrom(history: ChatMessage[]): Promise<void> {
       await adapter.refresh();
     }
 
-    const finalContent = result.reply;
+    // Defense in depth: drop any [Tool activity ...] block the model imitated
+    // in its reply — it must never reach the user or the persisted history.
+    const finalContent = stripToolTraceBlocks(result.reply);
+
+    // Nothing came back at all (e.g. an empty stream) and no tool cards to
+    // show — surface an error instead of appending a blank assistant bubble.
+    if (finalContent.trim().length === 0 && result.toolCalls.length === 0) {
+      const emptyId = streamingId;
+      const message = "The assistant returned an empty response — please try again.";
+      store.setState((state) => ({
+        messages: emptyId ? state.messages.filter((m) => m.id !== emptyId) : state.messages,
+        status: "error",
+        error: message,
+        steps: [],
+        streamingMessageId: null
+      }));
+      useUiStore.getState().addToast({ kind: "error", title: "Assistant error", description: message });
+      currentAbort = null;
+      return;
+    }
+
     if (streamingId) {
       // Finalize the streaming placeholder in place with the authoritative reply.
       const id = streamingId;
       store.setState((state) => ({
         messages: state.messages.map((m) =>
           m.id === id
-            ? { ...m, content: finalContent.length > 0 ? finalContent : m.content, toolCalls: result.toolCalls }
+            ? {
+                ...m,
+                content: finalContent.length > 0 ? finalContent : stripToolTraceBlocks(m.content),
+                toolCalls: result.toolCalls
+              }
             : m
         ),
         status: "idle",

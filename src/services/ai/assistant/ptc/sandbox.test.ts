@@ -96,6 +96,46 @@ describe("runProgram — log()", () => {
   });
 });
 
+describe("runProgram — macrotask-resolved host tool (real I/O)", () => {
+  it("settles tools whose promises resolve via the macrotask queue (e.g. Tauri IPC)", async () => {
+    // Regression: a microtask-only pump yield starves the macrotask queue, so a
+    // tool resolved by setTimeout (like an IPC callback) could never settle and
+    // the program spun until the deadline. Must complete fast, not at timeout.
+    const ioTool: HostTool = {
+      name: "io",
+      execute: (args: unknown) => new Promise((resolve) => setTimeout(() => resolve({ echoed: args }), 10))
+    };
+    const started = Date.now();
+    const result = await runProgram(
+      `
+      const a = await io({ n: 1 });
+      const b = await io({ n: 2 });
+      return a.echoed.n + b.echoed.n;
+      `,
+      { tools: [ioTool], timeoutMs: 3000 }
+    );
+    expect(result.ok).toBe(true);
+    expect(result.returnValue).toBe(3);
+    expect(result.calls).toHaveLength(2);
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+});
+
+describe("runProgram — hung host tool", () => {
+  it("returns a timeout error instead of hanging forever", async () => {
+    const hungTool: HostTool = {
+      name: "hang",
+      execute: () => new Promise(() => {}) // never resolves
+    };
+    const result = await runProgram(`await hang(); return "never";`, {
+      tools: [hungTool],
+      timeoutMs: 300
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/timeout|interrupt/i);
+  }, 5000);
+});
+
 describe("runProgram — timeout", () => {
   it("returns ok:false with a timeout error and does not hang", async () => {
     const result = await runProgram(

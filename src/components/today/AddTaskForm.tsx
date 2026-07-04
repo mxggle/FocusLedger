@@ -1,24 +1,33 @@
-import { ChevronDown, Plus } from "lucide-react";
+import { ChevronDown, Plus, Sparkles } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
+import { hasAiKey } from "../../services/ai/aiClient";
+import { smartCaptureTask } from "../../services/ai/smartCapture";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
-import type { TaskPriority } from "../../types";
+import { useUiStore } from "../../stores/uiStore";
+import type { CreateTaskInput, TaskPriority } from "../../types";
 import { toDateKey } from "../../utils/date";
+import { parseEstimateMinutes } from "../../utils/duration";
 import { Button } from "../ui/Button";
 import { Field, Input, Select } from "../ui/Field";
 
 export function AddTaskForm() {
   const categories = useTaskStore((state) => state.categories);
   const createTask = useTaskStore((state) => state.createTask);
-  const defaultCategoryId = useSettingsStore(
-    (state) => state.settings.defaultCategoryId
-  );
+  const settings = useSettingsStore((state) => state.settings);
+  const addToast = useUiStore((state) => state.addToast);
+  const defaultCategoryId = settings.defaultCategoryId;
   const [title, setTitle] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [pending, setPending] = useState(false);
   const [categoryId, setCategoryId] = useState("inbox");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [estimatedMinutes, setEstimatedMinutes] = useState("");
   const [dueDate, setDueDate] = useState(toDateKey());
+
+  // AI fills in the details from the title alone; opening the advanced
+  // fields switches to fully manual entry.
+  const aiEnabled = hasAiKey(settings) && !advancedOpen;
 
   useEffect(() => {
     setCategoryId(defaultCategoryId || "inbox");
@@ -26,14 +35,48 @@ export function AddTaskForm() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const result = await createTask({
+    // Guard against re-entry: AI capture takes seconds, and a second submit
+    // (e.g. Enter in the input) would create a duplicate task.
+    if (pending) return;
+    let input: CreateTaskInput = {
       title,
       category_id: categoryId || "inbox",
       priority,
-      estimated_minutes: estimatedMinutes ? Number(estimatedMinutes) : null,
+      estimated_minutes: parseEstimateMinutes(estimatedMinutes),
       due_date: dueDate || toDateKey()
-    });
+    };
+
+    let aiError: string | null = null;
+    if (aiEnabled) {
+      setPending(true);
+      try {
+        const captured = await smartCaptureTask(settings, {
+          text: title,
+          categories,
+          today: toDateKey(),
+          defaultDueDate: toDateKey()
+        });
+        input = {
+          ...captured,
+          category_id: captured.category_id ?? (defaultCategoryId || "inbox")
+        };
+      } catch (error) {
+        aiError = error instanceof Error ? error.message : "AI capture failed";
+      } finally {
+        setPending(false);
+      }
+    }
+
+    const result = await createTask(input);
     if (!result.ok) return;
+    if (aiError) {
+      // Only claim "added" once the create actually succeeded.
+      addToast({
+        kind: "error",
+        title: "Added without AI details",
+        description: aiError
+      });
+    }
     setTitle("");
     setEstimatedMinutes("");
     setPriority("medium");
@@ -53,27 +96,42 @@ export function AddTaskForm() {
         <Input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          placeholder="What needs to get done?"
+          placeholder={
+            aiEnabled ? "What needs to get done? AI fills in the details" : "What needs to get done?"
+          }
           className="min-w-0 flex-1"
         />
-        <Button type="submit" disabled={!title.trim()}>
-          <Plus className="h-4 w-4" />
+        <Button type="submit" loading={pending} disabled={!title.trim()}>
+          {pending ? null : aiEnabled ? (
+            <Sparkles className="h-4 w-4" />
+          ) : (
+            <Plus className="h-4 w-4" />
+          )}
           Add
         </Button>
       </div>
-      <button
-        type="button"
-        onClick={() => setAdvancedOpen((value) => !value)}
-        aria-expanded={advancedOpen}
-        className="mt-3 flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-      >
-        <ChevronDown
-          className={`h-3.5 w-3.5 transition-transform duration-fast ${
-            advancedOpen ? "rotate-180" : ""
-          }`}
-        />
-        Advanced fields
-      </button>
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <button
+          type="button"
+          onClick={() => setAdvancedOpen((value) => !value)}
+          aria-expanded={advancedOpen}
+          className="flex items-center gap-1 rounded text-xs font-medium text-muted-foreground outline-none transition-colors duration-fast hover:text-foreground focus-visible:shadow-ring"
+        >
+          <ChevronDown
+            className={`h-3.5 w-3.5 transition-transform duration-fast ${
+              advancedOpen ? "rotate-180" : ""
+            }`}
+          />
+          Advanced fields
+        </button>
+        {/* Opening advanced fields switches to fully manual entry — say so,
+            instead of only swapping the sparkle icon. */}
+        {hasAiKey(settings) && advancedOpen ? (
+          <span className="text-xs text-subtle">
+            Manual mode — AI autofill is off while advanced fields are open.
+          </span>
+        ) : null}
+      </div>
       {advancedOpen ? (
         <div className="mt-3 grid grid-cols-2 gap-3">
           <Field label="Category">

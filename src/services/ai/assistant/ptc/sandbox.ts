@@ -14,9 +14,11 @@
  * returns a QuickJS Promise handle for any async function body. We pump
  * that promise to completion by polling:
  *   while (!settled) {
- *     ctx.runtime.executePendingJobs();   // run QuickJS jobs
- *     await Promise.resolve();            // yield to host microtask queue
+ *     ctx.runtime.executePendingJobs();          // run QuickJS jobs
+ *     await new Promise(r => setTimeout(r, 0));  // yield a host MACROTASK
  *   }
+ * The yield must be a macrotask so host tool I/O (Tauri IPC) can complete —
+ * see pumpUntilSettled for why a microtask yield deadlocks.
  *
  * WHY NOT evalCodeAsync / newAsyncifiedFunction:
  * Both use Emscripten Asyncify to suspend the WASM stack while awaiting.
@@ -77,15 +79,22 @@ function buildWrappers(toolNames: string[]): string {
 }
 
 /**
- * Poll the QuickJS job queue until the native promise settles.
- * Interleaves `executePendingJobs` with host microtask yields so that
- * host-side deferred resolutions can run between pump cycles.
+ * Poll the QuickJS job queue until the native promise settles. Returns whether
+ * it settled (false = deadline/abort hit while the program was still pending).
+ *
+ * The yield between pump cycles MUST be a macrotask (setTimeout), not
+ * `await Promise.resolve()`: host tools resolve through real I/O (Tauri IPC →
+ * SQLite), whose completion callbacks are macrotasks. A microtask-only yield
+ * forms an unbroken microtask chain, and browsers drain the microtask queue
+ * completely before running any macrotask — so the tool's promise could never
+ * settle and the loop would freeze the UI at 100% CPU until the deadline.
  */
 async function pumpUntilSettled(
   vm: QuickJSAsyncContext,
   p: Promise<unknown>,
-  deadlineMs: number
-): Promise<void> {
+  deadlineMs: number,
+  aborted: () => boolean
+): Promise<boolean> {
   let settled = false;
   p.then(
     () => {
@@ -96,10 +105,11 @@ async function pumpUntilSettled(
     }
   );
 
-  while (!settled && Date.now() < deadlineMs) {
+  while (!settled && Date.now() < deadlineMs && !aborted()) {
     vm.runtime.executePendingJobs();
-    if (!settled) await Promise.resolve();
+    if (!settled) await new Promise((resolve) => setTimeout(resolve, 0));
   }
+  return settled;
 }
 
 /**
@@ -187,6 +197,8 @@ export async function runProgram(code: string, opts: PtcOptions): Promise<PtcRes
           try {
             const hostResult = await tool.execute(rawArgs);
             callLog.result = hostResult;
+            // The VM may have been disposed (timeout/abort) while the tool ran.
+            if (!vm?.runtime.alive) return;
             const json = JSON.stringify({ __ok: true, v: hostResult ?? null });
             const handle = vm!.newString(json);
             deferred.resolve(handle);
@@ -194,6 +206,7 @@ export async function runProgram(code: string, opts: PtcOptions): Promise<PtcRes
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             callLog.error = msg;
+            if (!vm?.runtime.alive) return;
             const json = JSON.stringify({ __ok: false, e: msg });
             const handle = vm!.newString(json);
             // Resolve with error protocol — the wrapper re-throws so code can catch.
@@ -201,7 +214,7 @@ export async function runProgram(code: string, opts: PtcOptions): Promise<PtcRes
             handle.dispose();
           } finally {
             // Pump so QuickJS picks up the settled promise.
-            vm!.runtime.executePendingJobs();
+            if (vm?.runtime.alive) vm.runtime.executePendingJobs();
           }
         });
 
@@ -247,9 +260,21 @@ export async function runProgram(code: string, opts: PtcOptions): Promise<PtcRes
     }
     const promiseFuture = vm.resolvePromise(promiseHandle);
 
-    await pumpUntilSettled(vm, promiseFuture, deadline + 500);
+    const settled = await pumpUntilSettled(vm, promiseFuture, deadline + 500, () => abortedBySignal);
 
     opts.signal?.removeEventListener("abort", onAbort);
+
+    if (!settled) {
+      // A host tool is still pending (hung I/O) or the program never yielded.
+      // Awaiting promiseFuture here could hang forever — bail out instead.
+      promiseHandle.dispose();
+      return {
+        ok: false,
+        error: abortedBySignal ? "aborted" : "timeout: execution interrupted",
+        logs,
+        calls
+      };
+    }
 
     const resolved = await promiseFuture;
     promiseHandle.dispose();
@@ -272,7 +297,12 @@ export async function runProgram(code: string, opts: PtcOptions): Promise<PtcRes
     return { ok: false, error: msg, logs, calls };
   } finally {
     // Always dispose to prevent WASM memory leaks.
-    vm?.dispose();
+    try {
+      vm?.dispose();
+    } catch {
+      // A hung host tool can leave undisposed deferred handles behind; leak
+      // this one VM rather than throw past the already-computed result.
+    }
   }
 }
 

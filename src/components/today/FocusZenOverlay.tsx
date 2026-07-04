@@ -38,20 +38,32 @@ export function FocusZenOverlay() {
   useEffect(() => {
     if (!focusZen) return;
     function onKey(event: KeyboardEvent) {
+      // A Radix layer (stop dialog, ambient menu) that just consumed this
+      // Escape marks it defaultPrevented — closing it must not also exit zen.
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") setFocusZen(false);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [focusZen, setFocusZen]);
 
+  // Move focus onto the stage while the app shell behind it is inert, so
+  // keyboard users land inside the overlay rather than on a blurred body.
+  const stageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focusZen) stageRef.current?.focus();
+  }, [focusZen]);
+
   return (
     <AnimatePresence>
       {focusZen ? (
         <motion.div
+          ref={stageRef}
+          tabIndex={-1}
           role="dialog"
           aria-modal="true"
           aria-label="Full-screen focus"
-          className="fixed inset-0 z-50 flex flex-col bg-background"
+          className="fixed inset-0 z-50 flex flex-col bg-background outline-none"
           style={focusAccentStyle(sceneId)}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -157,7 +169,7 @@ function ZenStage({ onExit, reduce }: { onExit: () => void; reduce: boolean }) {
           onClick={onExit}
           aria-label="Exit full-screen focus"
           title="Exit full-screen (Esc)"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:shadow-ring"
         >
           <Minimize2 className="h-5 w-5" />
         </button>

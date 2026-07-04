@@ -7,7 +7,17 @@ function extractJsonObject(raw: string): string | null {
   return raw.slice(start, end + 1);
 }
 
-export type ParsedToolCall = { name: string; args: unknown };
+export type ParsedToolCall = {
+  name: string;
+  args: unknown;
+  /** Provider-native call id (OpenAI/Anthropic). Absent for Gemini and for
+   *  calls parsed from the JSON text fallback. */
+  id?: string;
+  /** True when the provider streamed argument JSON that did not parse (usually
+   *  a truncated response). The call must not execute — for all-optional-args
+   *  tools `{}` would be "valid" and run with defaults the model never chose. */
+  argsInvalid?: boolean;
+};
 
 /** Parse a tool-call turn. Returns null when the text is a final markdown answer. */
 export function parseToolCalls(raw: string): ParsedToolCall[] | null {

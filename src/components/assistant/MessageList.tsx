@@ -63,11 +63,12 @@ export function MessageList() {
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
+      {/* Deliberately NOT aria-live: streaming token updates would make screen
+          readers re-announce the growing reply on every render. */}
       <div
         ref={scrollRef}
         onScroll={handleScroll}
         className="h-full overflow-y-auto p-4"
-        aria-live="polite"
       >
         {messages.length === 0 ? (
           keyConfigured ? (
@@ -106,7 +107,10 @@ export function MessageList() {
               <ReasoningPanel steps={steps} active={false} />
             ) : null}
             {status === "error" && error ? (
-              <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive-soft px-3 py-2 text-sm text-destructive">
+              <div
+                role="alert"
+                className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive-soft px-3 py-2 text-sm text-destructive"
+              >
                 <span>{error}</span>
               </div>
             ) : null}

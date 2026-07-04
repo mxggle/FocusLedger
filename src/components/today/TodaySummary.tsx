@@ -54,7 +54,7 @@ export function TodaySummary() {
           "transition-colors duration-fast"
         )}
       >
-        {/* Row 1: badge + label + target progress + chevron */}
+        {/* Row 1: badge + label + target progress + chevron. */}
         <div className="flex items-center gap-2.5">
           <span
             className={cn(
@@ -78,7 +78,7 @@ export function TodaySummary() {
                     "h-full rounded-full",
                     targetMet
                       ? "bg-gradient-to-r from-success/80 to-success"
-                      : "bg-gradient-to-r from-primary/75 to-primary"
+                      : "yolo-brand-gradient bg-primary"
                   )}
                   initial={false}
                   animate={{ width: `${targetProgress}%` }}

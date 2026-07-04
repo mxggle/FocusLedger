@@ -1,8 +1,10 @@
+import { AnimatePresence } from "framer-motion";
 import { ListTodo } from "lucide-react";
 import { useMemo } from "react";
 import { useTaskStore } from "../../stores/taskStore";
 import { toDateKey } from "../../utils/date";
 import { partitionTodayTasks } from "../../utils/taskGrouping";
+import { AnimatedListItem } from "../ui/AnimatedListItem";
 import { Badge } from "../ui/Badge";
 import { EmptyState } from "../ui/EmptyState";
 import { TaskCard } from "./TaskCard";
@@ -36,9 +38,13 @@ export function TaskList() {
             </h3>
             <Badge variant="warning">{overdue.length}</Badge>
           </div>
-          {overdue.map((task) => (
-            <TaskCard key={task.id} task={task} />
-          ))}
+          <AnimatePresence initial={false}>
+            {overdue.map((task) => (
+              <AnimatedListItem key={task.id}>
+                <TaskCard task={task} />
+              </AnimatedListItem>
+            ))}
+          </AnimatePresence>
         </section>
       ) : null}
 
@@ -55,7 +61,13 @@ export function TaskList() {
             dashed
           />
         ) : (
-          todayTasks.map((task) => <TaskCard key={task.id} task={task} />)
+          <AnimatePresence initial={false}>
+            {todayTasks.map((task) => (
+              <AnimatedListItem key={task.id}>
+                <TaskCard task={task} />
+              </AnimatedListItem>
+            ))}
+          </AnimatePresence>
         )}
       </section>
     </div>

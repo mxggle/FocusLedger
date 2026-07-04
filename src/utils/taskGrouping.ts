@@ -8,10 +8,10 @@ export type TodayTaskGroups = {
 /**
  * Split the Today view's tasks into carried-over (overdue) and current-day groups.
  *
- * A task is overdue when it has a due date strictly before `today` and is not the
- * task currently being worked on (`doing`). The actively running task always stays
- * in the today group so it is never surfaced as overdue while it is in progress.
- * Backlog tasks (no due date) and future-dated tasks remain in the today group.
+ * A task is overdue when it has a due date strictly before `today` — a pure date
+ * fact, deliberately independent of task status, so pausing/resuming a focus
+ * session never moves a card between groups. Backlog tasks (no due date) and
+ * future-dated tasks remain in the today group.
  *
  * Input order is preserved within each group.
  */
@@ -20,7 +20,7 @@ export function partitionTodayTasks(tasks: Task[], today: string): TodayTaskGrou
   const todayTasks: Task[] = [];
 
   for (const task of tasks) {
-    if (task.due_date && task.due_date < today && task.status !== "doing") {
+    if (isTaskOverdue(task, today)) {
       overdue.push(task);
     } else {
       todayTasks.push(task);
@@ -32,5 +32,5 @@ export function partitionTodayTasks(tasks: Task[], today: string): TodayTaskGrou
 
 /** Whether a task should be presented as overdue in the Today view. */
 export function isTaskOverdue(task: Task, today: string): boolean {
-  return Boolean(task.due_date && task.due_date < today && task.status !== "doing");
+  return Boolean(task.due_date && task.due_date < today);
 }
