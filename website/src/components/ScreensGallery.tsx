@@ -12,7 +12,7 @@ const SCREENS = [
   },
   {
     title: "Backlog",
-    blurb: "Capture ideas and future-dated work; pull them into today, tomorrow, or next week.",
+    blurb: "Capture ideas and future-dated work, then triage with grouping, sorting, and views that persist.",
     mock: <BacklogMock />,
     window: "Yolo — Backlog"
   },

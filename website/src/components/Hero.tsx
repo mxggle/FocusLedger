@@ -29,13 +29,13 @@ export function Hero() {
           transition={{ duration: 0.7, ease: [0.22, 0.61, 0.36, 1] }}
         >
           <a
-            href="#ai"
+            href="#features"
             className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-muted-foreground shadow-sm transition-colors hover:text-foreground"
           >
             <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
               v{SITE.version}
             </span>
-            Now with a built-in AI assistant
+            New: AI smart capture &amp; the day line
             <ArrowRight size={13} />
           </a>
 
