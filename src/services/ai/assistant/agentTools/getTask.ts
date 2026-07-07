@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { findTask, taskLine } from "./readHelpers";
+import { taskLine } from "./readHelpers";
+import { requireTask } from "./taskRef";
 import type { AgentTool, AgentToolDeps, ToolResult } from "./types";
 
 const schema = z.object({ task_id: z.string().min(1) });
@@ -14,9 +15,9 @@ export const getTaskTool: AgentTool = {
   async execute(rawArgs, deps: AgentToolDeps): Promise<ToolResult> {
     try {
       const args = schema.parse(rawArgs);
-      const task = findTask(deps, args.task_id);
-      if (!task) return { ok: false, error: `Unknown task_id "${args.task_id}"` };
-      return { ok: true, summary: taskLine(task, deps), data: task };
+      const found = requireTask(deps, args.task_id);
+      if ("error" in found) return { ok: false, error: found.error };
+      return { ok: true, summary: taskLine(found.task, deps), data: found.task };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "invalid get_task args" };
     }

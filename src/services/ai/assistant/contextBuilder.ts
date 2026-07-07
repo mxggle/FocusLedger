@@ -24,7 +24,7 @@ export type AssistantStoreSnapshot = {
   permissionLevel?: PermissionLevel;
 };
 
-function toContextTask(task: Task): ContextTask {
+function toContextTask(task: Task, selectedDate: string): ContextTask {
   return {
     id: task.id,
     title: task.title,
@@ -32,6 +32,8 @@ function toContextTask(task: Task): ContextTask {
     priority: task.priority,
     estimatedMinutes: task.estimated_minutes,
     categoryId: task.category_id,
+    dueDate: task.due_date,
+    isOverdue: Boolean(task.due_date && task.due_date < selectedDate),
     plannedStartTime: task.planned_start_time,
     plannedEndTime: task.planned_end_time
   };
@@ -41,13 +43,13 @@ export function buildAssistantContext(
   snapshot: AssistantStoreSnapshot,
   insights?: RetrospectiveInsights | null
 ): AssistantContext {
-  const tasks = snapshot.tasks.map(toContextTask);
+  const tasks = snapshot.tasks.map((task) => toContextTask(task, snapshot.selectedDate));
   return {
     // The day the user is currently viewing (selectedDate), which the assistant treats as "today".
     today: snapshot.selectedDate,
     categories: snapshot.categories.map((category) => ({ id: category.id, name: category.name })),
     tasks,
-    backlog: snapshot.backlogTasks.slice(0, BACKLOG_CAP).map(toContextTask),
+    backlog: snapshot.backlogTasks.slice(0, BACKLOG_CAP).map((task) => toContextTask(task, snapshot.selectedDate)),
     allTasksCount: snapshot.allTasks.length,
     assistantName: snapshot.assistantName ?? "",
     assistantSoul: snapshot.assistantSoul ?? "",

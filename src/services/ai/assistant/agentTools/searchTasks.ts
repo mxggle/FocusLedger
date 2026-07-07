@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { countTermHits, extractTerms } from "../normalizeKey";
 import { MAX_SEARCH_RESULTS } from "./readHelpers";
+import { shortTaskId } from "./taskRef";
 import type { AgentTool, AgentToolDeps, ToolResult } from "./types";
 
 const schema = z.object({ query: z.string().min(1) });
@@ -27,7 +28,7 @@ export const searchTasksTool: AgentTool = {
         .slice(0, MAX_SEARCH_RESULTS);
 
       if (scored.length === 0) return { ok: true, summary: `search_tasks("${args.query}"): no matching tasks.`, data: [] };
-      const lines = scored.map(({ task }) => `- [${task.id}] "${task.title}" (${task.status}${task.due_date ? `, due ${task.due_date}` : ""})`);
+      const lines = scored.map(({ task }) => `- [${shortTaskId(task.id)}] "${task.title}" (${task.status}${task.due_date ? `, due ${task.due_date}` : ""})`);
       return {
         ok: true,
         summary: [`search_tasks("${args.query}") found ${scored.length}:`, ...lines].join("\n"),

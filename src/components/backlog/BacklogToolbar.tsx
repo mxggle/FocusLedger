@@ -2,11 +2,13 @@ import {
   ArrowUpDown,
   CalendarDays,
   Check,
+  Columns3,
   LayoutGrid,
   Package,
   Rows3,
   Search,
   SlidersHorizontal,
+  Table2,
   X
 } from "lucide-react";
 import type { Category, TaskPriority } from "../../types";
@@ -92,7 +94,9 @@ export function BacklogToolbar({
             onChange={(mode) => onViewChange({ viewMode: mode })}
             segments={[
               { value: "cards", label: "Cards", icon: LayoutGrid },
-              { value: "list", label: "List", icon: Rows3 }
+              { value: "list", label: "List", icon: Rows3 },
+              { value: "board", label: "Board", icon: Columns3 },
+              { value: "table", label: "Table", icon: Table2 }
             ]}
           />
         </div>

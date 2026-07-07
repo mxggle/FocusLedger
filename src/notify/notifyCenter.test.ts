@@ -81,6 +81,27 @@ describe("notifyCenter", () => {
     expect(snooze).not.toHaveBeenCalled();
   });
 
+  it("drops the replaced notification's handlers when a newer one reuses the window", async () => {
+    const oldHandler = vi.fn();
+    await showStyledNotification("fullscreen", {
+      title: "First",
+      description: "Will be replaced",
+      actions: [{ label: "Act", onClick: oldHandler }]
+    });
+    const first = invokeMock.mock.calls.at(-1)![1].payload.notificationId;
+
+    await showStyledNotification("fullscreen", {
+      title: "Second",
+      description: "Replaces the first",
+      actions: [{ label: "Act", onClick: vi.fn() }]
+    });
+
+    // The first notification was swapped out of the window; its handlers must
+    // be gone (no leak, no stale invocation).
+    actionCallback?.({ payload: { notificationId: first, actionId: "a0" } });
+    expect(oldHandler).not.toHaveBeenCalled();
+  });
+
   it("does not re-run a handler after its notification is consumed", async () => {
     const handler = vi.fn();
     await showStyledNotification("fullscreen", {

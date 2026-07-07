@@ -68,7 +68,7 @@ const NATIVE_PARAMETERS: Record<string, Record<string, unknown>> = {
   list_tasks: {
     type: "object",
     properties: {
-      scope: { type: "string", enum: ["today", "backlog", "all"] },
+      scope: { type: "string", enum: ["today", "overdue", "backlog", "all"] },
       due_date: DATE_OR_NULL,
       status: TASK_STATUS,
       category: STRING,

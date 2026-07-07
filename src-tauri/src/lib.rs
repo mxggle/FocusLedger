@@ -31,27 +31,29 @@ const TRAFFIC_LIGHT_INSET_Y: f64 = 22.0;
 #[allow(deprecated)] // `cocoa` crate is in maintenance; its API still works.
 fn position_traffic_lights(ns_window_ptr: *mut std::ffi::c_void, x: f64, y: f64) {
     use cocoa::appkit::{NSWindow, NSWindowButton};
-    use cocoa::base::id;
     use cocoa::foundation::{NSPoint, NSRect};
+    use objc::runtime::Object;
     use objc::{msg_send, sel, sel_impl};
+
+    type ObjcId = *mut Object;
 
     if ns_window_ptr.is_null() {
         return;
     }
-    let ns_window = ns_window_ptr as id;
+    let ns_window = ns_window_ptr.cast::<Object>();
 
     // SAFETY: standard AppKit calls dispatched on the main thread (Tauri setup
     // and window events run there); every handle is null-checked before use.
     unsafe {
-        let close: id = ns_window.standardWindowButton_(NSWindowButton::NSWindowCloseButton);
-        let miniaturize: id =
+        let close: ObjcId = ns_window.standardWindowButton_(NSWindowButton::NSWindowCloseButton);
+        let miniaturize: ObjcId =
             ns_window.standardWindowButton_(NSWindowButton::NSWindowMiniaturizeButton);
-        let zoom: id = ns_window.standardWindowButton_(NSWindowButton::NSWindowZoomButton);
+        let zoom: ObjcId = ns_window.standardWindowButton_(NSWindowButton::NSWindowZoomButton);
         if close.is_null() || miniaturize.is_null() || zoom.is_null() {
             return;
         }
 
-        let container: id = msg_send![close, superview];
+        let container: ObjcId = msg_send![close, superview];
         if container.is_null() {
             return;
         }
@@ -90,34 +92,33 @@ fn apply_main_traffic_lights(app: &AppHandle) {
 /// Depth-first search for an `NSButton` (in practice the private
 /// `NSStatusBarButton`) inside a status-bar window's view hierarchy.
 #[cfg(target_os = "macos")]
-fn find_ns_button(view: cocoa::base::id) -> cocoa::base::id {
-    use cocoa::base::{id, nil};
-    use objc::runtime::YES;
+fn find_ns_button(view: *mut objc::runtime::Object) -> *mut objc::runtime::Object {
+    use objc::runtime::{Object, YES};
     use objc::{class, msg_send, sel, sel_impl};
 
     // SAFETY: AppKit calls on views we just obtained from AppKit itself; every
     // handle is null-checked before use, on the main thread (Tauri setup).
     unsafe {
         if view.is_null() {
-            return nil;
+            return std::ptr::null_mut();
         }
         let is_button: objc::runtime::BOOL = msg_send![view, isKindOfClass: class!(NSButton)];
         if is_button == YES {
             return view;
         }
-        let subviews: id = msg_send![view, subviews];
+        let subviews: *mut Object = msg_send![view, subviews];
         if subviews.is_null() {
-            return nil;
+            return std::ptr::null_mut();
         }
         let count: usize = msg_send![subviews, count];
         for index in 0..count {
-            let child: id = msg_send![subviews, objectAtIndex: index];
+            let child: *mut Object = msg_send![subviews, objectAtIndex: index];
             let found = find_ns_button(child);
             if !found.is_null() {
                 return found;
             }
         }
-        nil
+        std::ptr::null_mut()
     }
 }
 
@@ -130,9 +131,10 @@ fn find_ns_button(view: cocoa::base::id) -> cocoa::base::id {
 /// AppKit's private classes ever change, the timer just keeps the old font.
 #[cfg(target_os = "macos")]
 fn apply_tray_monospaced_digits() {
-    use cocoa::base::id;
-    use objc::runtime::{Class, YES};
+    use objc::runtime::{Class, Object, YES};
     use objc::{class, msg_send, sel, sel_impl};
+
+    type ObjcId = *mut Object;
 
     // Private AppKit class backing status items; resolved at runtime so a
     // future rename degrades to "no font tweak" instead of a crash.
@@ -143,28 +145,28 @@ fn apply_tray_monospaced_digits() {
     // SAFETY: standard AppKit calls on the main thread (Tauri setup); every
     // handle is null-checked before use.
     unsafe {
-        let ns_app: id = msg_send![class!(NSApplication), sharedApplication];
-        let windows: id = msg_send![ns_app, windows];
+        let ns_app: ObjcId = msg_send![class!(NSApplication), sharedApplication];
+        let windows: ObjcId = msg_send![ns_app, windows];
         if windows.is_null() {
             return;
         }
         let count: usize = msg_send![windows, count];
         for index in 0..count {
-            let window: id = msg_send![windows, objectAtIndex: index];
+            let window: ObjcId = msg_send![windows, objectAtIndex: index];
             let is_status: objc::runtime::BOOL =
                 msg_send![window, isKindOfClass: status_window_class];
             if is_status != YES {
                 continue;
             }
-            let content: id = msg_send![window, contentView];
+            let content: ObjcId = msg_send![window, contentView];
             let button = find_ns_button(content);
             if button.is_null() {
                 continue;
             }
             // Match the menu bar's size but with fixed-width digits.
-            let menu_bar_font: id = msg_send![class!(NSFont), menuBarFontOfSize: 0.0f64];
+            let menu_bar_font: ObjcId = msg_send![class!(NSFont), menuBarFontOfSize: 0.0f64];
             let size: f64 = msg_send![menu_bar_font, pointSize];
-            let font: id =
+            let font: ObjcId =
                 msg_send![class!(NSFont), monospacedDigitSystemFontOfSize: size weight: 0.0f64];
             if !font.is_null() {
                 let _: () = msg_send![button, setFont: font];
@@ -346,7 +348,13 @@ fn show_notification_window(
 
     let window = builder.build().map_err(|error| error.to_string())?;
 
-    if let Ok(Some(monitor)) = window.primary_monitor() {
+    // Cover the monitor the app lives on — that is where the user is working —
+    // and fall back to the primary one when it can't be determined.
+    let monitor = app
+        .get_webview_window("main")
+        .and_then(|main| main.current_monitor().ok().flatten())
+        .or_else(|| window.primary_monitor().ok().flatten());
+    if let Some(monitor) = monitor {
         let size = monitor.size();
         let position = monitor.position();
         let _ = window.set_position(PhysicalPosition::new(position.x as f64, position.y as f64));
@@ -380,16 +388,37 @@ fn reveal_notification_window(app: AppHandle, kind: String) -> Result<(), String
 }
 
 /// Close the fullscreen notification window and drop its payload.
+///
+/// Race guard: a new notification can be staged while the window is still
+/// animating the old one out. `notification_id` says which notification the
+/// window is closing; if the staged payload is a *newer* one, closing would
+/// silently drop it — keep the window and re-show that payload instead.
 #[tauri::command]
 fn close_notification_window(
     app: AppHandle,
     payloads: State<'_, NotificationPayloads>,
     kind: String,
+    notification_id: Option<String>,
 ) -> Result<(), String> {
     let label = notification_label(&kind)?;
-    if let Ok(mut map) = payloads.0.lock() {
-        map.remove(label);
+
+    let newer_payload = {
+        let mut map = payloads.0.lock().map_err(|error| error.to_string())?;
+        match (map.get(label), notification_id.as_deref()) {
+            (Some(staged), Some(id)) if staged.notification_id != id => Some(staged.clone()),
+            _ => {
+                map.remove(label);
+                None
+            }
+        }
+    };
+
+    if let Some(payload) = newer_payload {
+        app.emit_to(label, "notif://show", payload)
+            .map_err(|error| error.to_string())?;
+        return Ok(());
     }
+
     if let Some(window) = app.get_webview_window(label) {
         let _ = window.close();
     }

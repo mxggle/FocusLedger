@@ -148,7 +148,7 @@ export function CollapsiblePane({
           summary scorecard) can adapt to the pane's width rather than the
           viewport's. Panes split the window, so pane width ≠ viewport width. */}
       <motion.div
-        className="@container min-h-0 flex-1 overflow-y-auto"
+        className="@container min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
         initial={animateExpand ? { opacity: 0, x: -8 } : false}
         animate={{ opacity: 1, x: 0 }}
         transition={settle}

@@ -34,6 +34,22 @@ function clamp01(value: number): number {
 }
 
 /**
+ * Nudge Howler's shared Web Audio context back to `running`. In the Tauri
+ * webview the context comes up `suspended` under the autoplay policy, and since
+ * we start playback from a state effect (not directly inside the click handler)
+ * Howler's auto-unlock doesn't reliably resume it — so buffers would play into a
+ * silent context. Safe to call repeatedly; a no-op once running or on HTML5.
+ */
+function resumeContext(): void {
+  try {
+    const ctx = Howler.ctx;
+    if (ctx && ctx.state === "suspended") void ctx.resume();
+  } catch {
+    /* no Web Audio context (HTML5 fallback) — nothing to resume */
+  }
+}
+
+/**
  * Real Howler-backed mixer. All Howler calls are guarded: a failure on one
  * layer is logged and that layer is disabled, never blocking the UI or the
  * other layers.
@@ -83,6 +99,7 @@ export function createAmbientMixer(sounds: SoundDef[]): AmbientMixer {
       const howl = ensureHowl(layer);
       if (!howl) return;
       try {
+        resumeContext();
         if (!howl.playing()) howl.play();
         howl.fade(howl.volume(), layer.volume, FADE_MS);
       } catch (error) {

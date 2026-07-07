@@ -295,7 +295,18 @@ export function useTaskReminders({ onOpenToday }: ReminderOptions = {}) {
       if (!endAt) {
         return Promise.resolve();
       }
-      const next = addMinutes(endAt, minutes);
+      // "Continue 10m" means ten more minutes from now. Extending a planned
+      // end that is already long past would produce a time still in the past,
+      // so the reminder would refire the moment the snooze expires.
+      const from = endAt.getTime() > Date.now() ? endAt : new Date();
+      let next = addMinutes(from, minutes);
+      // planned_end_time is a same-day HH:MM: clamp at the end of the task's
+      // day instead of wrapping past midnight, which would parse as early
+      // *today* — i.e. in the past.
+      if (toDateKey(next) !== task.due_date) {
+        next = new Date(endAt);
+        next.setHours(23, 59, 0, 0);
+      }
       const hh = String(next.getHours()).padStart(2, "0");
       const mm = String(next.getMinutes()).padStart(2, "0");
       return updateTask(task.id, { planned_end_time: `${hh}:${mm}` });
@@ -424,12 +435,25 @@ export function useTaskReminders({ onOpenToday }: ReminderOptions = {}) {
         });
       }
 
-      if (!hasStarted && now >= startGraceEndsAt) {
+      // Snoozing the start reminder must also hold back the missed-start
+      // escalation — otherwise "Snooze 30m" at start time still nags 10
+      // minutes later under a different reminder type.
+      const startSnoozedUntil = snoozedUntilRef.current.get(
+        reminderBaseKey(todayDate, task.id, "start")
+      );
+      const startSnoozeActive =
+        startSnoozedUntil !== undefined && now.getTime() < startSnoozedUntil;
+
+      if (!hasStarted && now >= startGraceEndsAt && !startSnoozeActive) {
+        const minutesLate = Math.max(
+          START_GRACE_MINUTES,
+          Math.round((now.getTime() - startAt.getTime()) / 60_000)
+        );
         notifyOnce({
           task,
           type: "missed-start",
           title: "Task has not started",
-          description: `${task.title} is ${START_GRACE_MINUTES} minutes past its planned start.`,
+          description: `${task.title} is ${minutesLate} minutes past its planned start.`,
           actions: [
             ...sharedStartActions,
             task.template_id

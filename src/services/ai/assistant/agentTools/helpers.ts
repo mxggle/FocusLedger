@@ -1,8 +1,9 @@
 import type { Task, TaskPriority } from "../../../../types";
 import type { AgentToolDeps, TaskUndoSnapshot } from "./types";
+import { resolveTaskRef } from "./taskRef";
 
 export function findTask(deps: AgentToolDeps, id: string): Task | undefined {
-  return deps.store.getAllTasks().find((task) => task.id === id);
+  return resolveTaskRef(deps.store.getAllTasks(), id);
 }
 
 export function snapshot(task: Task): TaskUndoSnapshot {

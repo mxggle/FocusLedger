@@ -90,6 +90,29 @@ describe("buildAssistantSystemPrompt", () => {
     expect(prompt).toContain("09:00-10:00");
   });
 
+  it("renders due dates and explicitly identifies overdue carry-over", () => {
+    const prompt = buildAssistantSystemPrompt(
+      makeCtx({
+        today: "2026-06-20",
+        tasks: [{
+          id: "t1",
+          title: "Late report",
+          status: "todo",
+          priority: "high",
+          estimatedMinutes: 60,
+          categoryId: "c1",
+          dueDate: "2026-06-19",
+          isOverdue: true,
+          plannedStartTime: null,
+          plannedEndTime: null
+        }]
+      })
+    );
+    expect(prompt).toContain("due 2026-06-19");
+    expect(prompt).toContain("OVERDUE");
+    expect(prompt).toContain("status and due date are independent");
+  });
+
   it("renders the current local time when provided", () => {
     const prompt = buildAssistantSystemPrompt(makeCtx({ currentTime: "2026-06-23T22:49:00.000+09:00" } as never));
     expect(prompt).toContain("Current local time");

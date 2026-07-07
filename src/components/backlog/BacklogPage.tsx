@@ -11,14 +11,18 @@ import {
   hasActiveBacklogFilters,
   sortBacklogTasks,
   type BacklogFilters,
-  type BacklogGroup
+  type BacklogGroup,
+  type BacklogViewMode
 } from "../../utils/backlogView";
+import { cn } from "../../utils/cn";
 import { toDateKey } from "../../utils/date";
 import { AnimatedListItem } from "../ui/AnimatedListItem";
 import { Button } from "../ui/Button";
 import { CategoryDot } from "../ui/CategoryDot";
 import { EmptyState } from "../ui/EmptyState";
 import { PageHeader } from "../ui/PageHeader";
+import { BacklogBoard } from "./BacklogBoard";
+import { BacklogTaskTable } from "./BacklogTable";
 import { BacklogTaskItem } from "./BacklogTaskItem";
 import { BacklogToolbar } from "./BacklogToolbar";
 import { useBacklogViewPrefs } from "./useBacklogViewPrefs";
@@ -60,9 +64,17 @@ export function BacklogPage() {
       filterBacklogTasks(combinedTasks, filters),
       prefs.sortBy
     );
-    return groupBacklogTasks(visible, prefs.groupBy, categories);
-  }, [combinedTasks, filters, prefs.sortBy, prefs.groupBy, categories]);
+    // The board needs a grouping dimension for its columns, so "Group: None"
+    // falls back to priority there.
+    const groupBy =
+      prefs.viewMode === "board" && prefs.groupBy === "none"
+        ? "priority"
+        : prefs.groupBy;
+    return groupBacklogTasks(visible, groupBy, categories);
+  }, [combinedTasks, filters, prefs.sortBy, prefs.groupBy, prefs.viewMode, categories]);
 
+  // Const alias so TypeScript narrows the board case out of the union below.
+  const viewMode = prefs.viewMode;
   const shownCount = groups.reduce((sum, group) => sum + group.tasks.length, 0);
   const filtersActive = hasActiveBacklogFilters(filters);
 
@@ -74,7 +86,12 @@ export function BacklogPage() {
 
   return (
     <div className="h-full overflow-y-auto px-6 py-7">
-      <div className="mx-auto max-w-4xl">
+      <div
+        className={cn(
+          "mx-auto",
+          viewMode === "board" ? "max-w-6xl" : "max-w-4xl"
+        )}
+      >
         <PageHeader
           icon={Package}
           eyebrow="Backlog"
@@ -90,7 +107,7 @@ export function BacklogPage() {
         <BacklogToolbar
           filters={filters}
           onFiltersChange={handleFiltersChange}
-          viewMode={prefs.viewMode}
+          viewMode={viewMode}
           groupBy={prefs.groupBy}
           sortBy={prefs.sortBy}
           onViewChange={updatePrefs}
@@ -99,7 +116,9 @@ export function BacklogPage() {
           totalCount={combinedTasks.length}
         />
 
-        <div className="mt-5 grid gap-6">
+        <div
+          className={cn("mt-5", viewMode !== "board" && "grid gap-6")}
+        >
           {shownCount === 0 ? (
             combinedTasks.length === 0 ? (
               <EmptyState
@@ -138,12 +157,14 @@ export function BacklogPage() {
                 dashed
               />
             )
+          ) : viewMode === "board" ? (
+            <BacklogBoard groups={groups} />
           ) : (
             groups.map((group) => (
               <BacklogGroupSection
                 key={group.key}
                 group={group}
-                viewMode={prefs.viewMode}
+                viewMode={viewMode}
               />
             ))
           )}
@@ -158,7 +179,7 @@ function BacklogGroupSection({
   viewMode
 }: {
   group: BacklogGroup;
-  viewMode: "cards" | "list";
+  viewMode: Exclude<BacklogViewMode, "board">;
 }) {
   return (
     <section>
@@ -176,7 +197,9 @@ function BacklogGroupSection({
         </div>
       ) : null}
 
-      {viewMode === "cards" ? (
+      {viewMode === "table" ? (
+        <BacklogTaskTable tasks={group.tasks} />
+      ) : viewMode === "cards" ? (
         <div className="grid gap-3">
           <AnimatePresence initial={false}>
             {group.tasks.map((task) => (

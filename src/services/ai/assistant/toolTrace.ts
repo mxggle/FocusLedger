@@ -1,3 +1,4 @@
+import { shortTaskId } from "./agentTools/taskRef";
 import type { ToolCallRecord } from "./agentTools/types";
 
 const STATUS_LABEL: Record<ToolCallRecord["status"], string> = {
@@ -27,7 +28,7 @@ export function renderToolTrace(calls: ToolCallRecord[]): string {
   if (calls.length === 0) return "";
   const lines = calls.map((call) => {
     const id = taskIdOf(call.args);
-    const target = id ? ` [task ${id}]` : "";
+    const target = id ? ` [task ${shortTaskId(id)}]` : "";
     const error = call.status === "failed" && call.error ? ` (${call.error})` : "";
     return `- ${call.name}${target}: ${call.summary} — ${STATUS_LABEL[call.status]}${error}`;
   });

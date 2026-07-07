@@ -17,6 +17,10 @@ type ActiveRest = {
   startedAt: string;
   plannedSeconds: number;
   trigger: RestTrigger;
+  /** Task this rest set aside — running (paused by us) or already paused —
+   *  so the rest screen can offer a one-tap "continue". In-memory only — lost
+   *  across a reopen, which degrades to the plain "End rest" exit. */
+  resumeTaskId: string | null;
 };
 
 type RestState = {
@@ -46,9 +50,13 @@ export const useRestStore = create<RestState>((set, get) => ({
             id: resumable.id,
             startedAt: resumable.start_at,
             plannedSeconds: planned,
-            trigger: resumable.trigger
+            trigger: resumable.trigger,
+            resumeTaskId: null
           }
         });
+        // Come back minimized, never trapped in a fullscreen break — the same
+        // rule focus zen follows on relaunch.
+        useUiStore.getState().setRestZen(false);
         useTimerStore.getState().startTicker();
       }
       await get().refreshToday();
@@ -75,6 +83,9 @@ export const useRestStore = create<RestState>((set, get) => ({
       // Rest and focus are mutually exclusive — pause anything running first so
       // its clock stops while you step away.
       const taskStore = useTaskStore.getState();
+      // A paused focus counts too — resting from a paused task should still
+      // offer the one-tap "continue" back into it.
+      const resumeTaskId = taskStore.activeEntry?.task_id ?? taskStore.focusedTask?.id ?? null;
       if (taskStore.activeEntry) {
         await taskStore.pauseActiveTask();
       }
@@ -87,9 +98,13 @@ export const useRestStore = create<RestState>((set, get) => ({
           id: session.id,
           startedAt: session.start_at,
           plannedSeconds: Math.max(60, Math.round(minutes * 60)),
-          trigger
+          trigger,
+          resumeTaskId
         }
       });
+      // A new break opens fullscreen (its "zen"); the top-bar button minimizes
+      // it back to the rest card without ending the break.
+      useUiStore.getState().setRestZen(true);
       useTimerStore.getState().startTicker();
       await get().refreshToday();
     } catch (error) {
@@ -112,6 +127,7 @@ export const useRestStore = create<RestState>((set, get) => ({
     const rest = get().rest;
     if (!rest) return;
     set({ rest: null });
+    useUiStore.getState().setRestZen(false);
     try {
       await restSessionRepository.close(rest.id);
       // Only stop the global ticker if no focus session is keeping it alive.

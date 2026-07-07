@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Task, TaskStatus, UpdateTaskInput } from "../../../../types";
-import { findTask, HHMM_RE, resolveCategoryId, resolveDueDate, snapshot } from "./helpers";
+import { HHMM_RE, resolveCategoryId, resolveDueDate, snapshot } from "./helpers";
+import { requireTask } from "./taskRef";
 import type { AgentTool, AgentToolDeps, ToolResult } from "./types";
 
 const schema = z.object({
@@ -73,8 +74,9 @@ export const updateTaskTool: AgentTool = {
   parameters: schema,
   async execute(rawArgs, deps: AgentToolDeps): Promise<ToolResult> {
     const args = schema.parse(rawArgs);
-    const task = findTask(deps, args.task_id);
-    if (!task) return { ok: false, error: `Unknown task_id "${args.task_id}"` };
+    const found = requireTask(deps, args.task_id);
+    if ("error" in found) return { ok: false, error: found.error };
+    const task = found.task;
 
     try {
       checkTime(args.planned_start_time, "planned_start_time");
@@ -125,7 +127,7 @@ export const updateTaskTool: AgentTool = {
       // Field edits go through the plain update; the status transition is routed
       // through its lifecycle method afterwards so both end up applied.
       if (parts.length > 0) {
-        const result = await deps.store.updateTask(args.task_id, changes);
+        const result = await deps.store.updateTask(task.id, changes);
         if (!result.ok) return { ok: false, error: result.message ?? "update failed" };
       }
 
@@ -138,7 +140,7 @@ export const updateTaskTool: AgentTool = {
       return {
         ok: true,
         summary: `Updated "${task.title}": ${parts.join(", ")}`,
-        undo: { kind: "restore_task", taskId: args.task_id, before }
+        undo: { kind: "restore_task", taskId: task.id, before }
       };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "invalid update" };

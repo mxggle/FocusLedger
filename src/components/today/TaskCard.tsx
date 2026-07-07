@@ -353,8 +353,10 @@ export function TaskCard({ task }: { task: Task }) {
         </span>
       ) : null}
 
-      {/* Header row */}
-      <div className="flex items-start justify-between gap-3">
+      {/* Header row. Wraps rather than overflows: on a narrow pane the status
+          badges drop to their own line instead of being squeezed against a
+          non-shrinking title and clipped by the card's overflow-hidden. */}
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold text-foreground">
             {task.title}
@@ -393,8 +395,9 @@ export function TaskCard({ task }: { task: Task }) {
           </div>
         </div>
 
-        {/* Status badges — right-aligned */}
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
+        {/* Status badges — right-aligned, even when wrapped alone onto their
+            own line by ml-auto pushing them to the row's end. */}
+        <div className="ml-auto flex shrink-0 flex-col items-end gap-1.5">
           {!validation.ok ? <Badge variant="danger" dot>Conflict</Badge> : null}
           <Badge variant={statusVariant[task.status]} dot>
             {statusLabel[task.status]}

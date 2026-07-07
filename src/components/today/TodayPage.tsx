@@ -1,10 +1,12 @@
 import { ListTodo, ScrollText, Timer } from "lucide-react";
 import { useEffect } from "react";
+import { useRestStore } from "../../stores/restStore";
 import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
 import { CollapsiblePane } from "../ui/CollapsiblePane";
 import { AddTaskForm } from "./AddTaskForm";
 import { CurrentFocus } from "./CurrentFocus";
+import { RestCard } from "./RestCard";
 import { DayHeader } from "./DayHeader";
 import { DebriefButton } from "./DebriefButton";
 import { TaskList } from "./TaskList";
@@ -20,6 +22,11 @@ export function TodayPage() {
   const todayPanes = useUiStore((state) => state.todayPanes);
   const toggleTodayPane = useUiStore((state) => state.toggleTodayPane);
   const setFocusZen = useUiStore((state) => state.setFocusZen);
+  const setRestZen = useUiStore((state) => state.setRestZen);
+  // A break running behind its card (not zen'd) takes over the Focus pane, the
+  // same slot focus minimizes into.
+  const resting = useRestStore((state) => Boolean(state.rest));
+  const restZen = useUiStore((state) => state.restZen);
   const tasks = useTaskStore((state) => state.tasks);
   const todayEntries = useTaskStore((state) => state.todayEntries);
 
@@ -88,7 +95,11 @@ export function TodayPage() {
           {/* Flush: the pane card is the focus surface, so the ambient scene
               bleeds to its edges instead of nesting a second card. */}
           <div className="h-full">
-            <CurrentFocus onExpand={() => setFocusZen(true)} />
+            {resting && !restZen ? (
+              <RestCard onExpand={() => setRestZen(true)} />
+            ) : (
+              <CurrentFocus onExpand={() => setFocusZen(true)} />
+            )}
           </div>
         </CollapsiblePane>
 

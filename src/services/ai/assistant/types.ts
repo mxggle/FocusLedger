@@ -17,6 +17,8 @@ export type ContextTask = {
   priority: TaskPriority;
   estimatedMinutes: number | null;
   categoryId: string | null;
+  dueDate?: string | null;
+  isOverdue?: boolean;
   plannedStartTime: string | null;
   plannedEndTime: string | null;
 };
@@ -25,7 +27,7 @@ export type AssistantContext = {
   today: string; // date key YYYY-MM-DD
   currentTime?: string; // local timestamp captured at the start of the assistant turn
   categories: { id: string; name: string }[];
-  tasks: ContextTask[]; // today's tasks
+  tasks: ContextTask[]; // tasks visible in the selected day's pane, including overdue carry-over
   backlog: ContextTask[]; // capped slice of backlog
   allTasksCount?: number; // total tasks searchable via search_tasks
   assistantName: string; // the assistant's configured name

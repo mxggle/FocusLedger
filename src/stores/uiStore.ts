@@ -182,6 +182,14 @@ type UiState = {
   setFocusZen: (value: boolean) => void;
   toggleFocusZen: () => void;
 
+  // Rest zen mode — the fullscreen counterpart for a break, mirroring focus
+  // zen: `restZen` toggles the fullscreen rest overlay independently of whether
+  // a rest is running, so minimizing drops back to a rest card without ending
+  // the break. Ephemeral for the same reason as `focusZen`.
+  restZen: boolean;
+  setRestZen: (value: boolean) => void;
+  toggleRestZen: () => void;
+
   // Yolo Assistant docked rail. Open state + width persist, so the workspace
   // layout the user set up is restored on relaunch (like an IDE side panel).
   assistantOpen: boolean;
@@ -320,6 +328,10 @@ export const useUiStore = create<UiState>((set) => ({
   focusZen: false,
   setFocusZen: (value) => set({ focusZen: value }),
   toggleFocusZen: () => set((state) => ({ focusZen: !state.focusZen })),
+
+  restZen: false,
+  setRestZen: (value) => set({ restZen: value }),
+  toggleRestZen: () => set((state) => ({ restZen: !state.restZen })),
 
   assistantOpen: readAssistantOpen(),
   assistantWidth: readAssistantWidth(),

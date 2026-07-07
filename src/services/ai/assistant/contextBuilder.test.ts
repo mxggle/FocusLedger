@@ -61,6 +61,15 @@ describe("buildAssistantContext", () => {
     expect(ctx.tasks[0]).toMatchObject({ plannedStartTime: "09:00", plannedEndTime: "10:00" });
   });
 
+  it("preserves due dates and marks carried-over tasks as overdue", () => {
+    const ctx = buildAssistantContext({
+      ...snapshot,
+      selectedDate: "2026-06-18",
+      tasks: [task({ due_date: "2026-06-17" })]
+    });
+    expect(ctx.tasks[0]).toMatchObject({ dueDate: "2026-06-17", isOverdue: true });
+  });
+
   it("caps backlog to 30 items", () => {
     const big = Array.from({ length: 50 }, (_, i) => task({ id: `b${i}`, due_date: null }));
     const ctx = buildAssistantContext({ ...snapshot, backlogTasks: big });

@@ -34,14 +34,17 @@ import { Field, Input, Select } from "../ui/Field";
 import { IconButton } from "../ui/IconButton";
 import { Menu, MenuItem, MenuSeparator } from "../ui/Menu";
 
-const priorityBadge: Record<TaskPriority, "neutral" | "primary" | "warning"> = {
+export const priorityBadge: Record<
+  TaskPriority,
+  "neutral" | "primary" | "warning"
+> = {
   low: "neutral",
   medium: "primary",
   high: "warning"
 };
 
 /** Shared schedule/edit/delete handlers for a backlog task. */
-function useBacklogTaskActions(task: Task) {
+export function useBacklogTaskActions(task: Task) {
   const updateTask = useTaskStore((state) => state.updateTask);
   const deleteTask = useTaskStore((state) => state.deleteTask);
   const startTask = useTaskStore((state) => state.startTask);
@@ -88,17 +91,21 @@ export function BacklogTaskItem({
     return (
       <BacklogTaskEditor
         task={task}
-        framed={view === "cards"}
+        framed={view === "cards" || view === "board"}
+        stacked={view === "board"}
         onClose={() => setEditing(false)}
       />
     );
   }
 
-  return view === "cards" ? (
-    <BacklogTaskCard task={task} onEdit={() => setEditing(true)} />
-  ) : (
-    <BacklogTaskRow task={task} onEdit={() => setEditing(true)} />
-  );
+  switch (view) {
+    case "cards":
+      return <BacklogTaskCard task={task} onEdit={() => setEditing(true)} />;
+    case "board":
+      return <BacklogBoardCard task={task} onEdit={() => setEditing(true)} />;
+    default:
+      return <BacklogTaskRow task={task} onEdit={() => setEditing(true)} />;
+  }
 }
 
 function AgeHint({ task }: { task: Task }) {
@@ -148,7 +155,7 @@ function TaskMeta({ task }: { task: Task }) {
   );
 }
 
-function ScheduleMenuItems({
+export function ScheduleMenuItems({
   task,
   onEdit
 }: {
@@ -299,6 +306,38 @@ function BacklogTaskCard({ task, onEdit }: { task: Task; onEdit: () => void }) {
   );
 }
 
+/** Compact card for narrow board columns; all actions live in a hover menu. */
+function BacklogBoardCard({ task, onEdit }: { task: Task; onEdit: () => void }) {
+  const { ref: highlightRef, highlighted } = useTaskHighlight<HTMLDivElement>(task.id);
+
+  return (
+    <div
+      ref={highlightRef}
+      className={cn(
+        "group rounded-lg border border-border bg-surface p-3 shadow-card transition-colors duration-fast hover:border-border-strong",
+        highlighted && "border-primary ring-2 ring-primary/60"
+      )}
+    >
+      <div className="flex items-start gap-2">
+        <h3 className="min-w-0 flex-1 text-sm font-medium leading-snug text-foreground">
+          {task.title}
+        </h3>
+        <span className="-mr-1 -mt-1 shrink-0 opacity-0 transition-opacity duration-fast focus-within:opacity-100 group-hover:opacity-100">
+          <Menu
+            align="end"
+            trigger={<IconButton icon={MoreHorizontal} label="Task actions" />}
+          >
+            <ScheduleMenuItems task={task} onEdit={onEdit} />
+          </Menu>
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground">
+        <TaskMeta task={task} />
+      </div>
+    </div>
+  );
+}
+
 /** Dense single-line row for the list view; secondary actions live in a menu. */
 function BacklogTaskRow({ task, onEdit }: { task: Task; onEdit: () => void }) {
   const categories = useTaskStore((state) => state.categories);
@@ -356,14 +395,19 @@ function BacklogTaskRow({ task, onEdit }: { task: Task; onEdit: () => void }) {
   );
 }
 
-/** Inline editor shared by both views; framed adds its own card chrome. */
-function BacklogTaskEditor({
+/**
+ * Inline editor shared by all views; framed adds its own card chrome and
+ * stacked keeps fields in a single column for narrow containers.
+ */
+export function BacklogTaskEditor({
   task,
   framed,
+  stacked = false,
   onClose
 }: {
   task: Task;
   framed: boolean;
+  stacked?: boolean;
   onClose: () => void;
 }) {
   const categories = useTaskStore((state) => state.categories);
@@ -393,7 +437,12 @@ function BacklogTaskEditor({
         framed && "rounded-xl border border-border bg-surface shadow-card"
       )}
     >
-      <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_160px_120px_120px_150px]">
+      <div
+        className={cn(
+          "grid gap-3",
+          !stacked && "lg:grid-cols-[minmax(220px,1fr)_160px_120px_120px_150px]"
+        )}
+      >
         <Field label="Title">
           <Input value={title} onChange={(event) => setTitle(event.target.value)} />
         </Field>

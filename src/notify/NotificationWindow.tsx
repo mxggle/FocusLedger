@@ -147,7 +147,12 @@ export function NotificationWindow({ role }: { role: NotifyWindowKind }) {
 
   async function closeSelf() {
     try {
-      await invoke("close_notification_window", { kind: role });
+      // Passing the id lets Rust detect a newer staged notification and keep
+      // the window alive for it instead of closing (see close_notification_window).
+      await invoke("close_notification_window", {
+        kind: role,
+        notificationId: payload?.notificationId ?? null
+      });
     } catch (error) {
       console.warn("Notification window could not close", error);
     }
@@ -174,6 +179,21 @@ export function NotificationWindow({ role }: { role: NotifyWindowKind }) {
     }
     beginClose();
   }
+
+  // A fullscreen takeover must always have a keyboard exit.
+  useEffect(() => {
+    if (!payload || !visible) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        void dismiss();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dismiss is stable per payload
+  }, [payload, visible]);
 
   return (
     <AnimatePresence

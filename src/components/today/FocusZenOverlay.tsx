@@ -1,28 +1,34 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Check, Minimize2, Pause, RotateCcw } from "lucide-react";
+import { Check, Coffee, Minimize2, Pause, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRestStore } from "../../stores/restStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
 import { getLiveTaskSeconds, useTimerStore } from "../../stores/timerStore";
-import { formatDurationCompact, formatTimer } from "../../utils/duration";
 import { CELEBRATION_MS, CELEBRATION_MS_REDUCED } from "../../utils/motion";
 import { focusAccentStyle } from "../ambient/accent";
 import { AmbientControls } from "../ambient/AmbientControls";
 import { AmbientScene } from "../ambient/AmbientScene";
 import { Badge } from "../ui/Badge";
 import { CategoryDot } from "../ui/CategoryDot";
+import { cn } from "../../utils/cn";
+import { getClockLayout } from "./clocks/registry";
 import { FocusButton } from "./FocusButton";
 import { FocusCelebration } from "./FocusCelebration";
-import { FocusRing } from "./FocusRing";
+import { FocusClock } from "./FocusClock";
 import { StopSessionDialog } from "./StopSessionDialog";
+
+function isTauriRuntime(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
 
 /**
  * Full-app focus mode ("zen"): a fixed overlay that hands the entire window —
- * sidebar and all — to one running session. Not OS full-screen; just an
- * immersive, borderless stage with the timer ring as the hero. Exit via the
- * corner button or Escape.
+ * sidebar and all — to one running session, and puts the OS window itself
+ * into true full-screen (hiding the menu bar / dock) for the duration. Exit
+ * via the corner button or Escape restores the window to whatever state it
+ * was in before entering.
  *
  * This is a bespoke layout rather than the focus *card* blown up: full-screen
  * focus wants a different composition (centered, airy, big ring) than a packed
@@ -41,11 +47,44 @@ export function FocusZenOverlay() {
       // A Radix layer (stop dialog, ambient menu) that just consumed this
       // Escape marks it defaultPrevented — closing it must not also exit zen.
       if (event.defaultPrevented) return;
+      // While the fullscreen rest overlay sits on top of zen, Escape belongs to
+      // it — it minimizes the break and drops the user back into zen, still
+      // full-screen. A break running behind the rest card (restZen off) does
+      // not intercept: Escape then exits zen as usual.
+      if (useUiStore.getState().restZen) return;
       if (event.key === "Escape") setFocusZen(false);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [focusZen, setFocusZen]);
+
+  // Drive real OS full-screen alongside the in-app overlay. Remember whether
+  // the window was already full-screen so exiting zen doesn't drop the user
+  // out of a full-screen state they set up themselves before focusing.
+  const wasFullscreenRef = useRef(false);
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const windowHandle = getCurrentWindow();
+        if (focusZen) {
+          wasFullscreenRef.current = await windowHandle.isFullscreen();
+          if (!cancelled && !wasFullscreenRef.current) {
+            await windowHandle.setFullscreen(true);
+          }
+        } else if (!wasFullscreenRef.current) {
+          await windowHandle.setFullscreen(false);
+        }
+      } catch (error) {
+        console.warn("Full-screen focus could not toggle window full-screen", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [focusZen]);
 
   // Move focus onto the stage while the app shell behind it is inert, so
   // keyboard users land inside the overlay rather than on a blurred body.
@@ -77,7 +116,12 @@ export function FocusZenOverlay() {
   );
 }
 
+/** Mouse-idle window before the zen chrome (top bar + controls) fades away. */
+const CHROME_IDLE_MS = 3000;
+
 function ZenStage({ onExit, reduce }: { onExit: () => void; reduce: boolean }) {
+  const clockStyle = useSettingsStore((state) => state.settings.focusClockStyle);
+  const clockLayout = getClockLayout(clockStyle);
   const focusedTask = useTaskStore((state) => state.focusedTask);
   const activeEntry = useTaskStore((state) => state.activeEntry);
   const categories = useTaskStore((state) => state.categories);
@@ -85,10 +129,36 @@ function ZenStage({ onExit, reduce }: { onExit: () => void; reduce: boolean }) {
   const pauseActiveTask = useTaskStore((state) => state.pauseActiveTask);
   const resumeTask = useTaskStore((state) => state.resumeTask);
   const maybeAutoRestAfter = useRestStore((state) => state.maybeAutoRestAfter);
+  const startRest = useRestStore((state) => state.startRest);
+  const restEnabled = useSettingsStore((state) => state.settings.restEnabled);
   const now = useTimerStore((state) => state.now);
 
   const [stopOpen, setStopOpen] = useState(false);
   const [celebration, setCelebration] = useState<{ seconds: number } | null>(null);
+
+  // Chrome auto-hide: after CHROME_IDLE_MS without pointer or key activity the
+  // top bar and control pills fade out (and the cursor hides), leaving only
+  // the clock — the expected behavior for a full-screen timer. Any movement or
+  // keypress brings them back; see `hideChrome` below for the exceptions.
+  const [inputIdle, setInputIdle] = useState(false);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const wake = () => {
+      setInputIdle(false);
+      clearTimeout(timer);
+      timer = setTimeout(() => setInputIdle(true), CHROME_IDLE_MS);
+    };
+    wake();
+    window.addEventListener("pointermove", wake);
+    window.addEventListener("pointerdown", wake);
+    window.addEventListener("keydown", wake);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("pointermove", wake);
+      window.removeEventListener("pointerdown", wake);
+      window.removeEventListener("keydown", wake);
+    };
+  }, []);
 
   const isRunning = Boolean(
     focusedTask && activeEntry && activeEntry.task_id === focusedTask.id
@@ -134,6 +204,14 @@ function ZenStage({ onExit, reduce }: { onExit: () => void; reduce: boolean }) {
     ? categories.find((item) => item.id === focusedTask.category_id)
     : undefined;
 
+  // Never hide the chrome when it's needed: a paused session, an open stop
+  // dialog, or the celebration all keep the controls (and cursor) around.
+  const hideChrome = inputIdle && isRunning && !stopOpen && !celebration;
+  const chromeClass = cn(
+    "transition-opacity duration-500 ease-out",
+    hideChrome && "pointer-events-none opacity-0"
+  );
+
   return (
     <>
       {/* ── Ambient background — a calm wash + a breathing aura behind the orb ── */}
@@ -162,7 +240,12 @@ function ZenStage({ onExit, reduce }: { onExit: () => void; reduce: boolean }) {
       </div>
 
       {/* ── Top bar — atmosphere + exit, to keep the stage uncluttered ── */}
-      <div className="relative flex shrink-0 items-center justify-end gap-1 px-5 py-4">
+      <div
+        className={cn(
+          "relative flex shrink-0 items-center justify-end gap-1 px-5 py-4",
+          chromeClass
+        )}
+      >
         <AmbientControls align="end" triggerClassName="h-9 w-9 rounded-lg [&_svg]:h-5 [&_svg]:w-5" />
         <button
           type="button"
@@ -176,7 +259,12 @@ function ZenStage({ onExit, reduce }: { onExit: () => void; reduce: boolean }) {
       </div>
 
       {/* ── Center stage ── */}
-      <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-8 px-6 pb-8">
+      <div
+        className={cn(
+          "relative flex min-h-0 flex-1 flex-col items-center justify-center gap-8 px-6 pb-8",
+          hideChrome && "cursor-none"
+        )}
+      >
         {focusedTask ? (
           <>
             {/* Title block */}
@@ -213,51 +301,36 @@ function ZenStage({ onExit, reduce }: { onExit: () => void; reduce: boolean }) {
               </div>
             </div>
 
-            {/* Hero ring */}
+            {/* Hero clock — circular faces get a vmin square; the typographic
+                face gets the wide, content-height stage a dedicated timer
+                app would give it. */}
             <div
-              className="relative aspect-square"
-              style={{
-                width: "clamp(260px, 40vmin, 420px)",
-                containerType: "inline-size"
-              }}
+              className={clockLayout === "orb" ? "relative aspect-square" : "relative"}
+              style={
+                clockLayout === "orb"
+                  ? { width: "clamp(260px, 40vmin, 420px)", containerType: "inline-size" }
+                  : { width: "min(86%, 880px)", containerType: "inline-size" }
+              }
               role="progressbar"
               aria-valuenow={hasEstimate ? pct : undefined}
               aria-valuemin={0}
               aria-valuemax={100}
               aria-label="Focus progress"
             >
-              <FocusRing
-                pct={Math.min(progress, 100)}
-                overrun={overrun}
+              <FocusClock
+                clock={clockStyle}
+                elapsedSeconds={elapsedSeconds}
+                estimateSeconds={estimateSeconds}
                 hasEstimate={hasEstimate}
+                progress={progress}
+                overrun={overrun}
                 isRunning={isRunning}
                 reduce={reduce}
               />
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-5">
-                <div
-                  className={`font-mono font-bold tabular-nums leading-none transition-colors ${
-                    overrun ? "text-warning" : "text-foreground"
-                  }`}
-                  style={{ fontSize: "clamp(28px, 12.5cqw, 52px)" }}
-                >
-                  {formatTimer(elapsedSeconds)}
-                </div>
-                {overrun ? (
-                  <span className="rounded-full bg-warning-soft px-3 py-1 text-sm font-semibold text-warning-soft-foreground ring-1 ring-inset ring-warning/20">
-                    Over by {formatDurationCompact(elapsedSeconds - estimateSeconds)}
-                  </span>
-                ) : (
-                  <span className="text-sm font-medium text-muted-foreground tabular-nums">
-                    {hasEstimate
-                      ? `${focusedTask.estimated_minutes} min · ${pct}%`
-                      : formatDurationCompact(elapsedSeconds)}
-                  </span>
-                )}
-              </div>
             </div>
 
             {/* Controls — understated centered pills in the scene's accent */}
-            <div className="flex items-center gap-3">
+            <div className={cn("flex items-center gap-3", chromeClass)}>
               {isRunning ? (
                 <FocusButton
                   type="button"
@@ -281,6 +354,18 @@ function ZenStage({ onExit, reduce }: { onExit: () => void; reduce: boolean }) {
                   Resume
                 </FocusButton>
               )}
+              {restEnabled ? (
+                <FocusButton
+                  type="button"
+                  variant="glass"
+                  size="lg"
+                  className="min-w-[132px]"
+                  onClick={() => void startRest()}
+                >
+                  <Coffee className="h-4 w-4 shrink-0" />
+                  Break
+                </FocusButton>
+              ) : null}
               <FocusButton
                 type="button"
                 variant={isRunning ? "accent" : "glass"}

@@ -6,15 +6,31 @@ import type { AgentTool, AgentToolDeps, ToolResult } from "./types";
 
 const statuses: TaskStatus[] = ["todo", "doing", "paused", "done", "dropped"];
 const schema = z.object({
-  scope: z.enum(["today", "backlog", "all"]).optional(),
+  scope: z.enum(["today", "overdue", "backlog", "all"]).optional(),
   due_date: z.string().nullable().optional(),
   status: z.enum(statuses as [TaskStatus, ...TaskStatus[]]).optional(),
   category: z.string().optional(),
   undated: z.boolean().optional()
 });
 
-function filterByScope(tasks: Task[], scope: "today" | "backlog" | "all", deps: AgentToolDeps): Task[] {
-  if (scope === "today") return tasks.filter((task) => task.due_date === deps.ctx.today);
+function isOpen(task: Task): boolean {
+  return task.status !== "done" && task.status !== "dropped";
+}
+
+function filterByScope(tasks: Task[], scope: "today" | "overdue" | "backlog" | "all", deps: AgentToolDeps): Task[] {
+  // Match taskRepository.getTodayTasks so "today" means the same thing to the
+  // assistant and the UI: current work plus unfinished carry-over.
+  if (scope === "today") {
+    return tasks.filter(
+      (task) =>
+        (Boolean(task.due_date && task.due_date <= deps.ctx.today) && isOpen(task)) ||
+        task.status === "doing" ||
+        task.status === "paused"
+    );
+  }
+  if (scope === "overdue") {
+    return tasks.filter((task) => Boolean(task.due_date && task.due_date < deps.ctx.today) && isOpen(task));
+  }
   if (scope === "backlog") return tasks.filter((task) => !task.due_date);
   return tasks;
 }
@@ -35,9 +51,9 @@ export const listTasksTool: AgentTool = {
   category: "read",
   destructive: false,
   description:
-    'List tasks by scope, due_date, status, category, or undated/backlog state. due_date supports "today", "yesterday", "tomorrow", YYYY-MM-DD, or null for backlog. Use before bulk edits so you have exact task ids and schedule times.',
+    'List tasks by scope, due_date, status, category, or undated/backlog state. scope "today" matches the selected-day UI and includes unfinished overdue carry-over; scope "overdue" returns only unfinished past-due work. due_date is an exact-date filter. Use before bulk edits so you have exact task ids, due dates, and schedule times.',
   paramsHint:
-    'scope optional ("today"|"backlog"|"all", default "today"), due_date optional ("today"|"yesterday"|"tomorrow"|YYYY-MM-DD|null), status optional, category optional name/id/"none", undated optional boolean',
+    'scope optional ("today"|"overdue"|"backlog"|"all", default "today"), due_date optional exact date ("today"|"yesterday"|"tomorrow"|YYYY-MM-DD|null), status optional, category optional name/id/"none", undated optional boolean',
   parameters: schema,
   async execute(rawArgs, deps: AgentToolDeps): Promise<ToolResult> {
     try {
