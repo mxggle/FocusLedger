@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useRestStore } from "../stores/restStore";
 import { useTaskStore } from "../stores/taskStore";
 import { toDateKey } from "../utils/date";
 
@@ -16,6 +17,7 @@ const CHECK_INTERVAL_MS = 30_000;
  */
 export function useDayRollover(): void {
   const refresh = useTaskStore((state) => state.refresh);
+  const refreshRest = useRestStore((state) => state.refreshToday);
   const lastDayRef = useRef(toDateKey());
 
   useEffect(() => {
@@ -24,6 +26,7 @@ export function useDayRollover(): void {
       if (currentDay !== lastDayRef.current) {
         lastDayRef.current = currentDay;
         void refresh();
+        void refreshRest();
       }
     }
 
@@ -33,6 +36,7 @@ export function useDayRollover(): void {
       }
       lastDayRef.current = toDateKey();
       void refresh();
+      void refreshRest();
     }
 
     const intervalId = window.setInterval(checkDayChange, CHECK_INTERVAL_MS);
@@ -44,5 +48,5 @@ export function useDayRollover(): void {
       window.removeEventListener("focus", handleWindowActive);
       document.removeEventListener("visibilitychange", handleWindowActive);
     };
-  }, [refresh]);
+  }, [refresh, refreshRest]);
 }

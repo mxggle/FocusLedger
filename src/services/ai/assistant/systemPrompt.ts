@@ -3,6 +3,7 @@ import { renderMemoryBlock } from "./memory/injectMemory";
 import { renderSkillBlock } from "./skills/render";
 import type { AssistantContext, ContextTask } from "./types";
 import { renderToolCatalog } from "./agentTools/registry";
+import { shortTaskId } from "./agentTools/taskRef";
 import { computeTimePulse, hhmmToMinutes, renderTimePulse } from "./timePulse";
 import type { PermissionLevel } from "./agentTools/types";
 import type {
@@ -23,7 +24,10 @@ function describeTask(task: ContextTask): string {
         : task.plannedEndTime
           ? `?-${task.plannedEndTime}`
           : "no time";
-  return `- [${task.id}] "${task.title}" (${task.status}, ${task.priority}, ${time}${estimate})`;
+  const due = task.dueDate ? `, due ${task.dueDate}` : ", no due date";
+  const overdue = task.isOverdue ? ", OVERDUE" : "";
+  // Short id: 41-char uuids get mangled when models copy them into tool calls.
+  return `- [${shortTaskId(task.id)}] "${task.title}" (${task.status}, ${task.priority}, ${time}${estimate}${due}${overdue})`;
 }
 
 function localTimeLabel(value: string): string {
@@ -53,7 +57,10 @@ function renderContext(ctx: AssistantContext): string {
 
   lines.push(
     ctx.tasks.length > 0
-      ? ["Today's tasks:", ...ctx.tasks.map(describeTask)].join("\n")
+      ? [
+          "Today's tasks in the selected-day pane (includes unfinished overdue carry-over; inspect due dates):",
+          ...ctx.tasks.map(describeTask)
+        ].join("\n")
       : "Today's tasks: none — the user has no tasks scheduled today."
   );
 
@@ -87,7 +94,7 @@ function renderSlips(slips: SlipAnalysis): string[] {
   if (slips.items.length === 0 && slips.blockerThemes.length === 0) return [];
   const lines = ["Slips (stuck or abandoned work):"];
   for (const item of slips.items) {
-    lines.push(`  • "${item.title}" — ${item.kind}, ${item.ageDays}d old [${item.taskId}]`);
+    lines.push(`  • "${item.title}" — ${item.kind}, ${item.ageDays}d old [${shortTaskId(item.taskId)}]`);
   }
   if (slips.moreCount > 0) lines.push(`  • …and ${slips.moreCount} more`);
   if (slips.blockerThemes.length > 0) {
@@ -144,6 +151,7 @@ const TOOL_PROTOCOL = [
   "How to think before acting:",
   "- For anything beyond a one-shot lookup, take a beat first: name the goal in your own words, decide what you must look up to be sure, and sketch the order of operations — then act. Don't guess at ids, times, or estimates you could verify with a read.",
   "- After tools return, reflect before continuing: did the result match what you expected? Did any write fail? Is the user's goal actually met? Adjust your plan if not, and only give the final answer once it is — don't keep calling tools out of momentum.",
+  "- Task status and due date are independent. A task is overdue when its due_date is before the current date; changing status to todo does not remove overdue. To make an overdue task due today, update due_date to today.",
   "",
   "Tool-calling protocol:",
   "- When you need to call a tool, use the tool-calling API your provider exposes (function calling). When a tool is not available via the API or your provider has no native tool calling, you may instead respond with ONLY a JSON object: { \"tool_calls\": [ { \"name\": \"list_tasks\", \"args\": { \"scope\": \"today\" } } ] }.",
@@ -157,8 +165,10 @@ const TOOL_PROTOCOL = [
   "- create_task is ONLY for genuinely new work the user wants tracked. If a request cannot be done with the available tools, say so plainly and suggest the closest supported action - never invent a task to fake completion.",
   "- When a request is ambiguous, under-specified, or could mean materially different things, call clarify with ONE focused question (optionally with suggested options) instead of guessing. This ends your turn until the user replies.",
   "- For multi-step, bulk, or conditional work (e.g. 'shift every task 30 min', 'rebalance my afternoon', 'for each overdue task ...'), prefer ONE execute_program call: write a short JavaScript program that calls the tools as async functions and loops over the results, then return a brief summary. This is faster and more reliable than emitting many separate tool calls.",
-  '- For past or future task lists, call list_tasks with due_date ("yesterday", "today", "tomorrow", or YYYY-MM-DD). Do not say you cannot inspect yesterday or another date before trying the date filter.',
+  '- Use list_tasks scope "today" for the same selected-day pane the user sees (including unfinished overdue carry-over), scope "overdue" for overdue work, or due_date for an exact date ("yesterday", "today", "tomorrow", or YYYY-MM-DD).',
+  "- Describe only the fields that tool results confirm were changed. A successful status update does not imply the due date changed. For bulk work, account for every requested task and report partial completion explicitly.",
   "- Before changing many tasks, call list_tasks to fetch exact ids and current schedule times, then call update_task per affected task (or do both inside execute_program).",
+  '- task_id values must be copied character-for-character from the bracketed ids in this context or a tool result (e.g. [task_1a2b3c4d]) — never reconstruct one from memory. If a tool answers "Unknown task_id", re-run list_tasks and copy the id again; when it offers "Closest matches", pick from those.',
   "- Safe text transformations are supported: when the user asks you to translate, normalize, or rewrite existing task titles/descriptions, use your language ability to produce the new text and call update_task with title or description. Do not claim the user must provide every replacement unless the source text is genuinely ambiguous.",
   "- When you reschedule several tasks, give them planned windows that do NOT overlap each other or any task you are leaving in place — a task can occupy only one slot at a time. Lay them out back-to-back in real gaps (use find_free_slots to see where the day is open). Apply them as a coherent set; the user can apply them all at once.",
   "- Before setting estimated_minutes, you may call get_calibration so estimates reflect deterministic history.",

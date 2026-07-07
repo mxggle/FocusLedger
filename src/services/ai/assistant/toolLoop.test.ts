@@ -252,6 +252,56 @@ describe("runToolLoop", () => {
     expect(res.toolCalls.find((call) => call.name === "update_task")?.status).toBe("pending");
   });
 
+  it("ask mode fails an unresolvable task_id back to the model instead of queueing it (AI-TOOL-QUEUE-01)", async () => {
+    const update = vi.fn(async () => ({ ok: true }));
+    const replies = [
+      '{"tool_calls":[{"name":"update_task","args":{"task_id":"task_deadbeef-0000-4000-8000-000000000000","planned_start_time":"19:00"}}]}',
+      "That id was stale."
+    ];
+    let i = 0;
+    const generateChat = vi.fn(async (..._args: unknown[]) => replies[i++]);
+    const res = await runToolLoop(
+      {
+        system: "s",
+        messages: [{ role: "user", content: "move it to 7pm" }],
+        level: "ask",
+        deps: depsWith({ updateTask: update })
+      },
+      { generateChat }
+    );
+    expect(update).not.toHaveBeenCalled();
+    const record = res.toolCalls.find((call) => call.name === "update_task");
+    expect(record?.status).toBe("failed");
+    expect(record?.error).toContain("Unknown task_id");
+    // The model must see the failure in-loop so it can correct the id now,
+    // not after the user clicks Apply.
+    const followUp = generateChat.mock.calls[1]?.[1] as unknown as { messages: { content: string }[] };
+    expect(followUp.messages.at(-1)?.content).toContain("FAILED");
+  });
+
+  it("ask mode queues a write whose short task_id resolves", async () => {
+    const uuidTask = task({ id: "task_e41f3a2b-1111-4222-8333-444455556666", title: "Mock Interview" });
+    const update = vi.fn(async () => ({ ok: true }));
+    const replies = [
+      '{"tool_calls":[{"name":"update_task","args":{"task_id":"task_e41f3a2b","planned_start_time":"19:00"}}]}',
+      "Proposed."
+    ];
+    let i = 0;
+    const res = await runToolLoop(
+      {
+        system: "s",
+        messages: [{ role: "user", content: "move it to 7pm" }],
+        level: "ask",
+        deps: depsWith({ updateTask: update, tasks: [uuidTask] })
+      },
+      { generateChat: vi.fn(async () => replies[i++]) }
+    );
+    expect(update).not.toHaveBeenCalled();
+    const record = res.toolCalls.find((call) => call.name === "update_task");
+    expect(record?.status).toBe("pending");
+    expect(record?.summary).toContain("Mock Interview");
+  });
+
   it("labels queued task updates with the task title instead of the raw tool name", async () => {
     const replies = [
       '{"tool_calls":[{"name":"update_task","args":{"task_id":"t1","planned_start_time":"09:30","planned_end_time":"10:00"}}]}',

@@ -1,5 +1,5 @@
 import { createId } from "../../../../utils/id";
-import { isDestructive, needsConfirm } from "../agentTools/permissions";
+import { isDestructive, needsConfirm, queuedWriteError } from "../agentTools/permissions";
 import { AGENT_TOOLS } from "../agentTools/registry";
 import type { AgentTool, AgentToolDeps, PermissionLevel, ToolCallRecord, UndoOp } from "../agentTools/types";
 import { describeToolCallForDisplay } from "../toolDisplay";
@@ -46,6 +46,13 @@ export function buildHostTools(deps: AgentToolDeps, level: PermissionLevel, reco
       };
 
       if (needsConfirm(tool, level, parsed.data)) {
+        // Same gate as the JSON loop: an unresolvable task_id fails now, in the
+        // program, instead of on the user's Apply click.
+        const unqueueable = queuedWriteError(parsed.data, deps);
+        if (unqueueable) {
+          records.push({ ...base, status: "failed", error: unqueueable, result: unqueueable });
+          return { ok: false, error: unqueueable };
+        }
         records.push({ ...base, status: "pending" });
         return { ok: true, queued: true, summary: "queued for the user's confirmation (not applied yet)" };
       }

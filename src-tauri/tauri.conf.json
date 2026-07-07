@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Yolo",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "identifier": "com.yolo.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://127.0.0.1:1420",
+    "devUrl": "http://127.0.0.1:1421",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },

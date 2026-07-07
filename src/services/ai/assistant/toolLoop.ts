@@ -1,6 +1,6 @@
 import { generateChat as defaultGenerateChat } from "../chatClient";
 import type { AiSettings, ChatInput, ChatTurn } from "../providers";
-import { isDestructive, needsConfirm } from "./agentTools/permissions";
+import { isDestructive, needsConfirm, queuedWriteError } from "./agentTools/permissions";
 import { nativeToolSpecs, toolByName } from "./agentTools/registry";
 import type { AgentToolDeps, PermissionLevel, ToolCallRecord } from "./agentTools/types";
 import { parseToolCalls, type ParsedToolCall } from "./responseParser";
@@ -268,6 +268,14 @@ export async function runToolLoop(
       };
 
       if (needsConfirm(tool, input.level, parsed.data)) {
+        // A call that can never apply must fail here, while the model is still
+        // in the loop to fix it — not later on the user's Apply click.
+        const unqueueable = queuedWriteError(parsed.data, input.deps);
+        if (unqueueable) {
+          records.push({ ...base, status: "failed", error: unqueueable, result: unqueueable });
+          feedback[idx] = `${call.name}: FAILED - ${unqueueable}`;
+          continue;
+        }
         records.push({ ...base, status: "pending" });
         feedback[idx] = `${call.name}: queued for the user's confirmation (not applied yet)`;
         continue;

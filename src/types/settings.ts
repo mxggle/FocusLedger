@@ -61,6 +61,8 @@ export type AppSettings = {
    */
   /** Active procedural scene id (a `SCENES` entry) or `"none"`. */
   ambientScene: string;
+  /** Focus clock face (a `CLOCKS` entry id); unknown values fall back to the ring. */
+  focusClockStyle: string;
   /**
    * Per-sound layer prefs keyed by `SoundDef.id`. Default-merged against the
    * live `SOUNDS` manifest on use, so adding/removing a sound never corrupts
@@ -120,6 +122,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   debriefAutoEnabled: false,
   debriefAutoTime: "23:00",
   ambientScene: "none",
+  focusClockStyle: "ring",
   ambientSounds: {},
   ambientMasterVolume: 0.6,
   ambientMuted: false,

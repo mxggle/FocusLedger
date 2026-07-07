@@ -1,4 +1,5 @@
 import type { Task } from "../../../types";
+import { resolveTaskRef } from "./agentTools/taskRef";
 import type { ToolCallRecord } from "./agentTools/types";
 
 type DisplayDetails = {
@@ -8,7 +9,9 @@ type DisplayDetails = {
   detail?: string;
 };
 
-const TASK_ID_RE = /\s*\[(?:task[_-]?)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\]/gi;
+// Full uuid form and the short "[task_1a2b3c4d]" form shown to the model.
+const TASK_ID_RE =
+  /\s*\[(?:task[_-]?)?[0-9a-f]{8}(?:-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?\]/gi;
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -22,7 +25,9 @@ function stringArg(args: unknown, key: string): string | undefined {
 function taskTitleFromArgs(args: unknown, tasks: Task[]): string | undefined {
   const taskId = stringArg(args, "task_id");
   if (!taskId) return undefined;
-  return tasks.find((task) => task.id === taskId)?.title;
+  // Same tolerant resolution the tools use, so cards still name the task when
+  // the model passed a short id.
+  return resolveTaskRef(tasks, taskId)?.title;
 }
 
 function quotedTitleFromSummary(summary: string): string | undefined {
@@ -36,6 +41,23 @@ function timeRange(args: unknown): string | undefined {
   if (start) return `starts ${start}`;
   if (end) return `ends ${end}`;
   return undefined;
+}
+
+function updateDetail(args: unknown): string | undefined {
+  const record = asRecord(args);
+  const details: string[] = [];
+  if (Object.prototype.hasOwnProperty.call(record, "due_date")) {
+    const due = record.due_date;
+    details.push(due === null ? "due date cleared" : `due ${String(due)}`);
+  }
+  const range = timeRange(args);
+  if (range) details.push(range);
+  const status = stringArg(args, "status");
+  if (status) details.push(`status ${status}`);
+  if (Object.prototype.hasOwnProperty.call(record, "estimated_minutes")) {
+    details.push(`estimate ${String(record.estimated_minutes)}m`);
+  }
+  return details.length > 0 ? details.join(", ") : undefined;
 }
 
 function humanizeToolName(name: string): string {
@@ -76,12 +98,14 @@ export function describeToolCallForDisplay(name: string, args: unknown, tasks: T
   }
 
   if (name === "update_task") {
-    const action = range ? "Reschedule" : "Update";
+    const detail = updateDetail(args);
+    const action =
+      range || Object.prototype.hasOwnProperty.call(asRecord(args), "due_date") ? "Reschedule" : "Update";
     return {
       action,
       targetTitle,
-      detail: range,
-      summary: targetTitle ? `${action} "${targetTitle}"${range ? ` to ${range}` : ""}` : "Update task"
+      detail,
+      summary: targetTitle ? `${action} "${targetTitle}"${detail ? `: ${detail}` : ""}` : `Update task${detail ? `: ${detail}` : ""}`
     };
   }
 

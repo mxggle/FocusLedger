@@ -27,9 +27,11 @@ import type {
 } from "../types";
 import { getRecentDateKeys, startOfDateKey, toDateKey } from "../utils/date";
 import { formatDurationCompact } from "../utils/duration";
+import { useRestStore } from "./restStore";
 import { useSettingsStore } from "./settingsStore";
 import { useTimerStore } from "./timerStore";
 import { useUiStore } from "./uiStore";
+import { verifyTaskUpdate } from "./taskUpdateVerification";
 
 type StartTaskResult = "started" | "failed";
 type StopOutcome = "paused" | "done" | "dropped";
@@ -218,7 +220,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       now
     });
 
-    if (activeEntry) {
+    // The ticker is shared between focus and rest. A focus session has an
+    // `activeEntry`; a break does not (its task is paused), so keep the ticker
+    // alive while a rest is running too — otherwise a refresh mid-break would
+    // stop it and freeze the rest countdown. Mirrors `endRest`'s guard.
+    if (activeEntry || useRestStore.getState().rest) {
       useTimerStore.getState().startTicker();
     } else {
       useTimerStore.getState().stopTicker();
@@ -293,6 +299,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       }
       await taskRepository.updateTask(id, input);
       await get().refresh();
+      verifyTaskUpdate(get().allTasks.find((task) => task.id === id), input);
       return { ok: true };
     } catch (error) {
       reportError("Task could not be updated", error);
@@ -432,6 +439,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   startTask: async (taskId) => {
     try {
+      // Focus and rest are mutually exclusive: starting a task ends any break
+      // in progress — the mirror of `startRest` pausing the running task — so
+      // the Focus pane swaps the rest card back for the live session.
+      if (useRestStore.getState().rest) {
+        await useRestStore.getState().endRest();
+      }
       const activeEntry = await timeEntryRepository.getActiveEntry();
       if (activeEntry && activeEntry.task_id !== taskId) {
         // Auto-pause whatever is currently running, then start the new task.

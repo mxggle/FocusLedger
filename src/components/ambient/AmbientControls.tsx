@@ -3,15 +3,17 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Ban, Volume2, VolumeX, Waves } from "lucide-react";
 import { useMemo } from "react";
 import { SCENES } from "./scenes/registry";
+import { CLOCKS, normalizeClockId } from "../today/clocks/registry";
 import { normalizeAmbientSounds, SOUNDS } from "../../services/ambient/sounds";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { cn } from "../../utils/cn";
 
 /**
- * Atmosphere controls for a focus session: a scene picker, a per-layer sound
- * mixer, and master volume/mute — all driven by the SCENES/SOUNDS manifests, so
- * adding a scene or sound needs no edit here. Writes go through the quiet,
- * debounced `updateAmbient` so slider drags don't spam toasts or the DB.
+ * Atmosphere controls for a focus session: a clock-face picker, a scene
+ * picker, a per-layer sound mixer, and master volume/mute — all driven by the
+ * CLOCKS/SCENES/SOUNDS manifests, so adding an entry needs no edit here.
+ * Writes go through the quiet, debounced `updateAmbient` so slider drags and
+ * style flipping don't spam toasts or the DB.
  */
 export function AmbientControls({
   align = "end",
@@ -22,6 +24,9 @@ export function AmbientControls({
 }) {
   const reduce = useReducedMotion();
   const scene = useSettingsStore((state) => state.settings.ambientScene);
+  const clock = normalizeClockId(
+    useSettingsStore((state) => state.settings.focusClockStyle)
+  );
   const storedSounds = useSettingsStore((state) => state.settings.ambientSounds);
   const masterVolume = useSettingsStore((state) => state.settings.ambientMasterVolume);
   const muted = useSettingsStore((state) => state.settings.ambientMuted);
@@ -45,8 +50,8 @@ export function AmbientControls({
       <Popover.Trigger asChild>
         <button
           type="button"
-          aria-label="Ambient scene & sound"
-          title="Ambient scene & sound"
+          aria-label="Focus style: clock, scene & sound"
+          title="Focus style: clock, scene & sound"
           className={cn(
             "relative inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:shadow-ring",
             active && "text-primary",
@@ -73,8 +78,24 @@ export function AmbientControls({
             transition={{ duration: 0.16, ease: "easeOut" }}
             className="rounded-xl border border-border bg-surface p-3 shadow-card"
           >
-            {/* Scene */}
+            {/* Clock face */}
             <p className="px-1 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Clock
+            </p>
+            <div className="grid grid-cols-4 gap-1.5">
+              {CLOCKS.map((def) => (
+                <SceneChip
+                  key={def.id}
+                  label={def.label}
+                  icon={def.icon}
+                  selected={clock === def.id}
+                  onClick={() => updateAmbient("focusClockStyle", def.id)}
+                />
+              ))}
+            </div>
+
+            {/* Scene */}
+            <p className="px-1 pb-1.5 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Scene
             </p>
             <div className="grid grid-cols-4 gap-1.5">

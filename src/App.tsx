@@ -70,14 +70,16 @@ export default function App() {
   const requestedRoute = useUiStore((state) => state.requestedRoute);
   const clearRequestedRoute = useUiStore((state) => state.clearRequestedRoute);
   const focusZen = useUiStore((state) => state.focusZen);
+  const restZen = useUiStore((state) => state.restZen);
   const resting = useRestStore((state) => Boolean(state.rest));
   const reduceMotion = useReducedMotion();
   const openToday = useCallback(() => setRoute("today"), []);
 
   // While a full-screen overlay (zen focus / rest) is up, the shell behind it
-  // is decoration: make it inert so Tab and screen readers can't reach it.
+  // is decoration: make it inert so Tab and screen readers can't reach it. A
+  // *minimized* rest (running behind its card) leaves the shell interactive.
   // Attribute (not prop) keeps this compatible with React 18's typings.
-  const overlayActive = focusZen || resting;
+  const overlayActive = focusZen || (resting && restZen);
   const shellRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     shellRef.current?.toggleAttribute("inert", overlayActive);

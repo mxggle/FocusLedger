@@ -3,13 +3,15 @@ import { settingsRepository } from "../db/settingsRepository";
 import { DEFAULT_SETTINGS, type AppSettings } from "../types";
 import { useUiStore } from "./uiStore";
 
-/** Ambient settings change rapidly (slider drags); they update in-memory at
- *  once and persist debounced, with no per-change toast. */
+/** Focus-atmosphere settings change rapidly (slider drags, style flipping);
+ *  they update in-memory at once and persist debounced, with no per-change
+ *  toast. */
 type AmbientKey =
   | "ambientScene"
   | "ambientSounds"
   | "ambientMasterVolume"
-  | "ambientMuted";
+  | "ambientMuted"
+  | "focusClockStyle";
 
 type SettingsState = {
   settings: AppSettings;

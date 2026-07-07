@@ -1,5 +1,86 @@
 # Changelog
 
+## 0.7.1 - 2026-07-08
+
+A polish-and-reliability release on top of 0.7.0. Focus gains a set of clock
+faces, the backlog gets two new ways to see your work, breaks get their own
+fullscreen mode, and the built-in AI assistant becomes noticeably more
+dependable when it edits your tasks. A batch of notification and macOS/Windows
+fixes rounds it out.
+
+### Added
+
+- **Focus clock faces.** The focus timer is no longer a single ring. Pick from
+  four faces — **Ring**, **Countdown**, **Dial**, and **Minimal** — from the
+  focus-style control next to your session. The typographic *Minimal* face
+  spreads across the pane so the digits can lead; the circular faces keep a tidy
+  orb. Your choice is remembered between sessions and, like the ambient sliders,
+  saves quietly without spamming toasts.
+- **Backlog board & table views.** Alongside **Cards** and **List**, the backlog
+  now offers a **Board** view for scanning work in columns and a compact
+  **Table** view for dense, spreadsheet-style triage. All four views respect the
+  same grouping, sorting, and scope filters, and the selected view persists.
+- **Fullscreen rest mode (Rest Zen).** Breaks now have their own fullscreen
+  counterpart to Focus Zen. A running break shows a dedicated rest card and can
+  expand to a calm fullscreen rest screen; minimizing drops back to the card
+  **without ending the break**. Rest keeps its own timer and record and still
+  never counts as focused time.
+
+### Changed
+
+- **Focus and rest are now mutually exclusive.** Starting a task automatically
+  ends any break in progress, and starting a break pauses the running task — so
+  the Focus pane always reflects exactly one thing at a time.
+- **One control for clock, scene, and sound.** The focus atmosphere popover now
+  leads with a clock-face picker above the scene and sound mixer, all driven by
+  shared manifests so the picker stays in sync as faces and scenes are added.
+- The in-app AI assistant now shows and accepts **short, transcription-friendly
+  task ids** (e.g. `task_e41f3a2b`) across its tools.
+
+### Fixed
+
+- **The assistant no longer loses edits to mangled task ids.** Smaller models
+  frequently garble the full 41-character task id when copying it into a tool
+  call. Task references now resolve from an exact id, a short id, a unique id
+  prefix (with or without the `task_` prefix or dashes), or a unique exact
+  title. An ambiguous reference resolves to *nothing* rather than guessing at
+  the wrong task, and the assistant is handed the closest matches so it can
+  retry.
+- **Task edits fail loudly instead of silently.** After a task is written, Yolo
+  now verifies the refreshed state actually contains the requested values and
+  reports a clear error if a write didn't stick, instead of appearing to
+  succeed.
+- **Fullscreen reminders no longer get dropped.** A race where a newer reminder
+  staged while the previous one was still animating out could silently discard
+  the newer notification — it now re-shows the newer reminder instead.
+- **Reminders appear on the screen you're working on.** The fullscreen
+  notification now covers the monitor the app is actually on, falling back to
+  the primary monitor only when that can't be determined.
+- **Notification listeners recover from failures** (they can re-register on a
+  later attempt) and no longer leak handlers when a window is reused for a new
+  reminder.
+- **The rest countdown no longer freezes on refresh.** The shared timer ticker
+  now stays alive during a break, so reloading mid-rest keeps the countdown
+  running.
+- Removed the unused popup notification window and tightened its permissions to
+  just the fullscreen reminder surface.
+
+### Platform & internals
+
+- **macOS native code hardened.** Traffic-light positioning and the menu-bar
+  monospaced-digit timer were migrated off the maintenance-mode `cocoa` id
+  aliases onto direct `objc` runtime object pointers, keeping the same
+  null-checked, main-thread safety guarantees.
+- **Fullscreen capability added** (`set-fullscreen` / `is-fullscreen`) to
+  support the focus and rest zen overlays.
+
+### Validation
+
+- `yarn build` (tsc + vite), `yarn test` (100 files, 720 tests), and
+  `cargo check` all pass. Clock faces, backlog views, rest mode, task-reference
+  resolution, task-update verification, and notification handling are
+  unit-tested.
+
 ## 0.7.0 - 2026-07-04
 
 This release makes capturing tasks effortless and the day itself visible.

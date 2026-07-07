@@ -1,4 +1,5 @@
 import type { Task } from "../../../../types";
+import { shortTaskId } from "./taskRef";
 import type { AgentToolDeps } from "./types";
 
 export const MAX_RESULTS = 40;
@@ -19,12 +20,9 @@ export function timeLabel(task: Pick<Task, "planned_start_time" | "planned_end_t
 export function taskLine(task: Task, deps: AgentToolDeps): string {
   const due = task.due_date ? `, due ${task.due_date}` : "";
   const estimate = task.estimated_minutes ? `, est ${task.estimated_minutes}m` : "";
-  return `- [${task.id}] "${task.title}" (${task.status}, ${task.priority}, ${timeLabel(task)}${due}, ${categoryLabel(
+  // Short id: 41-char uuids get mangled when models copy them into tool calls.
+  return `- [${shortTaskId(task.id)}] "${task.title}" (${task.status}, ${task.priority}, ${timeLabel(task)}${due}, ${categoryLabel(
     task.category_id,
     deps
   )}${estimate})`;
-}
-
-export function findTask(deps: AgentToolDeps, id: string): Task | undefined {
-  return deps.store.getAllTasks().find((task) => task.id === id);
 }

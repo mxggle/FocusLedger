@@ -5,7 +5,7 @@ import { formatDateLabel } from "./date";
 export type BacklogScope = "all" | "backlog" | "scheduled";
 export type BacklogGroupBy = "none" | "category" | "priority" | "date";
 export type BacklogSortBy = "priority" | "newest" | "oldest" | "shortest" | "date";
-export type BacklogViewMode = "cards" | "list";
+export type BacklogViewMode = "cards" | "list" | "board" | "table";
 
 export const BACKLOG_SCOPES: BacklogScope[] = ["all", "backlog", "scheduled"];
 export const BACKLOG_GROUPINGS: BacklogGroupBy[] = [
@@ -21,7 +21,12 @@ export const BACKLOG_SORTS: BacklogSortBy[] = [
   "shortest",
   "date"
 ];
-export const BACKLOG_VIEW_MODES: BacklogViewMode[] = ["cards", "list"];
+export const BACKLOG_VIEW_MODES: BacklogViewMode[] = [
+  "cards",
+  "list",
+  "board",
+  "table"
+];
 
 export type BacklogFilters = {
   scope: BacklogScope;

@@ -23,6 +23,13 @@ type LiveAction = { onClick: () => void | Promise<unknown> };
 
 /** notificationId → (actionId → handler). Holds only the live notifications. */
 const registry = new Map<string, Map<string, LiveAction>>();
+/**
+ * window kind → notification currently shown there. A window shows one
+ * notification at a time, so when a new one swaps in (window reuse) the
+ * replaced one will never report an action/dismiss — drop its handlers here
+ * instead of leaking them.
+ */
+const liveByWindow = new Map<NotifyWindowKind, string>();
 let listenersReady = false;
 
 function isTauriRuntime(): boolean {
@@ -37,18 +44,25 @@ export async function ensureNotifyCenter(): Promise<void> {
   if (!isTauriRuntime() || listenersReady) {
     return;
   }
+  // Set before awaiting so concurrent callers don't double-register; reset on
+  // failure so a later call can retry instead of leaving actions dead.
   listenersReady = true;
 
-  await listen<NotifyActionEvent>(NOTIFY_ACTION_EVENT, (event) => {
-    const { notificationId, actionId } = event.payload;
-    const action = registry.get(notificationId)?.get(actionId);
-    registry.delete(notificationId);
-    void action?.onClick();
-  });
+  try {
+    await listen<NotifyActionEvent>(NOTIFY_ACTION_EVENT, (event) => {
+      const { notificationId, actionId } = event.payload;
+      const action = registry.get(notificationId)?.get(actionId);
+      registry.delete(notificationId);
+      void action?.onClick();
+    });
 
-  await listen<NotifyDismissEvent>(NOTIFY_DISMISS_EVENT, (event) => {
-    registry.delete(event.payload.notificationId);
-  });
+    await listen<NotifyDismissEvent>(NOTIFY_DISMISS_EVENT, (event) => {
+      registry.delete(event.payload.notificationId);
+    });
+  } catch (error) {
+    listenersReady = false;
+    console.warn("Notification action listeners could not be registered", error);
+  }
 }
 
 export type StyledAction = {
@@ -98,4 +112,12 @@ export async function showStyledNotification(
     registry.delete(notificationId);
     throw error;
   }
+
+  // Only after the window accepted the new notification: release the handlers
+  // of the one it replaced (a failed show above keeps the old one live).
+  const replaced = liveByWindow.get(style);
+  if (replaced) {
+    registry.delete(replaced);
+  }
+  liveByWindow.set(style, notificationId);
 }

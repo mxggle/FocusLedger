@@ -181,6 +181,21 @@ describe("read tools", () => {
     }
   });
 
+  it("aligns today with the UI carry-over view and supports an overdue-only scope", async () => {
+    const today = task({ id: "t1", title: "Today", due_date: "2026-06-23" });
+    const overdue = task({ id: "t2", title: "Overdue", due_date: "2026-06-22" });
+    const oldDone = task({ id: "t3", title: "Old done", due_date: "2026-06-22", status: "done" });
+    const future = task({ id: "t4", title: "Future", due_date: "2026-06-24" });
+
+    const dayView = await listTasksTool.execute({ scope: "today" }, deps([today, overdue, oldDone, future]));
+    expect(dayView.ok).toBe(true);
+    if (dayView.ok) expect((dayView.data as Task[]).map((item) => item.id)).toEqual(["t1", "t2"]);
+
+    const overdueOnly = await listTasksTool.execute({ scope: "overdue" }, deps([today, overdue, oldDone, future]));
+    expect(overdueOnly.ok).toBe(true);
+    if (overdueOnly.ok) expect(overdueOnly.data).toEqual([overdue]);
+  });
+
   it("search_tasks caps results and reports no-match (AI-TOOL-03)", async () => {
     const many = Array.from({ length: 12 }, (_, i) => task({ id: `t${i}`, title: `Launch ${i}` }));
     const capped = await searchTasksTool.execute({ query: "launch" }, deps(many));

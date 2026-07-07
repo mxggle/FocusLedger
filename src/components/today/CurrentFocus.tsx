@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { useRestStore } from "../../stores/restStore";
 import { useTaskStore } from "../../stores/taskStore";
 import { getLiveTaskSeconds, useTimerStore } from "../../stores/timerStore";
-import { formatDurationCompact, formatTimer } from "../../utils/duration";
 import {
   CELEBRATION_MS,
   CELEBRATION_MS_REDUCED,
@@ -19,9 +18,10 @@ import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { CategoryDot } from "../ui/CategoryDot";
 import { EmptyState } from "../ui/EmptyState";
+import { getClockLayout } from "./clocks/registry";
 import { FocusButton } from "./FocusButton";
 import { FocusCelebration } from "./FocusCelebration";
-import { FocusRing } from "./FocusRing";
+import { FocusClock } from "./FocusClock";
 import { StopSessionDialog } from "./StopSessionDialog";
 
 export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
@@ -33,6 +33,8 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
   const resumeTask = useTaskStore((state) => state.resumeTask);
   const now = useTimerStore((state) => state.now);
   const sceneId = useSettingsStore((state) => state.settings.ambientScene);
+  const clockStyle = useSettingsStore((state) => state.settings.focusClockStyle);
+  const clockLayout = getClockLayout(clockStyle);
   const restEnabled = useSettingsStore((state) => state.settings.restEnabled);
   const startRest = useRestStore((state) => state.startRest);
   const maybeAutoRestAfter = useRestStore((state) => state.maybeAutoRestAfter);
@@ -234,49 +236,31 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
           </AnimatePresence>
         </div>
 
-        {/* ── Focus orb: progress ring + timer ── */}
+        {/* ── Focus clock: circular faces get a square orb; the typographic
+            face gets the pane's width so its digits can lead. ── */}
         <div
-          className="relative aspect-square"
-          style={{
-            width: "clamp(184px, 64%, 256px)",
-            containerType: "inline-size"
-          }}
+          className={clockLayout === "orb" ? "relative aspect-square" : "relative"}
+          style={
+            clockLayout === "orb"
+              ? { width: "clamp(184px, 64%, 256px)", containerType: "inline-size" }
+              : { width: "min(88%, 340px)", containerType: "inline-size" }
+          }
           role="progressbar"
           aria-valuenow={hasEstimate ? pct : undefined}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-label="Focus progress"
         >
-          <FocusRing
-            pct={Math.min(progress, 100)}
-            overrun={overrun}
+          <FocusClock
+            clock={clockStyle}
+            elapsedSeconds={elapsedSeconds}
+            estimateSeconds={estimateSeconds}
             hasEstimate={hasEstimate}
+            progress={progress}
+            overrun={overrun}
             isRunning={isRunning}
             reduce={Boolean(reduce)}
           />
-
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-3">
-            <div
-              className={`font-mono font-bold tabular-nums leading-none transition-colors ${
-                overrun ? "text-warning" : "text-foreground"
-              }`}
-              style={{ fontSize: "clamp(18px, 13.5cqw, 32px)" }}
-            >
-              {formatTimer(elapsedSeconds)}
-            </div>
-
-            {overrun ? (
-              <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-semibold text-warning-soft-foreground ring-1 ring-inset ring-warning/20">
-                Over by {formatDurationCompact(elapsedSeconds - estimateSeconds)}
-              </span>
-            ) : (
-              <span className="text-xs font-medium text-muted-foreground tabular-nums">
-                {hasEstimate
-                  ? `${focusedTask.estimated_minutes} min · ${pct}%`
-                  : formatDurationCompact(elapsedSeconds)}
-              </span>
-            )}
-          </div>
         </div>
 
         {/* Commit whisper — fades in and out, never holds layout */}
@@ -331,6 +315,20 @@ export function CurrentFocus({ onExpand }: { onExpand?: () => void } = {}) {
             <span className="focus-control-label truncate">Resume</span>
           </FocusButton>
         )}
+        {restEnabled ? (
+          // Icon-only on purpose: Pause/Resume and Done are the primary pair;
+          // a break is the quieter "step away" between them.
+          <FocusButton
+            type="button"
+            variant="glass"
+            className="w-10 shrink-0 px-0"
+            aria-label="Take a break"
+            title="Take a break"
+            onClick={() => void startRest()}
+          >
+            <Coffee className="h-4 w-4 shrink-0" />
+          </FocusButton>
+        ) : null}
         <FocusButton
           type="button"
           variant={isRunning ? "accent" : "glass"}

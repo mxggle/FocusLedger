@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { findTask, snapshot } from "./helpers";
+import { snapshot } from "./helpers";
+import { requireTask } from "./taskRef";
 import type { AgentTool, AgentToolDeps, ToolResult } from "./types";
 
 const schema = z.object({
@@ -17,15 +18,16 @@ export const completeTaskTool: AgentTool = {
   async execute(rawArgs, deps: AgentToolDeps): Promise<ToolResult> {
     try {
       const args = schema.parse(rawArgs);
-      const task = findTask(deps, args.task_id);
-      if (!task) return { ok: false, error: `Unknown task_id "${args.task_id}"` };
+      const found = requireTask(deps, args.task_id);
+      if ("error" in found) return { ok: false, error: found.error };
+      const task = found.task;
       const before = snapshot(task);
-      const result = await deps.store.completeTask(args.task_id, args.note);
+      const result = await deps.store.completeTask(task.id, args.note);
       if (!result.ok) return { ok: false, error: result.message ?? "complete failed" };
       return {
         ok: true,
         summary: `Marked "${task.title}" done`,
-        undo: { kind: "restore_task", taskId: args.task_id, before }
+        undo: { kind: "restore_task", taskId: task.id, before }
       };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "invalid complete" };
