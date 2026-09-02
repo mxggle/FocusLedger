@@ -1,130 +1,60 @@
-import {
-  Bell,
-  Bot,
-  Brain,
-  Coffee,
-  Eye,
-  EyeOff,
-  Keyboard,
-  MonitorCog,
-  SlidersHorizontal,
-  Sparkles,
-  Tags
-} from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
-import { useNotificationPermission } from "../../hooks/useNotificationPermission";
-import { showStyledNotification } from "../../notify/notifyCenter";
-import { AI_LANGUAGES } from "../../services/ai/languages";
-import { DEFAULT_MODELS, PROVIDER_LABELS } from "../../services/ai/providers";
-import { DEFAULT_SOUL } from "../../services/ai/assistant/soul";
-import { useSettingsStore } from "../../stores/settingsStore";
-import { useTaskStore } from "../../stores/taskStore";
+import { Bell, Bot, Coffee, MonitorCog, SlidersHorizontal, Tags } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useUiStore } from "../../stores/uiStore";
-import { sendTestNotification } from "../../utils/notificationPermission";
-import type { AiProvider, AppTheme, NotificationStyle, RestAfterTask } from "../../types";
-import type { PermissionLevel } from "../../services/ai/assistant/agentTools/types";
-import { Badge } from "../ui/Badge";
-import { Button } from "../ui/Button";
-import { Field, Input, Select, Textarea } from "../ui/Field";
-import { PageHeader, SettingsSection } from "../ui/PageHeader";
-import { SegmentedControl } from "../ui/SegmentedControl";
-import { ShortcutInput } from "../ui/ShortcutInput";
-import { Switch } from "../ui/Switch";
-import { CategoryManager } from "./CategoryManager";
-import { MemoryManager } from "./MemoryManager";
+import { PageHeader } from "../ui/PageHeader";
+import { TabBar, tabId, tabPanelId, type TabItem } from "../ui/Tabs";
+import { AssistantSettings } from "./sections/AssistantSettings";
+import { CategoriesSettings } from "./sections/CategoriesSettings";
+import { GeneralSettings } from "./sections/GeneralSettings";
+import { RestSettings } from "./sections/RestSettings";
+import { SystemSettings } from "./sections/SystemSettings";
 
-const PERMISSION_SEGMENTS: { value: PermissionLevel; label: string; icon: typeof SlidersHorizontal }[] = [
-  { value: "plan", label: "Plan", icon: SlidersHorizontal },
-  { value: "ask", label: "Ask", icon: Bell },
-  { value: "auto", label: "Auto", icon: Sparkles }
+export type SettingsTab = "general" | "categories" | "rest" | "assistant" | "system";
+
+const TABS: TabItem<SettingsTab>[] = [
+  { value: "general", label: "General", icon: SlidersHorizontal },
+  { value: "categories", label: "Categories", icon: Tags },
+  { value: "rest", label: "Rest", icon: Coffee },
+  { value: "assistant", label: "Assistant", icon: Bot },
+  { value: "system", label: "System", icon: Bell }
 ];
 
-const REST_AFTER_TASK_SEGMENTS: { value: RestAfterTask; label: string }[] = [
-  { value: "off", label: "Off" },
-  { value: "ask", label: "Ask" },
-  { value: "auto", label: "Auto" }
-];
+const TAB_IDS = new Set<string>(TABS.map((tab) => tab.value));
+const STORAGE_TAB = "fl:settingsTab";
+const ID_BASE = "settings";
+
+function readStoredTab(): SettingsTab {
+  try {
+    const raw = localStorage.getItem(STORAGE_TAB);
+    if (raw && TAB_IDS.has(raw)) return raw as SettingsTab;
+  } catch {
+    // Ignore: a blocked storage just means we start on the first tab.
+  }
+  return "general";
+}
 
 export function SettingsPage() {
-  const settings = useSettingsStore((state) => state.settings);
-  const updateSetting = useSettingsStore((state) => state.updateSetting);
-  const categories = useTaskStore((state) => state.categories);
-  const notificationPermission = useNotificationPermission();
-  const addToast = useUiStore((state) => state.addToast);
-  const [showApiKey, setShowApiKey] = useState(false);
+  const [tab, setTab] = useState<SettingsTab>(readStoredTab);
+  const requestedTab = useUiStore((state) => state.requestedSettingsTab);
+  const clearRequestedTab = useUiStore((state) => state.clearRequestedSettingsTab);
 
-  async function enableSystemNotifications() {
-    const result = await notificationPermission.request();
-    // If the OS won't re-prompt (already denied), send the user to settings.
-    if (result !== "granted") {
-      await notificationPermission.openSettings();
+  // Deep links (e.g. the assistant's "Add your API key") land on their tab
+  // instead of the page top, then clear so it only fires once.
+  useEffect(() => {
+    if (requestedTab && TAB_IDS.has(requestedTab)) {
+      setTab(requestedTab as SettingsTab);
     }
-  }
+    if (requestedTab) clearRequestedTab();
+  }, [requestedTab, clearRequestedTab]);
 
-  async function testNotification() {
-    const style = settings.notificationStyle;
-
-    // Full-screen renders in its own window; preview it directly so the user
-    // sees exactly what a real reminder looks like.
-    if (style === "fullscreen") {
-      try {
-        await showStyledNotification(style, {
-          kind: "info",
-          title: "Time's up",
-          description: "This is a full-screen reminder. Pick how you want to continue.",
-          actions: [
-            { label: "Continue", variant: "primary", onClick: () => {} },
-            { label: "Open Yolo", variant: "secondary", onClick: () => void notificationPermission.refresh() }
-          ]
-        });
-        addToast({
-          kind: "success",
-          title: "Test full-screen shown",
-          description: "If no window appeared, run the desktop app (yarn tauri dev)."
-        });
-      } catch (error) {
-        addToast({
-          kind: "error",
-          title: "Could not show the notification window",
-          description: error instanceof Error ? error.message : "Run the desktop app to test this style."
-        });
-      }
-      return;
+  // Remember the last tab so returning to Settings resumes where you left.
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_TAB, tab);
+    } catch {
+      // Ignore: remembering the tab is a convenience, not a requirement.
     }
-
-    const result = await sendTestNotification();
-    // Re-read permission so the indicator above reflects any prompt just shown.
-    await notificationPermission.refresh();
-
-    if (result === "sent") {
-      addToast({
-        kind: "success",
-        title: "Test notification sent",
-        description: "Check your desktop. If no banner appeared, review your OS notification settings."
-      });
-    } else if (result === "denied") {
-      addToast({
-        kind: "error",
-        title: "Notifications are blocked",
-        description: "Your OS hasn't allowed Yolo to show notifications. Allow them, then try again.",
-        actions: notificationPermission.canOpenSettings
-          ? [
-              {
-                label: "Open settings",
-                variant: "primary",
-                onClick: () => void notificationPermission.openSettings()
-              }
-            ]
-          : undefined
-      });
-    } else {
-      addToast({
-        kind: "error",
-        title: "Notifications unavailable",
-        description: "This environment can't show desktop notifications. Run the desktop app to test them."
-      });
-    }
-  }
+  }, [tab]);
 
   return (
     <div className="page-scroll px-6 py-7">
@@ -136,540 +66,34 @@ export function SettingsPage() {
           description="Tune how Yolo plans, tracks, and reflects on your time."
         />
 
-        <div className="grid gap-8">
-          <SettingsGroup label="Planning">
-            <SettingsSection icon={SlidersHorizontal} title="General">
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="Default category">
-                  <Select
-                    value={settings.defaultCategoryId}
-                    onChange={(event) =>
-                      void updateSetting("defaultCategoryId", event.target.value)
-                    }
-                  >
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="Theme">
-                  <Select
-                    value={settings.theme}
-                    onChange={(event) =>
-                      void updateSetting("theme", event.target.value as AppTheme)
-                    }
-                  >
-                    <option value="system">System</option>
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                  </Select>
-                </Field>
-                <Field
-                  label="Daily focus target"
-                  hint="Focus minutes per day"
-                >
-                  <DeferredNumberInput
-                    min={0}
-                    fallback={240}
-                    value={settings.dailyFocusTargetMinutes}
-                    onCommit={(value) =>
-                      void updateSetting("dailyFocusTargetMinutes", value)
-                    }
-                  />
-                </Field>
-              </div>
-              <div className="mt-4 border-t border-border pt-1">
-                <SettingRow
-                  label="Start week on Monday"
-                  value={settings.startWeekOnMonday}
-                  onChange={(value) =>
-                    void updateSetting("startWeekOnMonday", value)
-                  }
-                />
-              </div>
-            </SettingsSection>
+        <TabBar
+          idBase={ID_BASE}
+          label="Settings sections"
+          tabs={TABS}
+          value={tab}
+          onChange={setTab}
+          className="mb-5"
+        />
 
-            <SettingsSection
-              icon={Tags}
-              title="Categories"
-              description="Organize tasks by area. Pick a color so they stand out across the app."
-            >
-              <CategoryManager />
-            </SettingsSection>
-
-            <SettingsSection
-              icon={Coffee}
-              title="Rest"
-              description="Breaks help your time count. Rest is never tracked as a task — it stays out of your stats and shows in the log only as a calm marker."
-            >
-              <SettingRow
-                label="Enable rest"
-                hint="Show the “Take a break” action and allow breaks after finishing a task."
-                value={settings.restEnabled}
-                onChange={(value) => void updateSetting("restEnabled", value)}
-              />
-              {settings.restEnabled ? (
-                <div className="mt-1 space-y-4 border-t border-border pt-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Default break length" hint="Minutes per break">
-                      <DeferredNumberInput
-                        min={1}
-                        max={120}
-                        fallback={5}
-                        value={settings.restDefaultMinutes}
-                        onCommit={(value) =>
-                          void updateSetting("restDefaultMinutes", value)
-                        }
-                      />
-                    </Field>
-                    <Field
-                      label="Minimum session to offer a break"
-                      hint="Skip the break prompt after very short sessions"
-                    >
-                      <DeferredNumberInput
-                        min={0}
-                        max={240}
-                        fallback={15}
-                        value={settings.restAfterTaskMinSessionMinutes}
-                        onCommit={(value) =>
-                          void updateSetting("restAfterTaskMinSessionMinutes", value)
-                        }
-                      />
-                    </Field>
-                  </div>
-                  <Field
-                    label="After finishing a task"
-                    hint="Off does nothing; Ask offers a break; Auto opens the rest screen."
-                  >
-                    <SegmentedControl
-                      segments={REST_AFTER_TASK_SEGMENTS}
-                      value={settings.restAfterTask}
-                      onChange={(value) => void updateSetting("restAfterTask", value)}
-                      className="justify-self-start"
-                    />
-                  </Field>
-                </div>
-              ) : null}
-            </SettingsSection>
-          </SettingsGroup>
-
-          <SettingsGroup label="AI assistant">
-            <SettingsSection
-              icon={Sparkles}
-              title="Provider"
-              description="Bring your own API key to power AI features like the daily debrief. Your key is only sent to the provider you choose."
-            >
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Provider">
-                  <Select
-                    value={settings.aiProvider}
-                    onChange={(event) =>
-                      void updateSetting("aiProvider", event.target.value as AiProvider)
-                    }
-                  >
-                    {(Object.keys(PROVIDER_LABELS) as AiProvider[]).map((provider) => (
-                      <option key={provider} value={provider}>
-                        {PROVIDER_LABELS[provider]}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="API key">
-                  <div className="relative">
-                    <Input
-                      type={showApiKey ? "text" : "password"}
-                      autoComplete="off"
-                      placeholder="Paste your API key"
-                      value={settings.aiApiKey}
-                      onChange={(event) => void updateSetting("aiApiKey", event.target.value)}
-                      className="pr-9"
-                    />
-                    <button
-                      type="button"
-                      aria-label={showApiKey ? "Hide API key" : "Show API key"}
-                      title={showApiKey ? "Hide API key" : "Show API key"}
-                      onClick={() => setShowApiKey((value) => !value)}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground outline-none transition-colors duration-fast hover:text-foreground focus-visible:shadow-ring"
-                    >
-                      {showApiKey ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
-                </Field>
-                <Field
-                  label="Model"
-                  hint={
-                    DEFAULT_MODELS[settings.aiProvider]
-                      ? `Leave empty for ${DEFAULT_MODELS[settings.aiProvider]}`
-                      : "Model ID served by your endpoint"
-                  }
-                >
-                  <Input
-                    type="text"
-                    placeholder={DEFAULT_MODELS[settings.aiProvider] || "e.g. llama3"}
-                    value={settings.aiModel}
-                    onChange={(event) => void updateSetting("aiModel", event.target.value)}
-                  />
-                </Field>
-                {settings.aiProvider === "custom" ? (
-                  <Field
-                    label="Base URL"
-                    hint="OpenAI-compatible endpoint, e.g. http://localhost:11434/v1"
-                  >
-                    <Input
-                      type="text"
-                      placeholder="https://your-endpoint/v1"
-                      value={settings.aiBaseUrl}
-                      onChange={(event) => void updateSetting("aiBaseUrl", event.target.value)}
-                    />
-                  </Field>
-                ) : null}
-                <Field
-                  label="Output language"
-                  hint="The language AI features write in, e.g. the daily debrief"
-                >
-                  <Select
-                    value={settings.aiLanguage}
-                    onChange={(event) => void updateSetting("aiLanguage", event.target.value)}
-                  >
-                    {AI_LANGUAGES.map((language) => (
-                      <option key={language.value} value={language.value}>
-                        {language.label}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-              </div>
-
-              <div className="mt-4 border-t border-border pt-1">
-                <SettingRow
-                  label="Automatic daily debrief"
-                  hint="Generate the debrief on a schedule and notify you when it's ready."
-                  value={settings.debriefAutoEnabled}
-                  onChange={(value) => void updateSetting("debriefAutoEnabled", value)}
-                />
-                {settings.debriefAutoEnabled ? (
-                  <div className="max-w-[12rem] pb-1">
-                    <Field label="Debrief time" hint="Local time, every day">
-                      <Input
-                        type="time"
-                        value={settings.debriefAutoTime}
-                        onChange={(event) =>
-                          void updateSetting("debriefAutoTime", event.target.value)
-                        }
-                      />
-                    </Field>
-                  </div>
-                ) : null}
-              </div>
-            </SettingsSection>
-
-            <SettingsSection
-              icon={Bot}
-              title="Assistant"
-              description="Shape who your assistant is, what it knows about you, and how much it can do on its own."
-            >
-              <div className="space-y-4">
-                <Field label="Assistant name" hint="What your assistant is called.">
-                  <Input
-                    type="text"
-                    placeholder="Yolo Assistant"
-                    value={settings.assistantName}
-                    onChange={(event) => void updateSetting("assistantName", event.target.value)}
-                  />
-                </Field>
-                <div>
-                  <Field
-                    label="Soul"
-                    hint="Defines who your assistant is and how it behaves — its identity, voice, and boundaries. Leave blank to use the default."
-                  >
-                    <Textarea
-                      rows={10}
-                      placeholder={DEFAULT_SOUL}
-                      value={settings.assistantSoul}
-                      onChange={(event) => void updateSetting("assistantSoul", event.target.value)}
-                      className="resize-y font-mono text-xs"
-                    />
-                  </Field>
-                  <button
-                    type="button"
-                    onClick={() => void updateSetting("assistantSoul", DEFAULT_SOUL)}
-                    className="mt-2 text-xs font-medium text-primary hover:underline"
-                  >
-                    Reset to default soul
-                  </button>
-                </div>
-                <Field
-                  label="About me"
-                  hint="About you — the assistant reads this to tailor its work to your role, projects, hours, and goals."
-                >
-                  <Textarea
-                    rows={4}
-                    placeholder="e.g. I'm a product manager relocating to Tokyo. Mornings are for deep work; I keep meetings after 2pm. Current focus: the Q3 launch and learning Japanese."
-                    value={settings.assistantProfile}
-                    onChange={(event) => void updateSetting("assistantProfile", event.target.value)}
-                    className="resize-y"
-                  />
-                </Field>
-                <Field label="Autonomy" hint="Plan proposes changes, Ask confirms each change, Auto applies reversible changes.">
-                  <SegmentedControl
-                    segments={PERMISSION_SEGMENTS}
-                    value={settings.assistantPermissionLevel}
-                    onChange={(level) => void updateSetting("assistantPermissionLevel", level)}
-                    className="justify-self-start"
-                  />
-                </Field>
-              </div>
-            </SettingsSection>
-
-            <SettingsSection
-              icon={Brain}
-              title="Memory"
-              description="Let the assistant remember durable facts about you between conversations."
-            >
-              <SettingRow
-                label="Self-curated memory"
-                hint="Learn from your conversations and recall what matters in future chats."
-                value={settings.assistantMemoryEnabled}
-                onChange={(value) => void updateSetting("assistantMemoryEnabled", value)}
-              />
-              <div className="mt-1 space-y-4 border-t border-border pt-4">
-                {settings.assistantMemoryEnabled ? (
-                  <Field
-                    label="Memory model (optional)"
-                    hint="A cheaper model for the background memory review. Leave empty to reuse your assistant model."
-                  >
-                    <Input
-                      type="text"
-                      placeholder={settings.aiModel || DEFAULT_MODELS[settings.aiProvider] || "same as assistant"}
-                      value={settings.assistantMemoryModel}
-                      onChange={(event) => void updateSetting("assistantMemoryModel", event.target.value)}
-                    />
-                  </Field>
-                ) : null}
-                <MemoryManager />
-              </div>
-            </SettingsSection>
-          </SettingsGroup>
-
-          <SettingsGroup label="System">
-            <SettingsSection icon={Bell} title="Notifications & tray">
-              <div className="divide-y divide-border">
-                <SettingRow
-                  label="Enable tray"
-                  hint="Keep Yolo in the menu bar / system tray."
-                  value={settings.enableTray}
-                  onChange={(value) => void updateSetting("enableTray", value)}
-                />
-                <SettingRow
-                  label="Enable notifications"
-                  hint="Get reminders when sessions and tasks need attention."
-                  value={settings.enableNotifications}
-                  onChange={(value) =>
-                    void updateSetting("enableNotifications", value)
-                  }
-                />
-                {settings.enableNotifications ? (
-                  <div className="flex items-center justify-between gap-4 py-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-foreground">
-                        Notification style
-                      </div>
-                      <div className="mt-0.5 text-xs text-muted-foreground">
-                        How reminders reach you: a system banner or a full-screen
-                        alert.
-                      </div>
-                    </div>
-                    <div className="w-44 shrink-0">
-                      <Select
-                        value={settings.notificationStyle}
-                        onChange={(event) =>
-                          void updateSetting(
-                            "notificationStyle",
-                            event.target.value as NotificationStyle
-                          )
-                        }
-                      >
-                        <option value="system">System notification</option>
-                        <option value="fullscreen">Full screen</option>
-                      </Select>
-                    </div>
-                  </div>
-                ) : null}
-                {settings.enableNotifications && settings.notificationStyle === "system" ? (
-                  <div className="flex items-center justify-between gap-4 py-3 last:pb-0">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-foreground">
-                          System permission
-                        </span>
-                        {notificationPermission.status === "granted" ? (
-                          <Badge variant="success" dot>
-                            Granted
-                          </Badge>
-                        ) : (
-                          <Badge variant="warning" dot>
-                            Not granted
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="mt-0.5 text-xs text-muted-foreground">
-                        {notificationPermission.status === "granted"
-                          ? "Your OS allows Yolo to show desktop notifications."
-                          : "Your OS hasn't allowed Yolo to show notifications. Until you grant it, reminders only appear inside the app."}
-                      </div>
-                    </div>
-                    {notificationPermission.status !== "granted" ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => void enableSystemNotifications()}
-                      >
-                        Allow notifications
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : null}
-                <div className="flex items-center justify-between gap-4 py-3 last:pb-0">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-foreground">
-                      Test notification
-                    </div>
-                    <div className="mt-0.5 text-xs text-muted-foreground">
-                      Send a sample desktop banner to confirm notifications reach you.
-                    </div>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => void testNotification()}
-                  >
-                    Send test
-                  </Button>
-                </div>
-              </div>
-            </SettingsSection>
-
-            <SettingsSection
-              icon={Keyboard}
-              title="Global shortcut"
-              description="Quick-add shortcut used both inside the app and system-wide while Yolo is running."
-            >
-              <div className="max-w-sm">
-                <Field label="Shortcut key">
-                  <ShortcutInput
-                    value={settings.globalShortcut}
-                    onChange={(value) => void updateSetting("globalShortcut", value)}
-                  />
-                </Field>
-              </div>
-            </SettingsSection>
-          </SettingsGroup>
+        <div
+          role="tabpanel"
+          id={tabPanelId(ID_BASE, tab)}
+          aria-labelledby={tabId(ID_BASE, tab)}
+          tabIndex={-1}
+        >
+          {tab === "general" ? (
+            <GeneralSettings />
+          ) : tab === "categories" ? (
+            <CategoriesSettings />
+          ) : tab === "rest" ? (
+            <RestSettings />
+          ) : tab === "assistant" ? (
+            <AssistantSettings />
+          ) : (
+            <SystemSettings />
+          )}
         </div>
       </div>
-    </div>
-  );
-}
-
-/**
- * A number input that commits on blur/Enter instead of every keystroke, so
- * clearing the field to retype doesn't instantly write 0 (or snap back to a
- * clamped value) mid-edit. Invalid or empty input falls back on commit.
- */
-function DeferredNumberInput({
-  value,
-  min,
-  max,
-  fallback,
-  onCommit
-}: {
-  value: number;
-  min?: number;
-  max?: number;
-  fallback: number;
-  onCommit: (value: number) => void;
-}) {
-  const [draft, setDraft] = useState(String(value));
-  const [focused, setFocused] = useState(false);
-
-  // Follow external changes (e.g. another surface updates the setting), but
-  // never while the user is typing.
-  useEffect(() => {
-    if (!focused) setDraft(String(value));
-  }, [value, focused]);
-
-  function commit() {
-    setFocused(false);
-    const parsed = Number(draft);
-    let next =
-      draft.trim() !== "" && Number.isFinite(parsed) ? Math.round(parsed) : fallback;
-    if (min !== undefined) next = Math.max(min, next);
-    if (max !== undefined) next = Math.min(max, next);
-    setDraft(String(next));
-    if (next !== value) onCommit(next);
-  }
-
-  return (
-    <Input
-      type="number"
-      min={min}
-      max={max}
-      value={draft}
-      onChange={(event) => setDraft(event.target.value)}
-      onFocus={() => setFocused(true)}
-      onBlur={commit}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          event.currentTarget.blur();
-        }
-      }}
-    />
-  );
-}
-
-/**
- * A labeled cluster of settings cards — gives the long page a scannable
- * table of contents without adding navigation.
- */
-function SettingsGroup({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <section>
-      <h2 className="mb-2.5 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </h2>
-      <div className="grid gap-4">{children}</div>
-    </section>
-  );
-}
-
-function SettingRow({
-  label,
-  hint,
-  value,
-  onChange
-}: {
-  label: string;
-  hint?: string;
-  value: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-      <div className="min-w-0">
-        <div className="text-sm font-medium text-foreground">{label}</div>
-        {hint ? (
-          <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div>
-        ) : null}
-      </div>
-      <Switch checked={value} onChange={onChange} label={label} />
     </div>
   );
 }

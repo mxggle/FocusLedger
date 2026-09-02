@@ -212,6 +212,13 @@ type UiState = {
   requestedRoute: string | null;
   requestRoute: (route: string) => void;
   clearRequestedRoute: () => void;
+
+  // Which tab the Settings page should open on. Set alongside
+  // requestRoute("settings") when a link points at a specific group of
+  // settings; SettingsPage applies it and clears it.
+  requestedSettingsTab: string | null;
+  requestSettingsTab: (tab: string) => void;
+  clearRequestedSettingsTab: () => void;
 };
 
 export const useUiStore = create<UiState>((set) => ({
@@ -372,5 +379,9 @@ export const useUiStore = create<UiState>((set) => ({
 
   requestedRoute: null,
   requestRoute: (route) => set({ requestedRoute: route }),
-  clearRequestedRoute: () => set({ requestedRoute: null })
+  clearRequestedRoute: () => set({ requestedRoute: null }),
+
+  requestedSettingsTab: null,
+  requestSettingsTab: (tab) => set({ requestedSettingsTab: tab }),
+  clearRequestedSettingsTab: () => set({ requestedSettingsTab: null })
 }));

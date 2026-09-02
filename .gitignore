@@ -15,3 +15,6 @@ CleanShot*.png
 .superpowers/
 .worktrees
 .worktrees/
+
+# tsc -b project output for the Node-side config
+.tsbuild/
