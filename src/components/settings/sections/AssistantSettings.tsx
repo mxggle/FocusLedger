@@ -2,7 +2,7 @@ import { Bell, Bot, Brain, Eye, EyeOff, SlidersHorizontal, Sparkles } from "luci
 import { useState } from "react";
 import { AI_LANGUAGES } from "../../../services/ai/languages";
 import { DEFAULT_SOUL } from "../../../services/ai/assistant/soul";
-import { DEFAULT_MODELS, PROVIDER_LABELS } from "../../../services/ai/providers";
+import { DEFAULT_MODELS, PROVIDER_LABELS, resolveModel } from "../../../services/ai/providers";
 import { useSettingsStore } from "../../../stores/settingsStore";
 import type { AiProvider } from "../../../types";
 import type { PermissionLevel } from "../../../services/ai/assistant/agentTools/types";
@@ -10,6 +10,7 @@ import { Field, Input, Select, Textarea } from "../../ui/Field";
 import { SettingsSection } from "../../ui/PageHeader";
 import { SegmentedControl } from "../../ui/SegmentedControl";
 import { MemoryManager } from "../MemoryManager";
+import { ModelPicker } from "../ModelPicker";
 import { SettingRow } from "../controls";
 
 const PERMISSION_SEGMENTS: { value: PermissionLevel; label: string; icon: typeof SlidersHorizontal }[] = [
@@ -23,6 +24,22 @@ export function AssistantSettings() {
   const updateSetting = useSettingsStore((state) => state.updateSetting);
   const [showApiKey, setShowApiKey] = useState(false);
 
+  const aiSettings = {
+    aiProvider: settings.aiProvider,
+    aiApiKey: settings.aiApiKey,
+    aiModel: settings.aiModel,
+    aiBaseUrl: settings.aiBaseUrl
+  };
+
+  // Model ids belong to one provider, so a switch drops the ones that were
+  // picked for the old one rather than leaving a request that can only 404.
+  async function changeProvider(next: AiProvider) {
+    if (next === settings.aiProvider) return;
+    await updateSetting("aiProvider", next);
+    if (settings.aiModel !== "") await updateSetting("aiModel", "");
+    if (settings.assistantMemoryModel !== "") await updateSetting("assistantMemoryModel", "");
+  }
+
   return (
     <div className="grid gap-4">
       <SettingsSection
@@ -34,9 +51,7 @@ export function AssistantSettings() {
           <Field label="Provider">
             <Select
               value={settings.aiProvider}
-              onChange={(event) =>
-                void updateSetting("aiProvider", event.target.value as AiProvider)
-              }
+              onChange={(event) => void changeProvider(event.target.value as AiProvider)}
             >
               {(Object.keys(PROVIDER_LABELS) as AiProvider[]).map((provider) => (
                 <option key={provider} value={provider}>
@@ -70,21 +85,17 @@ export function AssistantSettings() {
               </button>
             </div>
           </Field>
-          <Field
+          <ModelPicker
             label="Model"
-            hint={
+            settings={aiSettings}
+            value={settings.aiModel}
+            onChange={(model) => void updateSetting("aiModel", model)}
+            emptyLabel={
               DEFAULT_MODELS[settings.aiProvider]
-                ? `Leave empty for ${DEFAULT_MODELS[settings.aiProvider]}`
-                : "Model ID served by your endpoint"
+                ? `Default (${DEFAULT_MODELS[settings.aiProvider]})`
+                : "Not set — pick a model your endpoint serves"
             }
-          >
-            <Input
-              type="text"
-              placeholder={DEFAULT_MODELS[settings.aiProvider] || "e.g. llama3"}
-              value={settings.aiModel}
-              onChange={(event) => void updateSetting("aiModel", event.target.value)}
-            />
-          </Field>
+          />
           {settings.aiProvider === "custom" ? (
             <Field
               label="Base URL"
@@ -209,17 +220,18 @@ export function AssistantSettings() {
         />
         <div className="mt-1 space-y-4 border-t border-border pt-4">
           {settings.assistantMemoryEnabled ? (
-            <Field
+            <ModelPicker
               label="Memory model (optional)"
-              hint="A cheaper model for the background memory review. Leave empty to reuse your assistant model."
-            >
-              <Input
-                type="text"
-                placeholder={settings.aiModel || DEFAULT_MODELS[settings.aiProvider] || "same as assistant"}
-                value={settings.assistantMemoryModel}
-                onChange={(event) => void updateSetting("assistantMemoryModel", event.target.value)}
-              />
-            </Field>
+              settings={aiSettings}
+              value={settings.assistantMemoryModel}
+              onChange={(model) => void updateSetting("assistantMemoryModel", model)}
+              emptyLabel={
+                resolveModel(aiSettings)
+                  ? `Same as assistant (${resolveModel(aiSettings)})`
+                  : "Same as assistant"
+              }
+              hint="A cheaper model keeps the background memory review cheap."
+            />
           ) : null}
           <MemoryManager />
         </div>

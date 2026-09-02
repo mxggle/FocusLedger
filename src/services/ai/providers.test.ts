@@ -23,7 +23,7 @@ const input = { system: "You are a coach.", prompt: "Debrief my day." };
 
 describe("resolveModel", () => {
   it("falls back to the provider default when no model is set", () => {
-    expect(resolveModel(settings())).toBe("claude-opus-4-8");
+    expect(resolveModel(settings())).toBe("claude-opus-5");
     expect(resolveModel(settings({ aiProvider: "openai" }))).toBe("gpt-5.1");
   });
 
@@ -39,7 +39,7 @@ describe("buildAiRequest", () => {
     expect(request.headers["x-api-key"]).toBe("test-key");
     expect(request.headers["anthropic-version"]).toBe("2023-06-01");
     expect(request.body).toMatchObject({
-      model: "claude-opus-4-8",
+      model: "claude-opus-5",
       system: input.system,
       messages: [{ role: "user", content: input.prompt }]
     });
@@ -229,7 +229,7 @@ describe("buildChatRequest", () => {
     expect(req.url).toBe("https://api.anthropic.com/v1/messages");
     expect(req.body.system).toBe("You are a planner.");
     expect(req.body.messages).toEqual(chatInput.messages);
-    expect(req.body.model).toBe("claude-opus-4-8");
+    expect(req.body.model).toBe("claude-opus-5");
     expect(req.headers["x-api-key"]).toBe("test-key");
   });
 

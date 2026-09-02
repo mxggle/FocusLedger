@@ -72,7 +72,7 @@ export const PROVIDER_LABELS: Record<AiProvider, string> = {
 };
 
 export const DEFAULT_MODELS: Record<AiProvider, string> = {
-  anthropic: "claude-opus-4-8",
+  anthropic: "claude-opus-5",
   openai: "gpt-5.1",
   gemini: "gemini-2.5-flash",
   custom: ""
