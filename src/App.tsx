@@ -7,6 +7,7 @@ import { AssistantLauncher } from "./components/assistant/AssistantLauncher";
 import { BacklogPage } from "./components/backlog/BacklogPage";
 import { HistoryPage } from "./components/history/HistoryPage";
 import { AppShell } from "./components/layout/AppShell";
+import { WindowFrame } from "./components/layout/WindowFrame";
 import { LifePage } from "./components/life/LifePage";
 import { MyDayPage } from "./components/myday/MyDayPage";
 import { PlanPage } from "./components/plan/PlanPage";
@@ -185,6 +186,9 @@ export default function App() {
       </AppShell>
       <AssistantLauncher />
       </div>
+      {/* Outside the inert wrapper on purpose: the window's own buttons must
+          keep working while a zen overlay makes the shell behind it inert. */}
+      <WindowFrame overlayActive={overlayActive} />
       <FocusZenOverlay />
       <RestOverlay />
       <QuickAddDialog />

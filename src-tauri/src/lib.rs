@@ -11,14 +11,32 @@ use tauri::{
 
 const TRAY_ID: &str = "yolo-status";
 
+// Window-material names. These are a contract with the web layer: they are
+// returned by the `window_material` command and published to CSS as
+// `<html data-material="…">` (see `src/utils/platform.ts`), where the glass
+// surfaces key off them. Keep the two lists in sync.
+const MATERIAL_NONE: &str = "none";
+#[cfg(target_os = "macos")]
+const MATERIAL_VIBRANCY: &str = "vibrancy";
+#[cfg(target_os = "windows")]
+const MATERIAL_MICA: &str = "mica";
+#[cfg(target_os = "windows")]
+const MATERIAL_ACRYLIC: &str = "acrylic";
+
 /// Inset of the native macOS traffic-light buttons from the window's top-left,
-/// in points. Tuned so the buttons land inside the floating sidebar's header
-/// (see `AppShell`'s macOS layout). Adjust together with the sidebar's top/left
-/// margins if those change.
+/// in points.
+///
+/// The buttons are 14pt tall and sit in the app's own title bar, which is
+/// `--titlebar-height` (40px) tall — see `TitleBar`. Centering them in that bar
+/// gives y = (40 - 14) / 2 = 13. The x inset matches the shell's horizontal
+/// gutter, so the lights line up with the sidebar content below them.
+///
+/// `TITLE_BAR_LEADING_INSET` in `src/components/layout/TitleBar.tsx` reserves
+/// the matching space on the web side; change the two together.
 #[cfg(target_os = "macos")]
-const TRAFFIC_LIGHT_INSET_X: f64 = 19.0;
+const TRAFFIC_LIGHT_INSET_X: f64 = 20.0;
 #[cfg(target_os = "macos")]
-const TRAFFIC_LIGHT_INSET_Y: f64 = 22.0;
+const TRAFFIC_LIGHT_INSET_Y: f64 = 13.0;
 
 /// Move the native window buttons (close/minimize/zoom) to the given inset from
 /// the window's top-left corner. macOS re-lays these out on resize and
@@ -76,6 +94,87 @@ fn position_traffic_lights(ns_window_ptr: *mut std::ffi::c_void, x: f64, y: f64)
         let _: () = msg_send![miniaturize, setFrameOrigin: NSPoint::new(x + spacing, top_y)];
         let _: () = msg_send![zoom, setFrameOrigin: NSPoint::new(x + spacing * 2.0, top_y)];
     }
+}
+
+/// Give the main window a real AppKit material so the app sits on live,
+/// desktop-sampling glass rather than an opaque sheet.
+///
+/// `UnderWindowBackground` is the material macOS itself uses for a window's
+/// background layer: it samples the wallpaper and windows *behind* Yolo, which
+/// is the part CSS `backdrop-filter` fundamentally cannot do (that only ever
+/// blurs Yolo's own content). The web layer then paints translucent panels on
+/// top of it — see the `--glass-*` tokens in `src/styles.css`.
+///
+/// `FollowsWindowActiveState` makes the material desaturate when the window
+/// loses key, matching every native app.
+///
+/// Deliberately *not* `apply_liquid_glass` (NSGlassEffectView, macOS 26+):
+/// that view reparents the window's content view into itself, which would sit
+/// between AppKit and the webview and disturb the traffic-light insetting and
+/// drag regions. NSGlassEffectView is for discrete floating controls, not a
+/// window background.
+#[cfg(target_os = "macos")]
+fn apply_main_window_material(app: &AppHandle) -> &'static str {
+    use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
+
+    let Some(window) = app.get_webview_window("main") else {
+        return MATERIAL_NONE;
+    };
+    match apply_vibrancy(
+        &window,
+        NSVisualEffectMaterial::UnderWindowBackground,
+        Some(NSVisualEffectState::FollowsWindowActiveState),
+        None,
+    ) {
+        Ok(()) => MATERIAL_VIBRANCY,
+        Err(error) => {
+            // Not fatal: the app is fully usable on an opaque background, so
+            // log and carry on rather than failing startup.
+            eprintln!("yolo: could not apply window vibrancy: {error}");
+            MATERIAL_NONE
+        }
+    }
+}
+
+/// The Windows counterpart: Mica, falling back to Acrylic.
+///
+/// Mica is the Windows 11 window backdrop — it samples the desktop wallpaper
+/// and tints with the system accent, which is the same "the window sits on
+/// living material" idea as the macOS `UnderWindowBackground` vibrancy above.
+/// It needs Windows 11 (build 22000+), so Windows 10 falls back to Acrylic,
+/// which blurs what is behind the window instead.
+///
+/// Both can fail for ordinary reasons — an older build, or transparency turned
+/// off in Settings → Personalization. The return value is what the web layer
+/// reads through the `window_material` command, so the CSS glass surfaces can
+/// render opaque rather than blurring nothing.
+#[cfg(target_os = "windows")]
+fn apply_main_window_material(app: &AppHandle) -> &'static str {
+    use window_vibrancy::{apply_acrylic, apply_mica};
+
+    let Some(window) = app.get_webview_window("main") else {
+        return MATERIAL_NONE;
+    };
+    // `None` = let the system decide light/dark, so the material follows the
+    // OS theme instead of pinning one and fighting our own dark mode.
+    if apply_mica(&window, None).is_ok() {
+        return MATERIAL_MICA;
+    }
+    match apply_acrylic(&window, None) {
+        Ok(()) => MATERIAL_ACRYLIC,
+        Err(error) => {
+            eprintln!("yolo: could not apply window material: {error}");
+            MATERIAL_NONE
+        }
+    }
+}
+
+/// Linux and anything else: no window material. The web layer paints an opaque
+/// canvas, which is what `data-material="none"` already does everywhere else
+/// the material is unavailable.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn apply_main_window_material(_app: &AppHandle) -> &'static str {
+    MATERIAL_NONE
 }
 
 /// Apply the traffic-light inset to the main window, if present. No-op when the
@@ -218,6 +317,21 @@ struct NotificationPayloads(Mutex<HashMap<String, NotifyPayload>>);
 
 /// Set just before a real quit so the close-to-tray handler doesn't swallow it.
 struct Quitting(AtomicBool);
+
+/// The window material that actually got applied at startup, for the web layer
+/// to read back through `window_material`.
+struct AppliedMaterial(&'static str);
+
+/// Report the window material behind the webview.
+///
+/// The frontend guesses optimistically from the platform so the first paint is
+/// right, then calls this to replace the guess with the truth — applying Mica
+/// or vibrancy can fail, and glass surfaces must fall back to opaque when it
+/// does rather than blurring an opaque background.
+#[tauri::command]
+fn window_material(state: State<AppliedMaterial>) -> &'static str {
+    state.0
+}
 
 #[tauri::command]
 fn update_tray_status(app: AppHandle, title: Option<String>, tooltip: String) -> Result<(), String> {
@@ -544,6 +658,11 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             apply_tray_monospaced_digits();
 
+            // Material first, then the button insets: applying it touches the
+            // window's view hierarchy, so the lights are positioned after it
+            // has settled.
+            app.manage(AppliedMaterial(apply_main_window_material(&app.handle())));
+
             // Inset the native traffic lights so they sit inside the floating
             // sidebar (macOS only). Re-applied on resize in `on_window_event`.
             #[cfg(target_os = "macos")]
@@ -606,7 +725,8 @@ pub fn run() {
             show_notification_window,
             take_notification_payload,
             reveal_notification_window,
-            close_notification_window
+            close_notification_window,
+            window_material
         ])
         .run(tauri::generate_context!())
         .expect("error while running Yolo");

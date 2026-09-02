@@ -82,7 +82,7 @@ export function LifePage({ onNavigate }: LifePageProps) {
   // First run (or invalid stored data): collect the inputs first.
   if (!progress) {
     return (
-      <div className="h-full overflow-y-auto px-6 py-7">
+      <div className="page-scroll px-6 py-7">
         <div className="mx-auto max-w-2xl">
           <PageHeader
             icon={Hourglass}

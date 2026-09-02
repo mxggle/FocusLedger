@@ -127,7 +127,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="h-full overflow-y-auto px-6 py-7">
+    <div className="page-scroll px-6 py-7">
       <div className="mx-auto max-w-3xl">
         <PageHeader
           icon={MonitorCog}
