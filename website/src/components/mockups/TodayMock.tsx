@@ -15,6 +15,7 @@ import {
   Waves,
   Zap
 } from "lucide-react";
+import { ContentRegion, type MockPlatform } from "./AppWindow";
 import { Sidebar } from "./Sidebar";
 import { AssistantRail } from "./AssistantRail";
 import { cn } from "../../lib/cn";
@@ -35,59 +36,101 @@ const catColor: Record<string, string> = {
   Writing: "bg-success"
 };
 
+const catHex: Record<string, string> = {
+  Design: "hsl(var(--primary))",
+  Work: "hsl(var(--warning))",
+  Meetings: "hsl(var(--accent))",
+  Writing: "hsl(var(--success))"
+};
+
+/**
+ * A task card as the app draws it since 0.8: one accented control, a badge
+ * only when the status differs from the default, a category spine inset from
+ * the card edge, and elapsed-vs-estimate as a hairline in the bottom padding.
+ */
 function TaskCard({
   title,
   cat,
   meta,
-  status
+  status,
+  progress = 0
 }: {
   title: string;
   cat: keyof typeof catColor;
   meta: string;
   status: "doing" | "todo" | "paused" | "done";
+  /** Elapsed vs. estimate, 0–1. */
+  progress?: number;
 }) {
   const badge = {
     doing: { label: "In progress", cls: "bg-primary-soft text-primary-soft-foreground" },
-    todo: { label: "To do", cls: "bg-muted text-muted-foreground" },
+    todo: null,
     paused: { label: "Paused", cls: "bg-warning-soft text-warning-soft-foreground" },
     done: { label: "Done", cls: "bg-success-soft text-success-soft-foreground" }
   }[status];
+  const active = status === "doing";
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-xl border bg-surface p-3 pl-3.5 shadow-card",
-        status === "doing" ? "border-primary/40 ring-1 ring-inset ring-primary/10" : "border-border"
+        "relative overflow-hidden rounded-lg border py-3 pl-4 pr-3",
+        active ? "border-primary/30 bg-primary-soft/30 shadow-card" : "border-border bg-surface shadow-xs"
       )}
     >
-      <span className={cn("absolute inset-y-0 left-0 w-1", catColor[cat])} />
-      <div className="flex items-center justify-between gap-2">
-        <span className={cn("truncate text-[13px] font-semibold", status === "done" && "text-subtle line-through")}>
-          {title}
+      {/* Category spine — a hairline the height of the content, not a slab. */}
+      <span
+        className="absolute inset-y-3 left-1.5 w-[3px] rounded-full"
+        style={{ backgroundColor: catHex[cat] }}
+      />
+
+      {/* Progress meter, resting in the card's bottom padding. */}
+      {progress > 0 && (
+        <span className="absolute bottom-1.5 left-4 right-3 h-[2px] overflow-hidden rounded-full bg-border/70">
+          <span className="block h-full rounded-full bg-primary" style={{ width: `${progress * 100}%` }} />
         </span>
-        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium", badge.cls)}>{badge.label}</span>
+      )}
+
+      <div className="flex flex-wrap items-start justify-between gap-x-2.5 gap-y-1.5">
+        <div className="min-w-0 flex-1">
+          <div
+            className={cn(
+              "truncate text-[13px] font-semibold tracking-tight",
+              status === "done" && "text-muted-foreground line-through"
+            )}
+          >
+            {title}
+          </div>
+          <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <span className={cn("h-1.5 w-1.5 rounded-full", catColor[cat])} />
+              {cat}
+            </span>
+            <span className="font-medium tabular-nums text-foreground/75">{meta}</span>
+          </div>
+        </div>
+        {badge && (
+          <span className={cn("ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium", badge.cls)}>
+            {badge.label}
+          </span>
+        )}
       </div>
-      <div className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-        <span className={cn("h-2 w-2 rounded-full", catColor[cat])} />
-        {cat}
-        <span className="text-border-strong">·</span>
-        {meta}
-      </div>
+
+      {/* One accented control per card: tinted at rest, solid only on hover. */}
       <div className="mt-2.5 flex items-center gap-1.5">
         {status === "paused" ? (
-          <button className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground">
+          <button className="inline-flex h-7 items-center gap-1.5 rounded-full bg-primary-soft px-2.5 text-[11px] font-semibold text-primary-soft-foreground">
             <RotateCcw size={11} /> Resume
           </button>
         ) : status === "doing" ? (
-          <button className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2.5 py-1 text-[11px] font-semibold text-primary-soft-foreground">
+          <button className="inline-flex h-7 items-center gap-1.5 rounded-full bg-primary px-2.5 text-[11px] font-semibold text-primary-foreground">
             <Play size={11} /> Running
           </button>
         ) : status !== "done" ? (
-          <button className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground">
+          <button className="inline-flex h-7 items-center gap-1.5 rounded-full bg-primary-soft px-2.5 text-[11px] font-semibold text-primary-soft-foreground">
             <Play size={11} /> Start
           </button>
         ) : null}
         {status !== "done" && (
-          <button className="inline-flex items-center gap-1 rounded-full border border-border-strong px-2.5 py-1 text-[11px] font-medium text-foreground">
+          <button className="inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-medium text-muted-foreground">
             <Check size={11} /> Done
           </button>
         )}
@@ -128,13 +171,14 @@ function DayLine() {
 }
 
 /** The real Today screen: day header over Tasks │ Focus │ Log panes. */
-export function TodayMock() {
+export function TodayMock({ platform = "mac" }: { platform?: MockPlatform }) {
   const C = 2 * Math.PI * 44;
   const progress = 0.4;
   return (
-    <div className="relative flex h-[480px] bg-surface text-foreground">
-      <Sidebar className="hidden md:flex" />
+    <div className="relative flex h-[480px] text-foreground">
+      <Sidebar className="hidden md:flex" platform={platform} />
 
+      <ContentRegion platform={platform} className="flex min-w-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Day header — date, live clock, and the day line */}
         <div className="border-b border-border px-4 pb-3 pt-2.5">
@@ -175,10 +219,10 @@ export function TodayMock() {
               </div>
               <div className="text-[10px] font-semibold uppercase tracking-wide text-subtle">Today</div>
               <div className="flex flex-col gap-2">
-                <TaskCard title="Ship onboarding redesign" cat="Design" meta="48m / 2h" status="doing" />
+                <TaskCard title="Ship onboarding redesign" cat="Design" meta="48m / 2h" status="doing" progress={0.4} />
                 <TaskCard title="Review Q3 metrics deck" cat="Work" meta="45 min" status="todo" />
-                <TaskCard title="Draft launch email" cat="Writing" meta="1h" status="paused" />
-                <TaskCard title="1:1 with Priya" cat="Meetings" meta="30 min" status="done" />
+                <TaskCard title="Draft launch email" cat="Writing" meta="48m / 1h" status="paused" progress={0.8} />
+                <TaskCard title="1:1 with Priya" cat="Meetings" meta="30m / 30m" status="done" />
               </div>
             </div>
           </div>
@@ -294,6 +338,7 @@ export function TodayMock() {
       <div className="hidden w-[280px] shrink-0 xl:flex">
         <AssistantRail />
       </div>
+      </ContentRegion>
 
       {/* Floating launcher — shown when the dock is closed */}
       <button

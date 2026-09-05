@@ -106,7 +106,7 @@ export function SubLine({
 }) {
   return (
     <span
-      className="font-medium text-muted-foreground tabular-nums"
+      className="whitespace-nowrap font-medium text-muted-foreground tabular-nums"
       style={{ fontSize: SUBLINE_SIZES[size] }}
     >
       {children}

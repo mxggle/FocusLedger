@@ -1,7 +1,11 @@
 import { fetch } from "@tauri-apps/plugin-http";
+import { withFreshCredential } from "./authSession";
+import { streamChatV2 } from "./chatClient";
+import { PROVIDERS } from "./providerCatalog";
 import {
   buildAiRequest,
   extractErrorMessage,
+  hasAiKey,
   isUnsupportedTemperatureError,
   parseAiResponse,
   providerHttpError,
@@ -9,18 +13,41 @@ import {
   type GenerateInput
 } from "./providers";
 
-export function hasAiKey(settings: AiSettings): boolean {
-  return settings.aiApiKey.trim().length > 0;
-}
+export { hasAiKey };
 
 /**
  * One-shot text generation against the configured provider. Uses the Tauri
  * HTTP plugin (requests go through Rust) so provider APIs that reject
  * browser-origin requests still work.
  */
-export async function generateText(settings: AiSettings, input: GenerateInput): Promise<string> {
-  if (!hasAiKey(settings)) {
+export async function generateText(
+  stored: AiSettings,
+  input: GenerateInput
+): Promise<string> {
+  if (!hasAiKey(stored)) {
     throw new Error("Add an API key in Settings → AI to use AI features");
+  }
+
+  // A signed-in credential may have aged out since it was stored.
+  const settings = await withFreshCredential(stored);
+
+  // Some endpoints (the ChatGPT/Codex backend) only answer as a stream. Read
+  // one to its end rather than keeping a second, unsupported request shape.
+  if (PROVIDERS[settings.aiProvider].streamOnly) {
+    const { text } = await streamChatV2(
+      settings,
+      {
+        system: input.system,
+        messages: [{ role: "user", content: input.prompt }],
+        ...(input.maxTokens !== undefined ? { maxTokens: input.maxTokens } : {}),
+        ...(input.temperature !== undefined ? { temperature: input.temperature } : {})
+      },
+      {}
+    );
+    if (text.trim().length === 0) {
+      throw new Error("The AI provider returned an empty response");
+    }
+    return text.trim();
   }
 
   const request = buildAiRequest(settings, input);

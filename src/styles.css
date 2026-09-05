@@ -2,6 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Yolo — cross-platform design foundation
+   ───────────────────────────────────────────────────────────────────────────
+   One visual language, two native accents. The window sits on a real OS
+   material — NSVisualEffectView on macOS, Mica (or Acrylic) on Windows, both
+   applied in `src-tauri/src/lib.rs` — and everything here paints on top of it.
+   That material samples the desktop *behind* the window, which is the one
+   thing CSS `backdrop-filter` can never do.
+
+   Layer model, which macOS and Windows 11 happen to agree on:
+
+     window   → native material (transparent to CSS)
+     chrome   → translucent: title bar, sidebar, menus, popovers, sheets
+     content  → opaque surfaces: the content region, cards, lists, tables
+
+   Chrome floats on the material; content stays solid so body text is never
+   read off a moving background. Translucency is never stacked on translucency.
+
+   Two attributes on <html> drive every platform-conditional rule here, both
+   published by `src/utils/platform.ts`:
+
+     data-platform  "mac" | "windows" | "linux"
+     data-material  "vibrancy" | "mica" | "acrylic" | "none"
+
+   `data-material` is the *applied* material, reported back by Rust — applying
+   Mica fails on Windows 10 and whenever the user turns off transparency, so
+   the fallbacks below are load-bearing, not theoretical.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 /* Prevent drag/rubber-band selection on containers for native app feel */
 body,
 button,
@@ -30,87 +59,123 @@ textarea,
      of always rendering light chrome. Overridden by .dark below. */
   color-scheme: light;
 
-  /* Backgrounds — cool porcelain with a whisper of blue */
-  --background: 218 28% 97%;
+  /* Backgrounds. `--background` is the *opaque* fallback used on platforms
+     without window vibrancy (Windows/Linux) and under
+     `prefers-reduced-transparency`. On macOS the canvas stays transparent so
+     the native material shows through. */
+  --background: 240 6% 96%;
   --surface: 0 0% 100%;
-  --surface-2: 218 28% 98.5%;
+  --surface-2: 240 6% 97.5%;
   --elevated: 0 0% 100%;
 
-  /* Text — ink with a blue undertone */
-  --foreground: 222 26% 11%;
-  --muted: 219 22% 94%;
-  --muted-foreground: 220 10% 45%;
-  --subtle-foreground: 220 8% 57%;
+  /* Text — macOS label colors. Tahoe leans on weight and opacity for
+     hierarchy rather than many distinct hues. */
+  --foreground: 240 6% 10%;
+  --muted: 240 5% 93%;
+  --muted-foreground: 240 4% 44%;
+  --subtle-foreground: 240 4% 58%;
 
-  /* Borders — hairline, very low contrast */
-  --border: 219 20% 90.5%;
-  --border-strong: 219 16% 84%;
-  --input: 219 16% 85%;
+  /* Separators — hairline. macOS separatorColor is ~10% black. */
+  --border: 240 6% 88%;
+  --border-strong: 240 5% 78%;
+  --input: 240 5% 82%;
 
-  /* Accent — electric blue */
-  --ring: 219 92% 60%;
-  --primary: 221 85% 54%;
+  /* Accent — macOS systemBlue (#007AFF). Tahoe controls are flat and tinted,
+     not gradient-filled. */
+  --ring: 211 100% 50%;
+  --primary: 211 100% 50%;
   --primary-foreground: 0 0% 100%;
-  --primary-hover: 221 83% 48%;
-  --primary-soft: 219 100% 96.5%;
-  --primary-soft-foreground: 221 75% 46%;
+  --primary-hover: 211 100% 44%;
+  --primary-soft: 211 100% 95%;
+  --primary-soft-foreground: 211 100% 38%;
 
-  /* Signature gradient — azure → cyan. Used for primary actions, active nav,
-     hero numbers. Always pair with bg-primary as the fallback. */
+  /* Brand gradient — retained for the logo lockup and hero numerals only.
+     Tahoe controls no longer wear it. */
   --gradient-accent: linear-gradient(
     135deg,
-    hsl(226 84% 56%) 0%,
-    hsl(212 92% 45%) 55%,
-    hsl(197 92% 35%) 100%
+    hsl(211 100% 54%) 0%,
+    hsl(199 100% 46%) 100%
   );
   --gradient-accent-hover: linear-gradient(
     135deg,
-    hsl(226 82% 47%) 0%,
-    hsl(212 90% 40%) 55%,
-    hsl(197 90% 31%) 100%
+    hsl(211 100% 48%) 0%,
+    hsl(199 100% 40%) 100%
   );
 
   /* Focus-stage accent — the active ambient scene overrides this (scoped to the
-     focus surface) so the ring, controls, and glow belong to the scene. Defaults
-     to the brand accent so "no scene" looks exactly as before. */
+     focus surface) so the ring, controls, and glow belong to the scene. */
   --focus-accent: var(--primary);
 
-  /* Semantic */
-  --destructive: 0 72% 51%;
+  /* Semantic — macOS system colors */
+  --destructive: 4 100% 59%;          /* systemRed    #FF3B30 */
   --destructive-foreground: 0 0% 100%;
-  --destructive-soft: 0 86% 96.5%;
-  --destructive-soft-foreground: 0 70% 45%;
+  --destructive-soft: 4 100% 96%;
+  --destructive-soft-foreground: 4 72% 45%;
 
-  --success: 142 69% 40%;
+  --success: 135 68% 48%;             /* systemGreen  #28CD41 */
   --success-foreground: 0 0% 100%;
-  --success-soft: 142 60% 95%;
-  --success-soft-foreground: 142 64% 28%;
+  --success-soft: 135 60% 95%;
+  --success-soft-foreground: 135 70% 27%;
 
-  --warning: 33 92% 48%;
+  --warning: 35 100% 50%;             /* systemOrange #FF9500 */
   --warning-foreground: 0 0% 100%;
-  --warning-soft: 38 96% 94%;
-  --warning-soft-foreground: 28 80% 36%;
+  --warning-soft: 38 100% 94%;
+  --warning-soft-foreground: 28 85% 35%;
 
-  /* Radius */
-  --radius-sm: 7px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
+  /* ── Radii ──────────────────────────────────────────────────────────────
+     Tahoe's signature is *concentric* corners: a child's radius equals its
+     parent's radius minus the padding between them. Keeping the scale on a
+     4px rhythm makes that arithmetic land on real tokens.
+
+       parent lg (16) + 4px inset → child md (12)
+       parent md (12) + 4px inset → child sm (8)
+
+     Controls are capsules in Tahoe, so `--radius-full` is the button default
+     rather than an exception. */
+  /* Height of the app-drawn title bar. The macOS traffic-light inset in
+     `src-tauri/src/lib.rs` centres the buttons in this height, so the two
+     must change together. */
+  --titlebar-height: 40px;
+
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 26px;
   --radius-full: 9999px;
 
-  /* Shadows — layered, soft, tinted with the canvas's blue ink so
-     elevation feels part of the palette instead of generic gray. */
-  --shadow-xs: 0 1px 2px hsl(220 30% 20% / 0.05);
-  --shadow-sm: 0 1px 2px hsl(220 30% 20% / 0.06), 0 1px 1px hsl(220 30% 20% / 0.04);
-  --shadow-card: 0 1px 2px hsl(220 30% 20% / 0.04), 0 4px 12px -2px hsl(220 30% 20% / 0.07);
-  --shadow-md: 0 2px 4px hsl(220 30% 20% / 0.05), 0 8px 20px -4px hsl(220 30% 20% / 0.11);
-  --shadow-pop: 0 4px 8px -2px hsl(220 30% 20% / 0.08), 0 16px 40px -8px hsl(220 30% 20% / 0.2);
-  --ring-shadow: 0 0 0 3px hsl(var(--ring) / 0.18);
-  /* Accent glow — hover/active state for gradient (primary) surfaces. */
-  --shadow-glow: 0 1px 2px hsl(220 60% 25% / 0.2), 0 4px 16px -2px hsl(var(--primary) / 0.45);
+  /* ── Liquid Glass ───────────────────────────────────────────────────────
+     A Tahoe glass surface is four things at once: a blurred + saturated
+     backdrop, a translucent body tint, a bright specular top edge, and a
+     hairline outer border. Missing any one of them reads as "frosted div". */
+  --glass-blur: 30px;
+  --glass-saturate: 180%;
+  --glass-tint: 0 0% 100%;
+  --glass-opacity: 0.62;
+  --glass-opacity-thick: 0.82;
+  --glass-specular: 0 0% 100%;
+  --glass-specular-opacity: 0.75;
+  --glass-hairline: 240 10% 50%;
+  --glass-hairline-opacity: 0.16;
 
-  /* Motion */
-  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* ── Shadows ────────────────────────────────────────────────────────────
+     Tahoe separates layers with material and hairlines first, shadow second.
+     These are deliberately softer and wider than a Material-style scale. */
+  --shadow-xs: 0 1px 1px hsl(240 10% 10% / 0.04);
+  --shadow-sm: 0 1px 2px hsl(240 10% 10% / 0.06);
+  --shadow-card: 0 1px 2px hsl(240 10% 10% / 0.05), 0 2px 8px -2px hsl(240 10% 10% / 0.06);
+  --shadow-md: 0 2px 6px -1px hsl(240 10% 10% / 0.07), 0 8px 24px -6px hsl(240 10% 10% / 0.12);
+  --shadow-pop: 0 4px 12px -2px hsl(240 10% 10% / 0.1), 0 24px 56px -12px hsl(240 10% 10% / 0.24);
+  --shadow-glass: 0 1px 2px hsl(240 10% 10% / 0.06), 0 12px 32px -8px hsl(240 10% 10% / 0.18);
+  --ring-shadow: 0 0 0 3.5px hsl(var(--ring) / 0.35);
+  /* Accent glow — retained for the focus stage's earned moments. */
+  --shadow-glow: 0 1px 2px hsl(240 20% 15% / 0.18), 0 4px 16px -2px hsl(var(--primary) / 0.4);
+
+  /* ── Motion ─────────────────────────────────────────────────────────────
+     Curves live in `src/utils/motion.ts` for framer-motion; these mirror them
+     for plain CSS transitions. Calm arrival, no overshoot. */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --duration-fast: 130ms;
   --duration-normal: 200ms;
@@ -119,70 +184,74 @@ textarea,
 .dark {
   color-scheme: dark;
 
-  /* Backgrounds — near-black navy ink, layered */
-  --background: 222 28% 6.5%;
-  --surface: 221 22% 9.5%;
-  --surface-2: 221 20% 12%;
-  --elevated: 220 19% 13%;
+  --background: 240 6% 11%;
+  --surface: 240 5% 15%;
+  --surface-2: 240 5% 18%;
+  --elevated: 240 5% 20%;
 
-  /* Text */
-  --foreground: 218 22% 94%;
-  --muted: 221 18% 16%;
-  --muted-foreground: 220 12% 64%;
-  --subtle-foreground: 220 10% 50%;
+  --foreground: 0 0% 96%;
+  --muted: 240 5% 22%;
+  --muted-foreground: 240 5% 65%;
+  --subtle-foreground: 240 4% 50%;
 
-  /* Borders */
-  --border: 221 16% 18%;
-  --border-strong: 221 14% 25%;
-  --input: 221 14% 23%;
+  --border: 240 5% 26%;
+  --border-strong: 240 5% 34%;
+  --input: 240 5% 30%;
 
-  /* Accent — brighter electric blue for dark canvas */
-  --ring: 212 96% 64%;
-  --primary: 213 94% 62%;
+  /* systemBlue, dark variant (#0A84FF) */
+  --ring: 211 100% 55%;
+  --primary: 211 100% 52%;
   --primary-foreground: 0 0% 100%;
-  --primary-hover: 213 96% 68%;
-  --primary-soft: 219 55% 18%;
-  --primary-soft-foreground: 210 100% 82%;
+  --primary-hover: 211 100% 60%;
+  --primary-soft: 211 70% 22%;
+  --primary-soft-foreground: 211 100% 78%;
 
   --gradient-accent: linear-gradient(
     135deg,
-    hsl(222 92% 54%) 0%,
-    hsl(208 95% 43%) 55%,
-    hsl(194 95% 32%) 100%
+    hsl(211 100% 56%) 0%,
+    hsl(199 100% 46%) 100%
   );
   --gradient-accent-hover: linear-gradient(
     135deg,
-    hsl(222 94% 50%) 0%,
-    hsl(208 96% 39%) 55%,
-    hsl(194 96% 29%) 100%
+    hsl(211 100% 62%) 0%,
+    hsl(199 100% 52%) 100%
   );
 
   --focus-accent: var(--primary);
 
-  /* Semantic */
-  --destructive: 0 72% 58%;
+  --destructive: 3 100% 61%;          /* #FF453A */
   --destructive-foreground: 0 0% 100%;
-  --destructive-soft: 0 50% 18%;
-  --destructive-soft-foreground: 0 80% 80%;
+  --destructive-soft: 3 45% 22%;
+  --destructive-soft-foreground: 3 100% 80%;
 
-  --success: 142 60% 48%;
-  --success-foreground: 0 0% 100%;
-  --success-soft: 142 38% 16%;
-  --success-soft-foreground: 142 60% 66%;
+  --success: 135 67% 52%;             /* #32D74B */
+  --success-foreground: 0 0% 0%;
+  --success-soft: 135 35% 18%;
+  --success-soft-foreground: 135 65% 68%;
 
-  --warning: 35 92% 58%;
-  --warning-foreground: 224 28% 8%;
-  --warning-soft: 33 50% 18%;
-  --warning-soft-foreground: 38 92% 72%;
+  --warning: 38 100% 52%;             /* #FF9F0A */
+  --warning-foreground: 240 6% 10%;
+  --warning-soft: 38 45% 20%;
+  --warning-soft-foreground: 38 100% 72%;
 
-  /* Shadows — deeper for dark canvas */
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px -2px rgba(0, 0, 0, 0.5);
-  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.4), 0 10px 24px -4px rgba(0, 0, 0, 0.6);
-  --shadow-pop: 0 8px 16px -4px rgba(0, 0, 0, 0.5), 0 20px 48px -8px rgba(0, 0, 0, 0.7);
-  --ring-shadow: 0 0 0 3px hsl(var(--ring) / 0.28);
-  --shadow-glow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 4px 18px -2px hsl(var(--primary) / 0.5);
+  /* Dark glass is a *dimming* layer, not a brightening one: the tint goes
+     near-black and the specular edge drops to a faint rim light. */
+  --glass-tint: 240 8% 12%;
+  --glass-opacity: 0.6;
+  --glass-opacity-thick: 0.8;
+  --glass-specular: 0 0% 100%;
+  --glass-specular-opacity: 0.14;
+  --glass-hairline: 0 0% 0%;
+  --glass-hairline-opacity: 0.5;
+
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.35), 0 2px 10px -2px rgb(0 0 0 / 0.45);
+  --shadow-md: 0 2px 6px -1px rgb(0 0 0 / 0.45), 0 10px 28px -6px rgb(0 0 0 / 0.55);
+  --shadow-pop: 0 6px 16px -4px rgb(0 0 0 / 0.5), 0 28px 64px -12px rgb(0 0 0 / 0.7);
+  --shadow-glass: 0 1px 2px rgb(0 0 0 / 0.4), 0 14px 36px -8px rgb(0 0 0 / 0.6);
+  --ring-shadow: 0 0 0 3.5px hsl(var(--ring) / 0.45);
+  --shadow-glow: 0 1px 2px rgb(0 0 0 / 0.5), 0 4px 18px -2px hsl(var(--primary) / 0.45);
 }
 
 /* ─── Base ──────────────────────────────────────────────────────────────── */
@@ -199,15 +268,23 @@ body,
 
 body {
   margin: 0;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
-  background: hsl(var(--background));
+  /* San Francisco first: `-apple-system` resolves to SF Pro Text/Display with
+     the correct optical size per weight, which is what makes a web-rendered
+     window read as a native macOS app. Inter stays as the cross-platform
+     fallback for Windows/Linux builds. */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    ui-sans-serif, system-ui, Inter, "Segoe UI", sans-serif;
+  /* Transparent so the native window material shows through. The opaque
+     fallback is applied by `.app-canvas` on non-vibrant platforms. */
+  background: transparent;
   color: hsl(var(--foreground));
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  font-feature-settings: "cv11", "ss01";
-  font-variant-ligatures: contextual;
+  /* SF Pro handles optical sizing itself; the old Inter-specific `cv11`/`ss01`
+     features are meaningless here and were silently ignored on macOS. */
+  font-optical-sizing: auto;
+  font-synthesis: none;
 }
 
 button,
@@ -218,12 +295,12 @@ select {
 }
 
 ::selection {
-  background: hsl(var(--primary) / 0.18);
+  background: hsl(var(--primary) / 0.25);
   color: hsl(var(--foreground));
 }
 
 /* ─── Focus ring ─────────────────────────────────────────────────────────── */
-/* Soft, modern focus: subtle outer glow rather than a hard outline. */
+/* macOS focus is a soft accent halo hugging the control's own shape. */
 
 :focus-visible {
   outline: none;
@@ -235,28 +312,153 @@ select {
   font-variant-numeric: tabular-nums;
 }
 
-/* ─── Master theme utilities ─────────────────────────────────────────────── */
+/* ─── App canvas ─────────────────────────────────────────────────────────── */
+/* Deliberately *empty* wherever a material was applied: the OS material is the
+   background, and painting anything opaque here would hide it. Depth comes
+   from real material and layering, not from a painted-on gradient.
 
-/* App canvas: the flat background plus two barely-there aurora washes anchored
-   to the top corners — azure on the left, cyan on the right. Fixed attachment
-   keeps the wash still while content scrolls, which reads as depth. */
+   Where no material could be applied — a browser dev server, Linux, Windows 10
+   without Acrylic, or transparency switched off — the canvas becomes a flat
+   opaque surface and the app degrades to a perfectly ordinary solid window. */
+
 .app-canvas {
+  background-color: transparent;
+}
+
+html[data-material="none"] .app-canvas {
   background-color: hsl(var(--background));
-  background-image:
-    radial-gradient(1100px 520px at 6% -12%, hsl(var(--primary) / 0.07), transparent 62%),
-    radial-gradient(900px 480px at 102% -6%, hsl(194 90% 52% / 0.05), transparent 58%),
-    radial-gradient(820px 460px at 50% 112%, hsl(206 90% 55% / 0.045), transparent 60%);
-  background-attachment: fixed;
 }
 
-.dark .app-canvas {
-  background-image:
-    radial-gradient(1100px 520px at 6% -12%, hsl(var(--primary) / 0.1), transparent 62%),
-    radial-gradient(900px 480px at 102% -6%, hsl(194 92% 56% / 0.08), transparent 58%),
-    radial-gradient(820px 460px at 50% 112%, hsl(206 92% 58% / 0.06), transparent 60%);
+@media (prefers-reduced-transparency: reduce) {
+  .app-canvas {
+    background-color: hsl(var(--background));
+  }
 }
 
-/* Signature gradient text — hero titles and stat numbers. */
+/* ─── Liquid Glass ───────────────────────────────────────────────────────── */
+/* Chrome-level surfaces only: sidebar, toolbars, menus, popovers, sheets.
+   Never nest one inside another. */
+
+.glass {
+  position: relative;
+  background-color: hsl(var(--glass-tint) / var(--glass-opacity));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid hsl(var(--glass-hairline) / var(--glass-hairline-opacity));
+  box-shadow: var(--shadow-glass);
+}
+
+/* Thicker variant for surfaces that must stay readable over busy content —
+   menus, popovers and sheets, where text sits directly on the material. */
+.glass-thick {
+  background-color: hsl(var(--glass-tint) / var(--glass-opacity-thick));
+}
+
+/* The specular top edge. A real Tahoe glass surface catches light along its
+   upper rim; this single inset hairline is what sells the material as glass
+   rather than a blurred rectangle. Uses a pseudo-element so it inherits the
+   host's border-radius and never affects layout. */
+.glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 1px 0 0 hsl(var(--glass-specular) / var(--glass-specular-opacity));
+}
+
+/* Accessibility: when the system asks for less transparency, glass becomes a
+   plain opaque surface. Same shape, same hierarchy, no blur. */
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background-color: hsl(var(--surface));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border-color: hsl(var(--border));
+  }
+  .glass-thick {
+    background-color: hsl(var(--surface));
+  }
+  .glass::after {
+    display: none;
+  }
+}
+
+/* Windows/Linux have no window vibrancy behind the webview, so glass there
+   would blur nothing. Fall back to a solid surface. */
+html[data-material="none"] .glass {
+  background-color: hsl(var(--surface));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-color: hsl(var(--border));
+}
+
+html[data-material="none"] .glass::after {
+  display: none;
+}
+
+/* ─── Shell surfaces ─────────────────────────────────────────────────────── */
+/* The two halves of the frame: a navigation rail on the material, and an
+   opaque region holding the page. Finder and Windows Settings both split the
+   window exactly this way. */
+
+/* Sidebar — sits on the material, adding only enough tint to separate it from
+   the content region beside it. */
+.sidebar-surface {
+  background-color: transparent;
+}
+
+/* macOS vibrancy is a *frosting*, so the rail can carry a faint tint of its
+   own without muddying. */
+html[data-material="vibrancy"] .sidebar-surface {
+  background-color: hsl(var(--glass-tint) / 0.1);
+}
+
+/* Mica and Acrylic already tint with the system accent and wallpaper; adding
+   our own layer on top is what makes a Windows app look "themed" rather than
+   native. Leave it bare. */
+html[data-material="mica"] .sidebar-surface,
+html[data-material="acrylic"] .sidebar-surface {
+  background-color: transparent;
+}
+
+/* No material: the rail needs to become a real surface, with a divider to do
+   the separating that translucency was doing. */
+html[data-material="none"] .sidebar-surface {
+  background-color: hsl(var(--surface-2));
+  border-right: 1px solid hsl(var(--border));
+}
+
+/* Content region — always opaque. Body text never sits on the material. */
+.content-region {
+  position: relative;
+  background-color: hsl(var(--surface));
+  border: 1px solid hsl(var(--border) / 0.8);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  /* Inset from the window's trailing and bottom edges so it reads as a card
+     floating on the material — the macOS treatment. */
+  margin: 0 8px 8px 0;
+}
+
+/* Windows 11 does not float the content: it meets the window edge and rounds
+   only the corner facing the nav pane. Matching that is most of what makes the
+   frame feel like a Windows app rather than a ported Mac one. */
+html[data-platform="windows"] .content-region {
+  margin: 0;
+  border-width: 1px 0 0 1px;
+  border-radius: var(--radius-md) 0 0 0;
+  box-shadow: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .sidebar-surface {
+    background-color: hsl(var(--surface-2));
+    border-right: 1px solid hsl(var(--border));
+  }
+}
+
+/* Signature gradient text — the logo lockup and hero numerals. */
 .text-gradient {
   background-image: var(--gradient-accent);
   -webkit-background-clip: text;
@@ -321,6 +523,45 @@ select {
   }
 }
 
+/* ─── Platform accents ──────────────────────────────────────────────────── */
+/* The design is shared; these are the places where matching the host OS beats
+   being consistent with ourselves. */
+
+/* Typography. The body stack in `body` leads with `-apple-system` so macOS
+   resolves SF Pro at the right optical size. Windows 11's UI face is Segoe UI
+   Variable, whose "Text" optical size is the one meant for body copy — asking
+   for it by name is what stops a Windows build from rendering in the fallback
+   and reading subtly foreign. */
+html[data-platform="windows"] body {
+  font-family: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI",
+    ui-sans-serif, system-ui, Inter, sans-serif;
+  /* Segoe is drawn a touch smaller than SF at the same nominal size, and
+     Windows expects 14px body text where AppKit expects 13px. */
+  font-size: 14px;
+}
+
+/* Corner radii. Tahoe's concentric capsules are unmistakably macOS; Windows 11
+   uses a tighter, flatter scale (8px surfaces, 4px controls). Overriding the
+   tokens re-skins every component at once, because they all consume these. */
+html[data-platform="windows"] {
+  --radius-xs: 4px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+}
+
+/* Focus. macOS draws a soft accent halo around the control; Windows 11 draws a
+   crisp two-tone focus rectangle. Both are the platform's real focus idiom, and
+   both clear WCAG's contrast requirement for focus indicators. */
+html[data-platform="windows"] :focus-visible {
+  box-shadow:
+    0 0 0 1px hsl(var(--background)),
+    0 0 0 3px hsl(var(--foreground));
+  border-color: hsl(var(--border-strong));
+}
+
 /* ─── Reduced motion ─────────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
@@ -333,26 +574,99 @@ select {
   }
 }
 
+/* ─── Page scroll regions ────────────────────────────────────────────────── */
+/* Every route's root scrolls independently, and the scrollbars below are
+   *classic* ones — giving `::-webkit-scrollbar` an explicit width opts WebKit
+   out of overlay scrollers — which means they occupy real layout space.
+   Without a reserved gutter, a tall page (Settings, Life, Plan) shows the bar
+   and a short one doesn't, so switching routes shifts the content sideways by
+   the scrollbar's width. That is the page-change jitter.
+
+   `overflow-y: scroll` reserves the track unconditionally and is understood by
+   every engine we ship on; `scrollbar-gutter: stable` is the modern, more
+   precise spelling of the same intent, and newer engines honour it. Together
+   the gutter is always there, and because the track is transparent and gets no
+   thumb until the content actually overflows, a page that doesn't scroll shows
+   nothing at all — the space is reserved invisibly. */
+
+.page-scroll {
+  height: 100%;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
+/* The fixed-height counterpart, for routes whose layout fills the viewport and
+   never scrolls as a whole (Today, Life). They need no scrollbar of their own,
+   but they must reserve the same gutter as `.page-scroll` — otherwise the page
+   is 11px wider on Today than on Backlog and every centred column steps
+   sideways as you navigate between them.
+
+   `overflow-y: scroll` is the reservation (identical to `.page-scroll`, so the
+   two agree on every engine including WKWebViews that predate
+   `scrollbar-gutter`); no thumb ever appears because these layouts size
+   themselves to the box. `overflow-x: hidden` keeps the horizontal axis
+   clipping the way these layouts already assumed. */
+.page-fixed {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
 /* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+/* Thin, unobtrusive bars on both platforms.
+
+   Two mechanisms are in play, and they are not redundant. `scrollbar-width` /
+   `scrollbar-color` at the bottom are the standard properties, and they are
+   what Chromium (WebView2, and Safari 18.2+) actually honours. The
+   `::-webkit-scrollbar` rules below are the fallback for older WKWebView,
+   where the standard properties are unsupported — there, and only there, do
+   these widths govern. Keep the two in agreement: 11px matches `thin`. */
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.22);
+  background: hsl(var(--foreground) / 0.2);
   border-radius: 9999px;
   border: 3px solid transparent;
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.4);
+  background: hsl(var(--foreground) / 0.35);
   background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 * {
   scrollbar-width: thin;
-  scrollbar-color: hsl(var(--muted-foreground) / 0.22) transparent;
+  scrollbar-color: hsl(var(--foreground) / 0.2) transparent;
+}
+
+/* Windows gets a slightly stronger thumb, because Mica behind a translucent
+   pane washes out a 0.2-alpha bar more than macOS vibrancy does.
+
+   Width is deliberately *not* set here. `scrollbar-width` above is what
+   actually sizes the bar in Chromium 121+ (thin = 11px, auto = 15px), and when
+   it is set to anything but `auto` the engine ignores `::-webkit-scrollbar`
+   sizing entirely — a `::-webkit-scrollbar { width }` override is silently
+   dead. Both platforms therefore stay on `thin`, which is also what Windows 11
+   itself now uses. Change the width by changing `scrollbar-width`. */
+html[data-platform="windows"] * {
+  scrollbar-color: hsl(var(--foreground) / 0.28) transparent;
+}
+
+html[data-platform="windows"] ::-webkit-scrollbar-thumb {
+  background: hsl(var(--foreground) / 0.28);
+  background-clip: padding-box;
+}
+
+html[data-platform="windows"] ::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--foreground) / 0.42);
+  background-clip: padding-box;
 }

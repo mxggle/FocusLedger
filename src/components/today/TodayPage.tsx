@@ -1,5 +1,6 @@
 import { ListTodo, ScrollText, Timer } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useMeasure } from "../../hooks/useMeasure";
 import { useRestStore } from "../../stores/restStore";
 import { useTaskStore } from "../../stores/taskStore";
 import { useUiStore } from "../../stores/uiStore";
@@ -15,8 +16,15 @@ import { TodaySummary } from "./TodaySummary";
 
 // Preserve usable task/focus widths across the supported desktop window range.
 // Focus stays visible; the secondary Log pane gives way first.
-const BREAK_LOG = 1240;
-const BREAK_TASKS = 820;
+//
+// These are measured against the *pane row*, not the window. The window is the
+// wrong ruler: the sidebar (232px expanded, 64px collapsed) and the assistant
+// dock (360-640px, a flex sibling in `content-region`) both take their width
+// out of this row without changing `window.innerWidth`, and the dock does not
+// fire a `resize` event at all. Sizing off the window meant opening the dock
+// left all three panes expanded in ~980px of space, crushing each to ~300px.
+const BREAK_LOG = 960;
+const BREAK_TASKS = 540;
 
 export function TodayPage() {
   const todayPanes = useUiStore((state) => state.todayPanes);
@@ -34,45 +42,49 @@ export function TodayPage() {
     (task) => task.status !== "done" && task.status !== "dropped"
   ).length;
 
-  // Responsive auto-collapse on window resize. Auto-collapses never persist —
-  // a transient window shrink must not rewrite the saved layout — and panes
-  // *we* collapsed re-expand when the window grows back. Panes the user
-  // collapsed themselves are left alone in both directions.
-  useEffect(() => {
-    const autoCollapsed = { log: false, tasks: false };
+  // The row the three panes share. Its width is set by the content region, not
+  // by the panes inside it, so collapsing a pane cannot feed back into the
+  // measurement and start a loop.
+  const [paneRowRef, paneRow] = useMeasure<HTMLDivElement>();
 
-    function apply(pane: "log" | "tasks", breakpoint: number, width: number) {
+  // Panes *we* collapsed, so exactly those re-expand when the room comes back.
+  // A ref rather than state: flipping it must not re-run the effect.
+  const autoCollapsed = useRef({ log: false, tasks: false });
+
+  // Responsive auto-collapse as the available width changes — window resize,
+  // sidebar toggle, or the assistant dock opening and being dragged wider.
+  // Auto-collapses never persist (a transient squeeze must not rewrite the
+  // saved layout), and panes the user collapsed themselves are left alone in
+  // both directions.
+  useEffect(() => {
+    const width = paneRow.width;
+    // Pre-measurement: 0 is "not known yet", not "no room".
+    if (width === 0) return;
+
+    function apply(pane: "log" | "tasks", breakpoint: number) {
       // Read fresh pane state — a mount-time snapshot would go stale as the
       // user toggles panes.
       const { todayPanes: panes, setTodayPaneCollapsed } = useUiStore.getState();
       if (width < breakpoint && !panes[pane]) {
         setTodayPaneCollapsed(pane, true, { persist: false });
-        autoCollapsed[pane] = true;
-      } else if (width >= breakpoint && panes[pane] && autoCollapsed[pane]) {
+        autoCollapsed.current[pane] = true;
+      } else if (width >= breakpoint && panes[pane] && autoCollapsed.current[pane]) {
         setTodayPaneCollapsed(pane, false, { persist: false });
-        autoCollapsed[pane] = false;
+        autoCollapsed.current[pane] = false;
       }
     }
 
-    function handleResize() {
-      const w = window.innerWidth;
-      apply("log", BREAK_LOG, w);
-      apply("tasks", BREAK_TASKS, w);
-    }
-
-    window.addEventListener("resize", handleResize);
-    // Check on mount
-    handleResize();
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+    apply("log", BREAK_LOG);
+    apply("tasks", BREAK_TASKS);
+  }, [paneRow.width]);
 
   return (
     // The day header sits on the aurora canvas; below it the three panes
     // float as separate cards with gaps, so the wash shows through between
     // surfaces instead of the page reading as one partitioned sheet.
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="page-fixed flex flex-col">
       <DayHeader />
-      <div className="flex min-h-0 flex-1 gap-2.5 overflow-hidden px-5 pb-4">
+      <div ref={paneRowRef} className="flex min-h-0 flex-1 gap-2.5 overflow-hidden px-5 pb-4">
         <CollapsiblePane
           title="Tasks"
           icon={ListTodo}

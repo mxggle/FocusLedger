@@ -1,6 +1,6 @@
 import { BarChart3, CalendarDays, CheckSquare, Hourglass, Inbox, Info, Settings, Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { LogoMark } from "../ui/Logo";
+import type { MockPlatform } from "./AppWindow";
 import { cn } from "../../lib/cn";
 
 const ITEMS: { icon: LucideIcon; label: string; active?: boolean }[] = [
@@ -12,38 +12,44 @@ const ITEMS: { icon: LucideIcon; label: string; active?: boolean }[] = [
   { icon: BarChart3, label: "History" }
 ];
 
-/** Left rail matching the app's real navigation (macOS floating style). */
-export function Sidebar({ className }: { className?: string }) {
+const FOOTER: { icon: LucideIcon; label: string }[] = [
+  { icon: Settings, label: "Settings" },
+  { icon: Info, label: "About" }
+];
+
+/**
+ * The navigation rail, as the app draws it: sitting directly on the window
+ * material with no fill or divider of its own. The only platform difference is
+ * how the selected row is marked — a filled capsule on macOS, the same capsule
+ * plus Fluent's leading selection bar on Windows.
+ */
+export function Sidebar({ className, platform = "mac" }: { className?: string; platform?: MockPlatform }) {
+  const row = (Icon: LucideIcon, label: string, active?: boolean) => (
+    <div
+      key={label}
+      className={cn(
+        "relative flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium",
+        active ? "bg-primary-soft text-primary-soft-foreground" : "text-muted-foreground"
+      )}
+    >
+      {active && platform === "windows" && (
+        <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-primary" />
+      )}
+      <Icon size={16} />
+      {label}
+    </div>
+  );
+
   return (
-    <nav className={cn("flex w-[200px] shrink-0 flex-col gap-0.5 border-r border-border bg-surface-2 p-3", className)}>
-      <div className="mb-4 flex items-center gap-2.5 px-1.5">
-        <LogoMark size={26} />
-        <div className="leading-tight">
-          <div className="text-[13px] font-semibold tracking-tight">Yolo</div>
-          <div className="text-[10px] text-muted-foreground">Make your time count.</div>
-        </div>
+    <div className={cn("flex w-[196px] shrink-0 flex-col", className)}>
+      <nav className="flex-1 space-y-0.5 px-3 pb-2">
+        {ITEMS.map(({ icon, label, active }) => row(icon, label, active))}
+      </nav>
+      <p className="px-3 pb-2 text-[11px] leading-snug text-subtle">Make your time count.</p>
+      <div className="px-3 pb-3">
+        <div className="mb-2 h-px bg-border/70" />
+        <nav className="space-y-0.5">{FOOTER.map(({ icon, label }) => row(icon, label))}</nav>
       </div>
-      {ITEMS.map(({ icon: Icon, label, active }) => (
-        <div
-          key={label}
-          className={cn(
-            "relative flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium",
-            active ? "bg-primary-soft text-primary-soft-foreground" : "text-muted-foreground"
-          )}
-        >
-          {active && <span className="absolute left-0 h-5 w-[3px] rounded-r-full bg-primary" />}
-          <Icon size={16} className={active ? "text-primary" : ""} />
-          {label}
-        </div>
-      ))}
-      <div className="mt-auto flex flex-col gap-0.5 border-t border-border pt-2">
-        <div className="flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium text-muted-foreground">
-          <Settings size={16} /> Settings
-        </div>
-        <div className="flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium text-muted-foreground">
-          <Info size={16} /> About
-        </div>
-      </div>
-    </nav>
+    </div>
   );
 }

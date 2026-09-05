@@ -320,3 +320,70 @@ describe("streamChatV2", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("streamChatV2 against the Responses wire (ChatGPT/Codex)", () => {
+  beforeEach(() => {
+    fetch.mockReset();
+  });
+
+  const codex = () => settings({ aiProvider: "chatgpt", aiApiKey: "access-token" });
+
+  it("streams output_text deltas and reads a completed function call", async () => {
+    fetch.mockResolvedValue(
+      sseResponse([
+        'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"Two "}\n\n',
+        'data: {"type":"response.output_text.delta","delta":"tasks left."}\n\n',
+        'data: {"type":"response.output_item.done","item":{"type":"function_call","call_id":"call_7","name":"list_tasks","arguments":"{\\"scope\\":\\"today\\"}"}}\n\n',
+        'data: {"type":"response.completed","response":{"status":"completed"}}\n\n'
+      ])
+    );
+
+    const tokens: string[] = [];
+    const result = await streamChatV2(codex(), chatInput, {
+      onToken: (chunk) => tokens.push(chunk)
+    });
+
+    expect(tokens).toEqual(["Two ", "tasks left."]);
+    expect(result.text).toBe("Two tasks left.");
+    expect(result.toolCalls).toEqual([
+      { name: "list_tasks", args: { scope: "today" }, id: "call_7" }
+    ]);
+  });
+
+  it("ignores reasoning and lifecycle events it has no use for", async () => {
+    fetch.mockResolvedValue(
+      sseResponse([
+        'data: {"type":"response.created","response":{"id":"resp_1"}}\n\n',
+        'data: {"type":"response.reasoning_summary_text.delta","delta":"thinking"}\n\n',
+        'data: {"type":"response.output_text.delta","delta":"Answer"}\n\n'
+      ])
+    );
+
+    const result = await streamChatV2(codex(), chatInput, {});
+    expect(result.text).toBe("Answer");
+  });
+
+  it("marks a response cut short by the token limit", async () => {
+    fetch.mockResolvedValue(
+      sseResponse([
+        'data: {"type":"response.output_text.delta","delta":"half"}\n\n',
+        'data: {"type":"response.incomplete","response":{"incomplete_details":{"reason":"max_output_tokens"}}}\n\n'
+      ])
+    );
+
+    const result = await streamChatV2(codex(), chatInput, {});
+    expect(result.truncated).toBe(true);
+    expect(result.text).toBe("half");
+  });
+
+  it("raises an error the provider streamed rather than returning a half answer", async () => {
+    fetch.mockResolvedValue(
+      sseResponse([
+        'data: {"type":"response.output_text.delta","delta":"partial"}\n\n',
+        'data: {"type":"response.failed","response":{"error":{"message":"usage limit reached"}}}\n\n'
+      ])
+    );
+
+    await expect(streamChatV2(codex(), chatInput, {})).rejects.toThrow("usage limit reached");
+  });
+});

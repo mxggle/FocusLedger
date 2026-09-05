@@ -1,5 +1,7 @@
 import { addDays } from "date-fns";
 import {
+  ArrowDown,
+  ArrowUp,
   CalendarClock,
   CalendarPlus,
   CalendarX,
@@ -63,6 +65,15 @@ function timeToSortOrder(time: string): number {
 function minimumEstimateMinutes(elapsedSeconds: number): number {
   return Math.max(1, Math.ceil(elapsedSeconds / 60));
 }
+
+/** Row actions are capsules an inch smaller than a standalone button: they sit
+    inside a card, so they read as part of it rather than stacked on top. */
+const ACTION_CLASS = "h-7 gap-1.5 rounded-full px-2.5 shadow-none";
+
+/** The one accented control on a card: tinted at rest, filling solid on hover
+    rather than shouting a saturated fill from every row of the list. */
+const START_CLASS =
+  "bg-primary-soft text-primary-soft-foreground hover:bg-primary hover:text-primary-foreground";
 
 // ── TaskCard ──────────────────────────────────────────────────────────────────
 
@@ -220,7 +231,7 @@ export function TaskCard({ task }: { task: Task }) {
 
   if (editing) {
     return (
-      <div className="rounded-xl border border-border bg-surface p-4 shadow-card motion-safe:animate-fade-in">
+      <div className="rounded-lg border border-border bg-surface p-4 shadow-card motion-safe:animate-fade-in">
         <div className="grid gap-3">
           <Field label="Title">
             <Input
@@ -313,221 +324,276 @@ export function TaskCard({ task }: { task: Task }) {
   // ── Default view ──────────────────────────────────────────────────────────
 
   const isActive = task.status === "doing";
+  const isPaused = task.status === "paused";
+  // "To do" is the default state of every card in the list — badging it says
+  // nothing and turns the list into a wall of grey pills. Only a state that
+  // differs from the default earns a badge.
+  const showStatusBadge = task.status !== "todo";
+  const overBudget = estimateSeconds > 0 && elapsedSeconds > estimateSeconds;
+  const progress =
+    estimateSeconds > 0 && elapsedSeconds > 0
+      ? Math.min(100, (elapsedSeconds / estimateSeconds) * 100)
+      : 0;
 
   return (
     <>
       <div
         ref={highlightRef}
         className={cn(
-          "group relative overflow-hidden rounded-xl border bg-surface p-3.5 pl-4 shadow-card",
-          "transition-[box-shadow,border-color,transform] duration-fast hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md",
-          isActive ? "border-primary/40 ring-1 ring-inset ring-primary/10" : "border-border",
-          highlighted && "border-primary ring-2 ring-primary/60"
+          "group/card relative overflow-hidden rounded-lg border py-3 pl-4 pr-3",
+          // Hover changes tone only — the card never moves or scales.
+          "transition-[background-color,border-color,box-shadow] duration-fast",
+          "hover:border-border-strong hover:shadow-md",
+          isActive
+            ? "border-primary/30 bg-primary-soft/30 shadow-card dark:bg-primary-soft/25"
+            : "border-border bg-surface shadow-xs",
+          highlighted && "border-primary ring-2 ring-primary/50"
         )}
       >
-      {/* Category accent rail */}
-      <span
-        className="absolute inset-y-0 left-0 w-1"
-        style={{ backgroundColor: categoryColor }}
-        aria-hidden="true"
-      />
-
-      {/* Progress strip — elapsed vs. estimate as a hairline along the card's
-          bottom edge, so effort is visible without opening the task. */}
-      {estimateSeconds > 0 && elapsedSeconds > 0 ? (
+        {/* Category spine — a hairline the height of the content, not a slab
+            welded to the card's edge. */}
         <span
-          className="absolute bottom-0 left-1 right-0 h-[3px] overflow-hidden bg-muted/50"
+          className="pointer-events-none absolute inset-y-3 left-1.5 w-[3px] rounded-full"
+          style={{ backgroundColor: categoryColor }}
           aria-hidden="true"
-        >
+        />
+
+        {/* Progress meter — elapsed vs. estimate as a hairline resting in the
+            card's bottom padding, so effort is visible without opening the task. */}
+        {progress > 0 ? (
           <span
-            className={cn(
-              "absolute inset-y-0 left-0 rounded-r-full",
-              elapsedSeconds > estimateSeconds
-                ? "bg-warning"
-                : "yolo-brand-gradient bg-primary"
-            )}
-            style={{
-              width: `${Math.min(100, (elapsedSeconds / estimateSeconds) * 100)}%`
-            }}
-          />
-        </span>
-      ) : null}
+            className="pointer-events-none absolute bottom-1.5 left-4 right-3 h-[2px] overflow-hidden rounded-full bg-border/70"
+            aria-hidden="true"
+          >
+            <span
+              className={cn(
+                "block h-full rounded-full",
+                overBudget ? "bg-warning" : "bg-primary"
+              )}
+              style={{ width: `${progress}%` }}
+            />
+          </span>
+        ) : null}
 
-      {/* Header row. Wraps rather than overflows: on a narrow pane the status
-          badges drop to their own line instead of being squeezed against a
-          non-shrinking title and clipped by the card's overflow-hidden. */}
-      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-semibold text-foreground">
-            {task.title}
-          </h3>
-          {/* Meta info row */}
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground">
-            {overdue && task.due_date ? (
-              <span className="inline-flex items-center gap-1 font-semibold text-warning-soft-foreground">
-                <CalendarClock className="h-3 w-3" />
-                Due {formatDateLabel(task.due_date)}
+        {/* Header row. Wraps rather than overflows: on a narrow pane the status
+            badges drop to their own line instead of being squeezed against a
+            non-shrinking title and clipped by the card's overflow-hidden. */}
+        <div className="flex flex-wrap items-start justify-between gap-x-2.5 gap-y-1.5">
+          <div className="min-w-0 flex-1">
+            <h3
+              className={cn(
+                "truncate text-sm font-semibold tracking-[-0.006em] text-foreground",
+                task.status === "done" && "text-muted-foreground line-through"
+              )}
+            >
+              {task.title}
+            </h3>
+
+            {/* Meta line — one quiet row of facts, weight reserved for the
+                two that change a decision: an overdue date and time spent. */}
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              {overdue && task.due_date ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-1.5 py-px font-medium text-warning-soft-foreground ring-1 ring-inset ring-warning/15">
+                  <CalendarClock className="h-3 w-3" />
+                  {formatDateLabel(task.due_date)}
+                </span>
+              ) : null}
+              {plannedTime ? (
+                <span className="inline-flex items-center gap-1 tabular-nums">
+                  <Clock className="h-3 w-3" />
+                  {plannedTime}
+                </span>
+              ) : null}
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <CategoryDot color={category?.color} />
+                <span className="truncate">{category?.name ?? "Inbox"}</span>
               </span>
-            ) : null}
-            {plannedTime ? (
-              <span className="inline-flex items-center gap-1 tabular-nums">
-                <Clock className="h-3 w-3" />
-                {plannedTime}
-              </span>
-            ) : null}
-            <span className="inline-flex items-center gap-1.5">
-              <CategoryDot color={category?.color} />
-              {category?.name ?? "Inbox"}
-            </span>
-            {task.priority !== "medium" ? (
-              <span className="capitalize">{task.priority} priority</span>
-            ) : null}
-            {elapsedSeconds > 0 || estimateSeconds > 0 ? (
-              <span className="font-medium tabular-nums text-foreground/70">
-                {formatDurationCompact(elapsedSeconds)}
-                {estimateSeconds > 0
-                  ? ` / ${formatDurationCompact(estimateSeconds)}`
-                  : ""}
-              </span>
-            ) : task.estimated_minutes ? (
-              <span className="tabular-nums">{task.estimated_minutes} min</span>
-            ) : null}
+              {task.priority !== "medium" ? (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-0.5 capitalize",
+                    task.priority === "high" &&
+                      "font-medium text-destructive-soft-foreground"
+                  )}
+                >
+                  {task.priority === "high" ? (
+                    <ArrowUp className="h-3 w-3" />
+                  ) : (
+                    <ArrowDown className="h-3 w-3" />
+                  )}
+                  {task.priority}
+                </span>
+              ) : null}
+              {elapsedSeconds > 0 || estimateSeconds > 0 ? (
+                <span
+                  className={cn(
+                    "font-medium tabular-nums",
+                    overBudget ? "text-warning-soft-foreground" : "text-foreground/75"
+                  )}
+                >
+                  {formatDurationCompact(elapsedSeconds)}
+                  {estimateSeconds > 0
+                    ? ` / ${formatDurationCompact(estimateSeconds)}`
+                    : ""}
+                </span>
+              ) : task.estimated_minutes ? (
+                <span className="tabular-nums">{task.estimated_minutes} min</span>
+              ) : null}
+            </div>
           </div>
+
+          {/* Status badges — right-aligned, even when wrapped alone onto their
+              own line by ml-auto pushing them to the row's end. */}
+          {!validation.ok || showStatusBadge ? (
+            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+              {!validation.ok ? <Badge variant="danger" dot>Conflict</Badge> : null}
+              {showStatusBadge ? (
+                <Badge variant={statusVariant[task.status]} dot>
+                  {statusLabel[task.status]}
+                </Badge>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
-        {/* Status badges — right-aligned, even when wrapped alone onto their
-            own line by ml-auto pushing them to the row's end. */}
-        <div className="ml-auto flex shrink-0 flex-col items-end gap-1.5">
-          {!validation.ok ? <Badge variant="danger" dot>Conflict</Badge> : null}
-          <Badge variant={statusVariant[task.status]} dot>
-            {statusLabel[task.status]}
-          </Badge>
-        </div>
-      </div>
-
-      {/* Action row. Text labels are kept whenever there's room: the action
-          buttons wrap to a second line before their labels are dropped, so the
-          menu is never clipped. Labels only collapse to icon-only below ~12rem
-          of pane width, where even a wrapped layout would get too tall. */}
-      <div className="mt-3.5 flex items-start gap-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {task.status === "paused" ? (
+        {/* Action row. One accented control per card: the tinted capsule fills
+            solid on hover rather than shouting from rest. Text labels are kept
+            whenever there's room — the buttons wrap to a second line before
+            their labels are dropped, so the menu is never clipped. Labels only
+            collapse to icon-only below ~12rem of pane width, where even a
+            wrapped layout would get too tall. */}
+        <div className="mt-2.5 flex items-start gap-1.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            {isPaused ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className={cn(ACTION_CLASS, START_CLASS)}
+                onClick={handleStart}
+                aria-label="Resume"
+                title="Resume"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span className="hidden @[12rem]:inline">Resume</span>
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className={cn(
+                  ACTION_CLASS,
+                  isActive
+                    ? "disabled:bg-primary disabled:text-primary-foreground"
+                    : START_CLASS
+                )}
+                onClick={handleStart}
+                disabled={isActive}
+                aria-label={isActive ? "Running" : "Start"}
+                title={isActive ? "Running" : "Start"}
+              >
+                <Play className="h-3.5 w-3.5" />
+                <span className="hidden @[12rem]:inline">
+                  {isActive ? "Running" : "Start"}
+                </span>
+              </Button>
+            )}
             <Button
               type="button"
               size="sm"
-              onClick={handleStart}
-              aria-label="Resume"
-              title="Resume"
+              variant="ghost"
+              className={cn(
+                ACTION_CLASS,
+                "hover:bg-success-soft hover:text-success-soft-foreground"
+              )}
+              onClick={handleDone}
+              aria-label="Done"
+              title="Done"
             >
-              <RotateCcw className="h-3.5 w-3.5" />
-              <span className="hidden @[12rem]:inline">Resume</span>
+              <Check className="h-3.5 w-3.5" />
+              <span className="hidden @[12rem]:inline">Done</span>
             </Button>
-          ) : (
-            <Button
-              type="button"
-              size="sm"
-              variant={isActive ? "soft" : "primary"}
-              onClick={handleStart}
-              disabled={isActive}
-              aria-label={isActive ? "Running" : "Start"}
-              title={isActive ? "Running" : "Start"}
-            >
-              <Play className="h-3.5 w-3.5" />
-              <span className="hidden @[12rem]:inline">
-                {isActive ? "Running" : "Start"}
-              </span>
-            </Button>
-          )}
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={handleDone}
-            aria-label="Done"
-            title="Done"
-          >
-            <Check className="h-3.5 w-3.5" />
-            <span className="hidden @[12rem]:inline">Done</span>
-          </Button>
-        </div>
+          </div>
 
-        <div className="ml-auto shrink-0">
-          <Menu
-            align="end"
-            trigger={
-              <IconButton
-                icon={MoreHorizontal}
-                label="More task actions"
-                variant="secondary"
-              />
-            }
-          >
-            <MenuItem icon={Pencil} onSelect={startEditing}>
-              Edit
-            </MenuItem>
-            <MenuItem
-              icon={CalendarPlus}
-              onSelect={() => void handleReschedule(1)}
+          <div className="ml-auto shrink-0">
+            <Menu
+              align="end"
+              trigger={
+                <IconButton
+                  icon={MoreHorizontal}
+                  label="More task actions"
+                  size="sm"
+                  className="rounded-full text-muted-foreground/60 data-[state=open]:bg-muted data-[state=open]:text-foreground"
+                />
+              }
             >
-              Move to tomorrow
-            </MenuItem>
-            <MenuItem
-              icon={CalendarClock}
-              onSelect={() => void handleReschedule(7)}
-            >
-              Move to next week
-            </MenuItem>
-            {isTodayPlanTask ? (
+              <MenuItem icon={Pencil} onSelect={startEditing}>
+                Edit
+              </MenuItem>
               <MenuItem
-                icon={CalendarX}
+                icon={CalendarPlus}
+                onSelect={() => void handleReschedule(1)}
+              >
+                Move to tomorrow
+              </MenuItem>
+              <MenuItem
+                icon={CalendarClock}
+                onSelect={() => void handleReschedule(7)}
+              >
+                Move to next week
+              </MenuItem>
+              {isTodayPlanTask ? (
+                <MenuItem
+                  icon={CalendarX}
+                  onSelect={() =>
+                    void (async () => {
+                      if (
+                        await confirm({
+                          title: "Skip today",
+                          message: "Skip this planned task for today?",
+                          confirmLabel: "Skip"
+                        })
+                      ) {
+                        await skipPlannedTask(task.id);
+                      }
+                    })()
+                  }
+                >
+                  Skip today
+                </MenuItem>
+              ) : null}
+              <MenuItem icon={Inbox} onSelect={() => void handleMoveToBacklog()}>
+                Move to backlog
+              </MenuItem>
+              <MenuSeparator />
+              <MenuItem
+                icon={X}
+                danger
                 onSelect={() =>
                   void (async () => {
                     if (
                       await confirm({
-                        title: "Skip today",
-                        message: "Skip this planned task for today?",
-                        confirmLabel: "Skip"
+                        title: "Drop task",
+                        message:
+                          "Drop this task? It will be marked as abandoned and kept in your history.",
+                        confirmLabel: "Drop",
+                        danger: true
                       })
                     ) {
-                      await skipPlannedTask(task.id);
+                      await dropTask(task.id);
                     }
                   })()
                 }
               >
-                Skip today
+                Drop
               </MenuItem>
-            ) : null}
-            <MenuItem icon={Inbox} onSelect={() => void handleMoveToBacklog()}>
-              Move to backlog
-            </MenuItem>
-            <MenuSeparator />
-            <MenuItem
-              icon={X}
-              danger
-              onSelect={() =>
-                void (async () => {
-                  if (
-                    await confirm({
-                      title: "Drop task",
-                      message:
-                        "Drop this task? It will be marked as abandoned and kept in your history.",
-                      confirmLabel: "Drop",
-                      danger: true
-                    })
-                  ) {
-                    await dropTask(task.id);
-                  }
-                })()
-              }
-            >
-              Drop
-            </MenuItem>
-            <MenuItem icon={Trash2} danger onSelect={() => void handleDelete()}>
-              Delete
-            </MenuItem>
-          </Menu>
+              <MenuItem icon={Trash2} danger onSelect={() => void handleDelete()}>
+                Delete
+              </MenuItem>
+            </Menu>
+          </div>
         </div>
-      </div>
       </div>
       <StopSessionDialog
         open={stopOpen}

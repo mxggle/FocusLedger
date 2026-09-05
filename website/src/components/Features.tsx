@@ -4,6 +4,7 @@ import { AppWindow } from "./mockups/AppWindow";
 import { FocusMock } from "./mockups/FocusMock";
 import { LifeMock } from "./mockups/LifeMock";
 import { MyDayMock } from "./mockups/MyDayMock";
+import { TodayMock } from "./mockups/TodayMock";
 
 export function Features() {
   return (
@@ -16,6 +17,24 @@ export function Features() {
         />
 
         <div className="mt-20 flex flex-col gap-28">
+          <FeatureRow
+            id="native"
+            eyebrow="Native on both"
+            title="A Mac app on a Mac. A Windows app on Windows."
+            description="One frame, drawn the way each OS draws its own: vibrancy behind the nav rail on macOS with the traffic lights in the title bar, Mica and Fluent caption buttons on Windows with the content flush to the edge. Not a Mac layout wearing a Windows window."
+            points={[
+              "Traffic lights on macOS, Fluent caption buttons on Windows",
+              "Window material both places — vibrancy and Mica, with opaque fallbacks",
+              "Selected nav marked the platform's way: capsule, or capsule plus selection bar",
+              "Collapsible rail, and a title bar you can drag from anywhere"
+            ]}
+            visual={
+              <AppWindow title="Yolo — Today" platform="windows" bare>
+                <TodayMock platform="windows" />
+              </AppWindow>
+            }
+          />
+
           <FeatureRow
             id="focus"
             eyebrow="Focus & ambient scenes"

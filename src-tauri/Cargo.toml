@@ -1,6 +1,6 @@
 [package]
 name = "yolo"
-version = "0.7.1"
+version = "0.8.0"
 description = "An AI-native desktop app for mastering your time — turn daily tasks into honest time records."
 authors = ["Yolo"]
 edition = "2021"
@@ -25,7 +25,13 @@ tauri-plugin-dialog = "2"
 tauri-plugin-clipboard-manager = "2"
 
 # macOS-only: used to inset the native traffic-light buttons so they sit inside
-# the floating sidebar. Not compiled on Windows/Linux.
+# our own title bar. Not compiled on Windows/Linux.
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.26"
 objc = "0.2"
+window-vibrancy = "0.8.0"
+
+# Windows-only: Mica (Windows 11) / Acrylic (Windows 10) behind the webview,
+# the counterpart to the macOS NSVisualEffectView material.
+[target.'cfg(target_os = "windows")'.dependencies]
+window-vibrancy = "0.8.0"

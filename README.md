@@ -74,7 +74,9 @@ The real problem isn't making lists. It's not knowing when you started, how long
 - **History-aware:** learns from your real time records — estimate-vs-actual **calibration**, **slip & blocker** detection, and an automatic **weekly review**
 - Grounds advice in your actual numbers and applies your real estimation ratios when planning the day
 - Numbers are computed deterministically; the model only explains them — so it never makes them up
-- Bring your own AI key (OpenAI / Anthropic / Gemini / compatible) in **Settings → AI**
+- Run it on **15 providers** — Anthropic, OpenAI, Gemini, xAI, DeepSeek, Mistral, Moonshot, Zhipu, Qwen, Groq, Together, OpenRouter, ChatGPT/Codex, Ollama, LM Studio, or any OpenAI-compatible endpoint
+- **Sign in** through your browser where the provider supports it, or paste a key; each provider keeps its own credentials in **Settings → Assistant**
+- Pick the model from a **list of what your key can actually reach**, fetched from the provider, with the curated shortlist as a fallback
 
 ### 🤖 AI-Native (MCP)
 - Ships an **MCP server** that exposes your tasks and time records to AI agents

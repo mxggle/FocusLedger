@@ -1,11 +1,14 @@
 import { fetch } from "@tauri-apps/plugin-http";
-import { hasAiKey } from "./aiClient";
+import { withFreshCredential } from "./authSession";
 import {
   buildChatRequest,
   extractErrorMessage,
+  hasAiKey,
   isUnsupportedTemperatureError,
   parseAiResponse,
+  parseResponsesToolCall,
   providerHttpError,
+  wireOf,
   type AiSettings,
   type ChatInput,
   type ParsedToolCall
@@ -18,14 +21,15 @@ import {
  * reject browser-origin requests still work.
  */
 export async function generateChat(
-  settings: AiSettings,
+  stored: AiSettings,
   input: ChatInput,
   signal?: AbortSignal
 ): Promise<string> {
-  if (!hasAiKey(settings)) {
+  if (!hasAiKey(stored)) {
     throw new Error("Add an API key in Settings → AI to use the assistant");
   }
 
+  const settings = await withFreshCredential(stored);
   const request = buildChatRequest(settings, input);
 
   let response: Response;
@@ -84,7 +88,7 @@ export type StreamCallbacksV2 = {
  * native tool calls the model emitted during the stream. Streams each text
  * delta to `cb.onToken` and adds per-provider streamed tool-call accumulation:
  *
- * - OpenAI/Custom: `delta.tool_calls[].function.{name,arguments}` accumulated
+ * - OpenAI-compatible: `delta.tool_calls[].function.{name,arguments}` accumulated
  *   per `index`; arguments JSON parsed once at stream end.
  * - Anthropic: content blocks tracked by `index` across `content_block_start`
  *   / `content_block_delta` / `content_block_stop`; `text_delta` → onToken,
@@ -92,20 +96,25 @@ export type StreamCallbacksV2 = {
  *   parsed when the block stops.
  * - Gemini: text parts streamed via `onToken`; a `functionCall` part in a
  *   streamed candidate becomes a tool call.
+ * - Responses (the Codex endpoint): `response.output_text.delta` → onToken;
+ *   a completed `function_call` output item becomes a tool call; a
+ *   `response.failed` event carries the provider's error, raised once the
+ *   stream ends.
  *
  * Falls back to a single non-streamed `parseAiResponse` read when
  * `response.body` isn't a usable stream. An abort via `cb.signal` resolves
  * with whatever accumulated so far — it never throws for aborts.
  */
 export async function streamChatV2(
-  settings: AiSettings,
+  stored: AiSettings,
   input: ChatInput,
   cb: StreamCallbacksV2
 ): Promise<{ text: string; toolCalls: ParsedToolCall[]; truncated: boolean }> {
-  if (!hasAiKey(settings)) {
+  if (!hasAiKey(stored)) {
     throw new Error("Add an API key in Settings → AI to use the assistant");
   }
 
+  const settings = await withFreshCredential(stored);
   const request = buildChatRequest(settings, { ...input, stream: true });
 
   let response: Response;
@@ -151,17 +160,20 @@ export async function streamChatV2(
     return { text: full, toolCalls: parsed.toolCalls, truncated: parsed.truncated };
   }
 
-  const provider = settings.aiProvider;
+  const wire = wireOf(settings.aiProvider);
   let acc = "";
   let truncated = false;
   const toolCalls: ParsedToolCall[] = [];
-  // OpenAI / Custom: per-index accumulator for streamed function calls.
+  // OpenAI-compatible: per-index accumulator for streamed function calls.
   const openaiTools = new Map<number, { id?: string; name: string; args: string }>();
   // Anthropic: per-index content block tracker.
   const anthropicBlocks = new Map<
     number,
     { type: "text" | "tool_use"; id?: string; name?: string; argsString: string }
   >();
+  // Responses: an error event ends the turn, but only after the read loop has
+  // drained — throwing from inside the parser would leak the reader.
+  let streamFailure: string | null = null;
 
   function handleData(data: string): void {
     let json: unknown;
@@ -172,9 +184,8 @@ export async function streamChatV2(
     }
     if (typeof json !== "object" || json === null) return;
     const obj = json as Record<string, unknown>;
-    switch (provider) {
-      case "openai":
-      case "custom": {
+    switch (wire) {
+      case "openai": {
         const choices = (
           obj as {
             choices?: Array<{
@@ -270,6 +281,32 @@ export async function streamChatV2(
         }
         break;
       }
+      case "responses": {
+        const type = typeof obj.type === "string" ? obj.type : "";
+        if (type === "response.output_text.delta") {
+          const delta = (obj as { delta?: unknown }).delta;
+          if (typeof delta === "string" && delta.length > 0) {
+            acc += delta;
+            cb.onToken?.(delta);
+          }
+        } else if (type === "response.output_item.done") {
+          const item = (obj as { item?: { type?: string; name?: string } }).item;
+          if (item?.type === "function_call" && typeof item.name === "string") {
+            toolCalls.push(parseResponsesToolCall(item));
+          }
+        } else if (type === "response.incomplete") {
+          const reason = (
+            obj as { response?: { incomplete_details?: { reason?: string } } }
+          ).response?.incomplete_details?.reason;
+          if (reason === "max_output_tokens") truncated = true;
+        } else if (type === "response.failed" || type === "error") {
+          const message =
+            (obj as { response?: { error?: { message?: string } } }).response?.error?.message ??
+            (obj as { error?: { message?: string } }).error?.message;
+          streamFailure = message ?? "The AI provider ended the stream with an error";
+        }
+        break;
+      }
       case "gemini": {
         const candidates = (
           obj as {
@@ -358,6 +395,7 @@ export async function streamChatV2(
   }
 
   finalizePending();
+  if (streamFailure !== null) throw new Error(streamFailure);
   return { text: acc, toolCalls, truncated };
 }
 

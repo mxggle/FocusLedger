@@ -1,4 +1,10 @@
 import type { AiProvider, AppSettings } from "../../types";
+import {
+  PROVIDERS,
+  requiresApiKey,
+  resolveBaseUrl,
+  type AiWireProtocol
+} from "./providerCatalog";
 import type { ParsedToolCall } from "./assistant/responseParser";
 
 export type { ParsedToolCall };
@@ -12,7 +18,11 @@ export type AiRequest = {
 export type AiSettings = Pick<
   AppSettings,
   "aiProvider" | "aiApiKey" | "aiModel" | "aiBaseUrl"
->;
+> &
+  // Optional so anything holding the live four can still be passed straight in.
+  // Providers whose API wants the account named (the ChatGPT/Codex endpoint)
+  // read it from here; everyone else ignores it.
+  Partial<Pick<AppSettings, "aiProviderConfigs">>;
 
 export type GenerateInput = {
   system: string;
@@ -64,19 +74,18 @@ export type ChatInput = {
   tools?: ChatToolSpec[];
 };
 
-export const PROVIDER_LABELS: Record<AiProvider, string> = {
-  anthropic: "Claude (Anthropic)",
-  openai: "OpenAI",
-  gemini: "Google Gemini",
-  custom: "Custom (OpenAI-compatible)"
-};
+function mapProviders<T>(pick: (id: AiProvider) => T): Record<AiProvider, T> {
+  const ids = Object.keys(PROVIDERS) as AiProvider[];
+  return Object.fromEntries(ids.map((id) => [id, pick(id)])) as Record<AiProvider, T>;
+}
 
-export const DEFAULT_MODELS: Record<AiProvider, string> = {
-  anthropic: "claude-opus-4-8",
-  openai: "gpt-5.1",
-  gemini: "gemini-2.5-flash",
-  custom: ""
-};
+export const PROVIDER_LABELS: Record<AiProvider, string> = mapProviders(
+  (id) => PROVIDERS[id].label
+);
+
+export const DEFAULT_MODELS: Record<AiProvider, string> = mapProviders(
+  (id) => PROVIDERS[id].defaultModel
+);
 
 const DEFAULT_MAX_TOKENS = 2048;
 
@@ -85,22 +94,73 @@ export function resolveModel(settings: AiSettings): string {
   return model.length > 0 ? model : DEFAULT_MODELS[settings.aiProvider];
 }
 
-/** Strips a trailing slash so URL joining stays predictable. */
-function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.trim().replace(/\/+$/, "");
+/**
+ * True when the provider has the credential it needs. Local runtimes (Ollama,
+ * LM Studio) take none, so "no key" is a valid, fully working configuration
+ * for them rather than a reason to refuse the request.
+ */
+export function hasAiKey(settings: AiSettings): boolean {
+  return settings.aiApiKey.trim().length > 0 || !requiresApiKey(settings.aiProvider);
+}
+
+/** The wire protocol the configured provider speaks. */
+export function wireOf(provider: AiProvider): AiWireProtocol {
+  return PROVIDERS[provider].wire;
+}
+
+/**
+ * Auth + provider-specific headers for one request. Local runtimes take no
+ * credential, so they get no `Authorization` header at all rather than an
+ * empty bearer token some servers reject.
+ */
+function authHeaders(settings: AiSettings): Record<string, string> {
+  const def = PROVIDERS[settings.aiProvider];
+  const key = settings.aiApiKey.trim();
+  const extra = def.headers ?? {};
+  if (!requiresApiKey(settings.aiProvider) && key.length === 0) {
+    return { ...extra };
+  }
+  switch (def.wire) {
+    case "anthropic":
+      return { ...extra, "x-api-key": key, "anthropic-version": "2023-06-01" };
+    case "gemini":
+      return { ...extra, "x-goog-api-key": key };
+    case "openai":
+      return { ...extra, Authorization: `Bearer ${key}` };
+    case "responses": {
+      const account = accountId(settings);
+      return {
+        ...extra,
+        Authorization: `Bearer ${key}`,
+        // One id per request, as the endpoint expects; it correlates the
+        // turns of a stream, not conversations across calls.
+        session_id: crypto.randomUUID(),
+        ...(account ? { "chatgpt-account-id": account } : {})
+      };
+    }
+  }
+}
+
+/**
+ * The account a signed-in credential belongs to, when we know it. The Codex
+ * endpoint serves several accounts behind one token and wants to be told which.
+ */
+function accountId(settings: AiSettings): string | undefined {
+  return settings.aiProviderConfigs?.[settings.aiProvider]?.accountId;
+}
+
+/** Base URL for the active provider, honouring a user override where allowed. */
+function baseUrlOf(settings: AiSettings): string {
+  return resolveBaseUrl(settings.aiProvider, settings.aiBaseUrl);
 }
 
 function buildOpenAiCompatibleRequest(
-  baseUrl: string,
   settings: AiSettings,
   input: GenerateInput
 ): AiRequest {
   return {
-    url: `${normalizeBaseUrl(baseUrl)}/chat/completions`,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${settings.aiApiKey}`
-    },
+    url: `${baseUrlOf(settings)}/chat/completions`,
+    headers: { "Content-Type": "application/json", ...authHeaders(settings) },
     body: {
       model: resolveModel(settings),
       messages: [
@@ -113,15 +173,11 @@ function buildOpenAiCompatibleRequest(
 }
 
 export function buildAiRequest(settings: AiSettings, input: GenerateInput): AiRequest {
-  switch (settings.aiProvider) {
+  switch (wireOf(settings.aiProvider)) {
     case "anthropic":
       return {
-        url: "https://api.anthropic.com/v1/messages",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": settings.aiApiKey,
-          "anthropic-version": "2023-06-01"
-        },
+        url: `${baseUrlOf(settings)}/messages`,
+        headers: { "Content-Type": "application/json", ...authHeaders(settings) },
         body: {
           model: resolveModel(settings),
           max_tokens: input.maxTokens ?? DEFAULT_MAX_TOKENS,
@@ -130,16 +186,11 @@ export function buildAiRequest(settings: AiSettings, input: GenerateInput): AiRe
           ...(input.temperature !== undefined ? { temperature: input.temperature } : {})
         }
       };
-    case "openai":
-      return buildOpenAiCompatibleRequest("https://api.openai.com/v1", settings, input);
     case "gemini": {
       const model = resolveModel(settings);
       return {
-        url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": settings.aiApiKey
-        },
+        url: `${baseUrlOf(settings)}/models/${model}:generateContent`,
+        headers: { "Content-Type": "application/json", ...authHeaders(settings) },
         body: {
           systemInstruction: { parts: [{ text: input.system }] },
           contents: [{ role: "user", parts: [{ text: input.prompt }] }],
@@ -149,12 +200,15 @@ export function buildAiRequest(settings: AiSettings, input: GenerateInput): AiRe
         }
       };
     }
-    case "custom": {
-      if (normalizeBaseUrl(settings.aiBaseUrl).length === 0) {
-        throw new Error("Custom provider needs a base URL (e.g. http://localhost:11434/v1)");
-      }
-      return buildOpenAiCompatibleRequest(settings.aiBaseUrl, settings, input);
-    }
+    case "openai":
+      return buildOpenAiCompatibleRequest(settings, input);
+    case "responses":
+      // The endpoint has one shape for everything; a one-shot prompt is just a
+      // conversation of length one. `generateText` reads the stream to its end.
+      return buildResponsesRequest(settings, {
+        system: input.system,
+        messages: [{ role: "user", content: input.prompt }]
+      });
   }
 }
 
@@ -194,16 +248,12 @@ function toOpenAiMessages(messages: ChatTurn[]): Record<string, unknown>[] {
 }
 
 function buildOpenAiCompatibleChatRequest(
-  baseUrl: string,
   settings: AiSettings,
   input: ChatInput
 ): AiRequest {
   return {
-    url: `${normalizeBaseUrl(baseUrl)}/chat/completions`,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${settings.aiApiKey}`
-    },
+    url: `${baseUrlOf(settings)}/chat/completions`,
+    headers: { "Content-Type": "application/json", ...authHeaders(settings) },
     body: {
       model: resolveModel(settings),
       messages: [
@@ -279,16 +329,96 @@ function toGeminiContents(messages: ChatTurn[]): Record<string, unknown>[] {
   });
 }
 
+/**
+ * Map structured turns to Responses API items. Unlike chat completions, tool
+ * calls and their results are top-level items rather than fields on a message,
+ * paired by `call_id`.
+ */
+function toResponsesInput(messages: ChatTurn[]): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  for (const turn of messages) {
+    if (turn.role === "assistant" && turn.toolCalls && turn.toolCalls.length > 0) {
+      if (turn.content.trim().length > 0) {
+        out.push({
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: turn.content }]
+        });
+      }
+      for (const call of turn.toolCalls) {
+        out.push({
+          type: "function_call",
+          call_id: call.id,
+          name: call.name,
+          arguments: JSON.stringify(toolArgsObject(call.args))
+        });
+      }
+      continue;
+    }
+    if (turn.role === "user" && turn.toolResults && turn.toolResults.length > 0) {
+      for (const result of turn.toolResults) {
+        out.push({ type: "function_call_output", call_id: result.id, output: result.content });
+      }
+      if (turn.content.trim().length > 0) {
+        out.push({
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: turn.content }]
+        });
+      }
+      continue;
+    }
+    out.push({
+      type: "message",
+      role: turn.role,
+      content: [
+        {
+          type: turn.role === "assistant" ? "output_text" : "input_text",
+          text: turn.content
+        }
+      ]
+    });
+  }
+  return out;
+}
+
+/**
+ * The Responses API as the Codex endpoint serves it: always streamed, never
+ * server-side stored, with the system prompt as `instructions`. Temperature is
+ * left off — the models behind this endpoint reject anything but their default,
+ * and omitting it saves a round-trip we would only have to retry.
+ */
+function buildResponsesRequest(settings: AiSettings, input: ChatInput): AiRequest {
+  return {
+    url: `${baseUrlOf(settings)}/responses`,
+    headers: { "Content-Type": "application/json", ...authHeaders(settings) },
+    body: {
+      model: resolveModel(settings),
+      instructions: input.system,
+      input: toResponsesInput(input.messages),
+      stream: true,
+      store: false,
+      ...(input.tools && input.tools.length > 0
+        ? {
+            tools: input.tools.map((tool) => ({
+              type: "function",
+              name: tool.name,
+              description: tool.description,
+              parameters: tool.parameters ?? { type: "object", properties: {} }
+            })),
+            tool_choice: "auto"
+          }
+        : {})
+    }
+  };
+}
+
 export function buildChatRequest(settings: AiSettings, input: ChatInput): AiRequest {
-  switch (settings.aiProvider) {
+  switch (wireOf(settings.aiProvider)) {
     case "anthropic":
       return {
-        url: "https://api.anthropic.com/v1/messages",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": settings.aiApiKey,
-          "anthropic-version": "2023-06-01"
-        },
+        url: `${baseUrlOf(settings)}/messages`,
+        headers: { "Content-Type": "application/json", ...authHeaders(settings) },
         body: {
           model: resolveModel(settings),
           max_tokens: input.maxTokens ?? DEFAULT_MAX_TOKENS,
@@ -307,18 +437,13 @@ export function buildChatRequest(settings: AiSettings, input: ChatInput): AiRequ
             : {})
         }
       };
-    case "openai":
-      return buildOpenAiCompatibleChatRequest("https://api.openai.com/v1", settings, input);
     case "gemini": {
       const model = resolveModel(settings);
       const action = input.stream ? "streamGenerateContent" : "generateContent";
       const query = input.stream ? "?alt=sse" : "";
       return {
-        url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:${action}${query}`,
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": settings.aiApiKey
-        },
+        url: `${baseUrlOf(settings)}/models/${model}:${action}${query}`,
+        headers: { "Content-Type": "application/json", ...authHeaders(settings) },
         body: {
           systemInstruction: { parts: [{ text: input.system }] },
           contents: toGeminiContents(input.messages),
@@ -341,12 +466,10 @@ export function buildChatRequest(settings: AiSettings, input: ChatInput): AiRequ
         }
       };
     }
-    case "custom": {
-      if (normalizeBaseUrl(settings.aiBaseUrl).length === 0) {
-        throw new Error("Custom provider needs a base URL (e.g. http://localhost:11434/v1)");
-      }
-      return buildOpenAiCompatibleChatRequest(settings.aiBaseUrl, settings, input);
-    }
+    case "openai":
+      return buildOpenAiCompatibleChatRequest(settings, input);
+    case "responses":
+      return buildResponsesRequest(settings, input);
   }
 }
 
@@ -374,6 +497,44 @@ type OpenAiResponse = {
   }>;
 };
 
+type ResponsesItem = {
+  type?: string;
+  name?: string;
+  arguments?: string;
+  call_id?: string;
+  content?: Array<{ type?: string; text?: string }>;
+};
+
+type ResponsesResponse = {
+  output?: ResponsesItem[];
+  incomplete_details?: { reason?: string };
+};
+
+/**
+ * One `function_call` item. Malformed arguments are flagged rather than coerced
+ * to `{}`, which for all-optional-args tools would run with defaults.
+ */
+export function parseResponsesToolCall(item: ResponsesItem): ParsedToolCall {
+  let args: Record<string, unknown> = {};
+  let argsInvalid = false;
+  try {
+    const parsed = item.arguments ? JSON.parse(item.arguments) : {};
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      args = parsed as Record<string, unknown>;
+    } else {
+      argsInvalid = true;
+    }
+  } catch {
+    argsInvalid = true;
+  }
+  return {
+    name: item.name as string,
+    args,
+    ...(typeof item.call_id === "string" ? { id: item.call_id } : {}),
+    ...(argsInvalid ? { argsInvalid: true } : {})
+  };
+}
+
 type GeminiResponse = {
   candidates?: Array<{
     finishReason?: string;
@@ -394,7 +555,7 @@ export function parseAiResponse(
   let truncated = false;
   const toolCalls: ParsedToolCall[] = [];
 
-  switch (provider) {
+  switch (wireOf(provider)) {
     case "anthropic": {
       const response = payload as AnthropicResponse;
       truncated = response.stop_reason === "max_tokens";
@@ -414,8 +575,7 @@ export function parseAiResponse(
       }
       break;
     }
-    case "openai":
-    case "custom": {
+    case "openai": {
       const response = payload as OpenAiResponse;
       const choice = response.choices?.[0];
       truncated = choice?.finish_reason === "length";
@@ -439,6 +599,21 @@ export function parseAiResponse(
               ...(argsInvalid ? { argsInvalid: true } : {})
             });
           }
+        }
+      }
+      break;
+    }
+    case "responses": {
+      const response = payload as ResponsesResponse;
+      truncated = response.incomplete_details?.reason === "max_output_tokens";
+      for (const item of response.output ?? []) {
+        if (item.type === "function_call" && typeof item.name === "string") {
+          toolCalls.push(parseResponsesToolCall(item));
+        } else if (item.type === "message") {
+          text += (item.content ?? [])
+            .filter((part) => part.type === "output_text")
+            .map((part) => part.text ?? "")
+            .join("");
         }
       }
       break;

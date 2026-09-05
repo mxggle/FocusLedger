@@ -102,9 +102,10 @@ export const useRestStore = create<RestState>((set, get) => ({
           resumeTaskId
         }
       });
-      // A new break opens fullscreen (its "zen"); the top-bar button minimizes
-      // it back to the rest card without ending the break.
-      useUiStore.getState().setRestZen(true);
+      // A new break starts minimized on the rest card, not fullscreen — the
+      // zen overlay is opt-in via the top-bar button, mirroring how a resumed
+      // break comes back minimized on relaunch.
+      useUiStore.getState().setRestZen(false);
       useTimerStore.getState().startTicker();
       await get().refreshToday();
     } catch (error) {

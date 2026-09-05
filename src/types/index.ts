@@ -9,6 +9,7 @@ export type {
 export type { DailyDebrief } from "./debrief";
 export type {
   AiProvider,
+  AiProviderConfig,
   AmbientSoundPref,
   AppSettings,
   AppTheme,

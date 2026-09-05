@@ -22,6 +22,7 @@ export function MessageList() {
   const send = useAssistantStore((s) => s.send);
   const settings = useSettingsStore((s) => s.settings);
   const requestRoute = useUiStore((s) => s.requestRoute);
+  const requestSettingsTab = useUiStore((s) => s.requestSettingsTab);
   const keyConfigured = hasAiKey(settings);
   const assistantName = settings.assistantName.trim() || "Assistant";
 
@@ -58,6 +59,7 @@ export function MessageList() {
   function openSettings() {
     // The dock is non-modal now, so it can stay open while settings render in
     // the reflowed main area — the user sees their key land without losing chat.
+    requestSettingsTab("assistant");
     requestRoute("settings");
   }
 

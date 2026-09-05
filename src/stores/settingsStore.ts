@@ -18,6 +18,8 @@ type SettingsState = {
   loading: boolean;
   loadSettings: () => Promise<void>;
   updateSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>;
+  /** Applies several related settings as one change: one write, one toast. */
+  updateSettings: (patch: Partial<AppSettings>) => Promise<void>;
   /** Quiet, debounced update for ambient settings — no toast, coalesced writes. */
   updateAmbient: <K extends AmbientKey>(key: K, value: AppSettings[K]) => void;
 };
@@ -59,6 +61,25 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       useUiStore.getState().addToast({
         kind: "error",
         title: "Setting was not saved",
+        description: error instanceof Error ? error.message : "Unknown settings error"
+      });
+    }
+  },
+
+  updateSettings: async (patch) => {
+    if (Object.keys(patch).length === 0) return;
+    const previous = get().settings;
+    set({ settings: { ...previous, ...patch } });
+
+    try {
+      await settingsRepository.setMany(patch);
+      useUiStore.getState().addToast({ kind: "success", title: "Settings saved" });
+    } catch (error) {
+      console.error("Failed to update settings", error);
+      set({ settings: previous });
+      useUiStore.getState().addToast({
+        kind: "error",
+        title: "Settings were not saved",
         description: error instanceof Error ? error.message : "Unknown settings error"
       });
     }

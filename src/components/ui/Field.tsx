@@ -17,7 +17,11 @@ type FieldProps = {
 
 export function Field({ label, hint, error, children }: FieldProps) {
   return (
-    <label className="grid gap-1.5 text-sm">
+    // `content-start` keeps the rows their natural height. Without it, a field
+    // laid out beside taller siblings (one carries a hint, the others don't)
+    // has its auto rows stretched to fill the row, which pushes its control
+    // out of line with the controls next to it.
+    <label className="grid content-start gap-1.5 text-sm">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       {children}
       {hint && !error ? (

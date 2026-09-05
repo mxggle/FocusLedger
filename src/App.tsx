@@ -7,6 +7,7 @@ import { AssistantLauncher } from "./components/assistant/AssistantLauncher";
 import { BacklogPage } from "./components/backlog/BacklogPage";
 import { HistoryPage } from "./components/history/HistoryPage";
 import { AppShell } from "./components/layout/AppShell";
+import { WindowFrame } from "./components/layout/WindowFrame";
 import { LifePage } from "./components/life/LifePage";
 import { MyDayPage } from "./components/myday/MyDayPage";
 import { PlanPage } from "./components/plan/PlanPage";
@@ -36,6 +37,7 @@ import { useSettingsStore } from "./stores/settingsStore";
 import { useTaskStore } from "./stores/taskStore";
 import { useUiStore } from "./stores/uiStore";
 import { settle } from "./utils/motion";
+import { applyTheme } from "./utils/theme";
 
 type RouteId =
   | "today"
@@ -120,14 +122,9 @@ export default function App() {
     }
   }, [requestedRoute, clearRequestedRoute]);
 
-  useEffect(() => {
-    const root = document.documentElement;
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    root.classList.toggle(
-      "dark",
-      theme === "dark" || (theme === "system" && prefersDark)
-    );
-  }, [theme]);
+  // Paints the theme on the web layer *and* the native window, and — while the
+  // setting is "System" — keeps following the OS as it changes.
+  useEffect(() => applyTheme(theme), [theme]);
 
   return (
     <TooltipProvider>
@@ -141,16 +138,21 @@ export default function App() {
         rightRail={<AssistantDock />}
       >
         {!initialized && loading ? (
-          <div className="p-6">
+          <div className="page-scroll p-6">
             <SkeletonList count={4} />
           </div>
         ) : error ? (
-          <div className="mx-auto mt-20 max-w-xl rounded-xl border border-destructive/30 bg-destructive-soft p-5">
-            <div className="mb-2 flex items-center gap-2 font-semibold text-destructive">
-              <AlertCircle className="h-4 w-4" />
-              Yolo could not start
+          // `page-scroll` so a long startup error can still be read: the
+          // content region clips, and these two branches are the only children
+          // of it that are not a route root.
+          <div className="page-scroll px-6">
+            <div className="mx-auto mt-20 max-w-xl rounded-xl border border-destructive/30 bg-destructive-soft p-5">
+              <div className="mb-2 flex items-center gap-2 font-semibold text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                Yolo could not start
+              </div>
+              <p className="text-sm text-muted-foreground">{error}</p>
             </div>
-            <p className="text-sm text-muted-foreground">{error}</p>
           </div>
         ) : (
           // Keyed by route: a barely-there fade with a 4px rise. This is the
@@ -185,6 +187,9 @@ export default function App() {
       </AppShell>
       <AssistantLauncher />
       </div>
+      {/* Outside the inert wrapper on purpose: the window's own buttons must
+          keep working while a zen overlay makes the shell behind it inert. */}
+      <WindowFrame overlayActive={overlayActive} />
       <FocusZenOverlay />
       <RestOverlay />
       <QuickAddDialog />

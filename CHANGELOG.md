@@ -1,5 +1,122 @@
 # Changelog
 
+## 0.8.0 - 2026-09-05
+
+The frame release. Yolo's window is rebuilt from the ground up so it looks
+native on macOS *and* on Windows rather than a Mac layout wearing a Windows
+window, the task list is redrawn to read as a list of work instead of a stack
+of buttons, Settings is split into tabs, and the assistant can now run on
+fifteen AI providers — signed in through your browser or with your own key —
+with the model picked from a list instead of typed from memory.
+
+### Added
+
+- **A rebuilt app frame for macOS and Windows.** One title bar spans the window
+  above the nav rail and content. macOS keeps its native traffic lights (moved
+  into the bar) with an optically centred title and a content region inset from
+  the window edge like a floating card; Windows gets an undecorated, shadowed
+  window with Fluent caption buttons drawn by the app, a leading title, and
+  content flush with the edge, rounded only where it meets the nav pane — the
+  way Windows 11 does it. A window material is applied on both: an
+  `NSVisualEffectView` on macOS, Mica with an Acrylic fallback on Windows.
+- **Sign in to your AI provider.** Providers that authenticate through the
+  browser (OpenRouter, ChatGPT/Codex) now support OAuth with a PKCE loopback
+  redirect and automatic token refresh — no key to paste, no key to store.
+- **Fifteen AI providers.** The provider catalog is data-driven rather than four
+  hardcoded entries: OpenAI, Gemini, xAI, DeepSeek, Mistral, Moonshot, Zhipu,
+  Qwen, OpenRouter, ChatGPT/Codex, Groq, Together, Ollama, LM Studio, and any
+  custom OpenAI-compatible endpoint, each declaring its wire protocol, auth
+  mode, base URL, and curated model shortlist.
+- **A model picker instead of a text field.** The model is chosen from a list of
+  what your key can actually reach — fetched live from the provider and cached
+  per provider/key/base URL — with the curated shortlist as the fallback when
+  there is no key or the lookup fails. "Other model ID…" stays available for
+  preview models and self-hosted names, and a stored id the catalog doesn't
+  know keeps that field open rather than being silently rewritten.
+- **A per-provider credential vault.** Switching providers no longer discards
+  what you configured for the last one — each provider keeps its own
+  credentials, so switching back finds them intact.
+- **Settings in tabs.** The 700-line settings scroll is now a tabbed shell —
+  General, Assistant, Categories, Rest, System — with roving focus and full
+  keyboard navigation. The active tab is remembered, and the app can deep-link
+  to a specific one: the assistant's "add your API key" prompt now opens
+  Settings on the Assistant tab instead of the page top.
+- **A collapsible nav rail.** Collapse the navigation to icons from the title
+  bar; collapsed rows keep their labels as tooltips, and the selected row's
+  fill glides between destinations rather than cross-fading.
+
+### Changed
+
+- **A quieter task list.** Every card used to wear a saturated blue Start slab,
+  a bordered ellipsis box, and a grey "To do" badge that said nothing. Now: a
+  badge only when the status differs from the default, so a badge means
+  something when you see one; one accented control per card, tinted at rest and
+  filling solid on hover, with the only solidly filled button in the list
+  belonging to the task actually running; the category slab replaced by a
+  rounded spine inset from the card edge and the progress bar by a hairline
+  meter resting in the bottom padding; overdue dates in a soft chip rather than
+  bold orange text, over-budget time in amber, and priority as a small arrow.
+  Hover changes tone only — the card no longer lifts.
+- The nav rail sits directly on the window material (vibrancy or Mica) the way
+  Finder's and Windows Settings' nav panes do, while the content stays opaque so
+  body text is never set on a translucent background.
+- Platform accents follow the host: Segoe UI Variable Text at 14px on Windows
+  against SF at 13px on macOS, Windows' tighter radius scale, and Fluent's focus
+  rectangle against the macOS accent halo.
+- Related settings writes are batched into one database round trip and one
+  toast instead of one of each per field.
+- The default Anthropic model is now `claude-opus-5`.
+
+### Fixed
+
+- **The page no longer jitters sideways on every navigation.** Each route root
+  owned its own scroller and the app forces classic scrollbars, so a tall page
+  reserved 11px for the bar and a short one did not. A `.page-scroll` class now
+  reserves the gutter permanently and invisibly — measured: 11px shift before,
+  0 after.
+- **No more scrollbar flash between routes.** The shell's content area is
+  clipped rather than scrollable, so the 4px entrance transform of a full-height
+  page can't pop a scrollbar for the length of the animation.
+- The connected-account row no longer overflows its card: it sat in a CSS grid
+  with no `min-w-0`, so its floored min-content width let the nowrap account
+  name escape, ignoring the name's own truncation.
+- Dropped a `::-webkit-scrollbar { width }` override that never applied —
+  Chromium 121+ ignores webkit scrollbar sizing whenever `scrollbar-width` is
+  set, which is the actual lever.
+- The Codex model catalog needs a client version parameter to avoid a 400, and
+  internal entries are now filtered out by their `visibility` flag.
+
+### Platform & internals
+
+- The Tauri window config is split per platform: `titleBarStyle: "Overlay"` is
+  macOS-only, and `transparent: true` requires `decorations: false` on Windows —
+  both were previously applied unconditionally.
+- A new `window_material` command reports which material actually landed, since
+  Mica fails on Windows 10 and whenever the user turns off transparency; the
+  opaque CSS fallbacks are load-bearing.
+- `platform.ts` now answers by intent (`usesCustomWindowControls`,
+  `hasNativeTrafficLights`) and publishes `data-platform` / `data-material` on
+  `<html>`, so every conditional rule keys off one source of truth. A dev-only
+  `?platform=` / `?material=` override makes the Windows chrome reviewable from
+  a Mac and is dropped from production builds.
+- Windows caption buttons are drawn in a layer above the whole app, so the
+  full-screen zen overlays can never cover the only way to close the window.
+- Added the missing `@testing-library/react` dev dependency and gave the Today
+  responsive-pane test the tooltip provider the real tree has, so the suite runs
+  green from a clean checkout.
+
+### Website
+
+- The landing page is updated to the new look: the mockups carry the new frame,
+  nav rail, and quiet task cards, a "Native on both" section shows the Windows
+  frame beside the macOS one, and the assistant section documents the fifteen
+  providers, browser sign-in, and the model picker.
+
+### Validation
+
+- `yarn build` (tsc + vite), `yarn test` (112 files, 849 tests), `cargo check`,
+  and the website build all pass.
+
 ## 0.7.1 - 2026-07-08
 
 A polish-and-reliability release on top of 0.7.0. Focus gains a set of clock

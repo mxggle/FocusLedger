@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { NotificationWindow } from "./notify/NotificationWindow";
 import type { NotifyWindowKind } from "./notify/types";
+import { markPlatform, syncWindowMaterial } from "./utils/platform";
 import "./styles.css";
 
 function isTauriRuntime(): boolean {
@@ -22,12 +23,21 @@ async function resolveRoot(): Promise<React.ReactElement> {
       const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
       const label = getCurrentWebviewWindow().label;
       if (AUX_WINDOWS.has(label)) {
+        // The auxiliary notification window is a bare transparent window with
+        // no material behind it — mark it as such so the glass surfaces there
+        // fall back to opaque instead of blurring nothing.
+        markPlatform("none");
         return <NotificationWindow role={label as NotifyWindowKind} />;
       }
     } catch {
       // Fall through to the main app.
     }
   }
+
+  // Publish the optimistic platform/material for the first paint, then let
+  // Rust correct the material once it has reported what actually applied.
+  markPlatform();
+  void syncWindowMaterial();
   return <App />;
 }
 

@@ -51,11 +51,15 @@ const config: Config = {
           "soft-foreground": "hsl(var(--warning-soft-foreground))"
         }
       },
+      // Concentric scale on a 4px rhythm, so `parent - padding = child`
+      // lands on a real token (Tahoe's defining corner treatment).
       borderRadius: {
+        xs: "var(--radius-xs)",
         sm: "var(--radius-sm)",
         md: "var(--radius-md)",
         lg: "var(--radius-lg)",
         xl: "var(--radius-xl)",
+        "2xl": "var(--radius-2xl)",
         full: "var(--radius-full)"
       },
       boxShadow: {
@@ -65,27 +69,45 @@ const config: Config = {
         md: "var(--shadow-md)",
         pop: "var(--shadow-pop)",
         ring: "var(--ring-shadow)",
-        glow: "var(--shadow-glow)"
+        glow: "var(--shadow-glow)",
+        glass: "var(--shadow-glass)"
       },
+      // San Francisco first — `-apple-system` resolves to SF Pro with correct
+      // optical sizing, which is what makes the window read as native. Inter
+      // remains the Windows/Linux fallback.
       fontFamily: {
         sans: [
-          "Inter",
-          "ui-sans-serif",
-          "system-ui",
           "-apple-system",
           "BlinkMacSystemFont",
+          "SF Pro Text",
+          "SF Pro Display",
+          "ui-sans-serif",
+          "system-ui",
+          "Inter",
           "Segoe UI",
           "sans-serif"
+        ],
+        mono: [
+          "ui-monospace",
+          "SF Mono",
+          "SFMono-Regular",
+          "Menlo",
+          "monospace"
         ]
       },
+      // macOS text styles. AppKit's body is 13px, not the 14px web default —
+      // matching it is most of what separates a native-feeling window from a
+      // web page in a frame. Larger sizes take negative tracking the way SF
+      // Pro Display does.
       fontSize: {
-        xs: ["12px", { lineHeight: "1.5" }],
-        sm: ["13px", { lineHeight: "1.5" }],
-        base: ["14px", { lineHeight: "1.6" }],
-        lg: ["16px", { lineHeight: "1.5" }],
-        xl: ["20px", { lineHeight: "1.4" }],
-        "2xl": ["24px", { lineHeight: "1.3" }],
-        "timer": ["56px", { lineHeight: "1", letterSpacing: "-0.02em" }]
+        xs: ["11px", { lineHeight: "1.45" }],      // caption / subheadline
+        sm: ["12px", { lineHeight: "1.45" }],      // callout
+        base: ["13px", { lineHeight: "1.5" }],     // body
+        lg: ["15px", { lineHeight: "1.4" }],       // title 3
+        xl: ["17px", { lineHeight: "1.35", letterSpacing: "-0.01em" }],  // title 2
+        "2xl": ["22px", { lineHeight: "1.25", letterSpacing: "-0.015em" }], // title 1
+        "3xl": ["26px", { lineHeight: "1.2", letterSpacing: "-0.02em" }],  // large title
+        timer: ["56px", { lineHeight: "1", letterSpacing: "-0.03em" }]
       },
       transitionTimingFunction: {
         DEFAULT: "var(--ease)",

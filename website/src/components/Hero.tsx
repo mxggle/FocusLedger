@@ -35,7 +35,7 @@ export function Hero() {
             <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
               v{SITE.version}
             </span>
-            New: AI smart capture &amp; the day line
+            New: a native frame for macOS &amp; Windows
             <ArrowRight size={13} />
           </a>
 
@@ -71,7 +71,7 @@ export function Hero() {
           transition={{ duration: 0.8, delay: 0.15, ease: [0.22, 0.61, 0.36, 1] }}
         >
           <div className="absolute -inset-x-8 -top-6 bottom-0 -z-10 rounded-[40px] bg-gradient-to-b from-primary/20 to-transparent blur-2xl" />
-          <AppWindow title="Yolo — Today">
+          <AppWindow title="Yolo — Today" bare>
             <TodayMock />
           </AppWindow>
 
