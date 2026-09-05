@@ -2,13 +2,16 @@ import {
   Bell,
   CalendarRange,
   Coffee,
+  LayoutGrid,
   ListChecks,
   ListFilter,
   MenuSquare,
   MoonStar,
   Moon,
   NotebookPen,
+  PanelLeft,
   Share2,
+  SquareDashed,
   Sparkles,
   Zap
 } from "lucide-react";
@@ -71,6 +74,21 @@ const ITEMS: { icon: LucideIcon; title: string; body: string }[] = [
     icon: Moon,
     title: "Tidy reminders",
     body: "Reminder toasts collapse into a fan-out deck with a single Clear all — never a cluttered corner of the screen."
+  },
+  {
+    icon: LayoutGrid,
+    title: "Settings, in tabs",
+    body: "General, Assistant, Categories, Rest, and System each get their own tab — and the app can deep-link you straight to the one you need."
+  },
+  {
+    icon: PanelLeft,
+    title: "A rail that gets out of the way",
+    body: "Collapse the navigation to icons when you want the width, and the selected row's fill glides between destinations rather than blinking."
+  },
+  {
+    icon: SquareDashed,
+    title: "A quieter task list",
+    body: "One accented control per card, a badge only when the status isn't the default, and elapsed-vs-estimate as a hairline — a list of work, not a stack of buttons."
   },
   {
     icon: MoonStar,

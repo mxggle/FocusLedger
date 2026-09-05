@@ -1,4 +1,15 @@
-import { Bell, Brain, CalendarClock, KeyRound, LineChart, RotateCcw, SlidersHorizontal, Sparkles, TerminalSquare } from "lucide-react";
+import {
+  Bell,
+  Brain,
+  CalendarClock,
+  KeyRound,
+  LineChart,
+  ListChecks,
+  RotateCcw,
+  SlidersHorizontal,
+  Sparkles,
+  TerminalSquare
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { AppWindow } from "./mockups/AppWindow";
 import { AssistantMock } from "./mockups/AssistantMock";
@@ -10,6 +21,26 @@ const AUTONOMY: { icon: LucideIcon; name: string; hint: string }[] = [
   { icon: Bell, name: "Ask", hint: "Confirms each change" },
   { icon: Sparkles, name: "Auto", hint: "Applies reversible changes" }
 ];
+
+/** The catalog the model picker ships with, minus the long tail. */
+const PROVIDERS = [
+  "Claude",
+  "OpenAI",
+  "Gemini",
+  "xAI",
+  "DeepSeek",
+  "Mistral",
+  "Moonshot",
+  "Zhipu",
+  "Qwen",
+  "Groq",
+  "Together",
+  "OpenRouter",
+  "ChatGPT / Codex",
+  "Ollama",
+  "LM Studio",
+  "Any OpenAI-compatible endpoint"
+] as const;
 
 const CAPS: { icon: LucideIcon; title: string; body: string }[] = [
   {
@@ -50,7 +81,7 @@ export function AssistantShowcase() {
             </>
           }
           title="An assistant that reads your day — and can act on it"
-          description="Yolo is AI-native, not AI-bolted-on. A docked, resizable assistant lives beside your work: a tool-calling agent that talks in plain language and acts through validated task tools — create, start, reschedule, complete, or drop — but it’s propose-then-confirm, so every change is yours to approve, and anything can be undone."
+          description="Yolo is AI-native, not AI-bolted-on. A docked, resizable assistant lives beside your work: a tool-calling agent that talks in plain language and acts through validated task tools — create, start, reschedule, complete, or drop — but it’s propose-then-confirm, so every change is yours to approve, and anything can be undone. Run it on any of fifteen providers, signed in or with your own key."
         />
 
         <div className="mt-16 grid items-start gap-12 lg:grid-cols-2 lg:gap-16">
@@ -77,14 +108,38 @@ export function AssistantShowcase() {
               </div>
             </div>
 
+            <div>
+              <div className="text-sm font-semibold">Bring any model</div>
+              <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+                Fifteen providers, from the frontier labs to whatever is running on your own
+                machine. Sign in through your browser where the provider supports it, or paste a
+                key — each provider keeps its own credentials, so switching back doesn&rsquo;t lose
+                what you set up. Then pick the model from a list of what your key can actually
+                reach, instead of spelling an id into a text box and finding out it was wrong a
+                request later.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {PROVIDERS.map((name) => (
+                  <span
+                    key={name}
+                    className="rounded-full border border-border bg-surface px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+                  >
+                    {name}
+                  </span>
+                ))}
+              </div>
+            </div>
+
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
                 <RotateCcw size={13} className="text-success" /> Every change revertible
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <KeyRound size={13} className="text-primary" /> Bring your own key
+                <KeyRound size={13} className="text-primary" /> Sign in, or bring your own key
               </span>
-              <span>Claude · OpenAI · Gemini · compatible</span>
+              <span className="inline-flex items-center gap-1.5">
+                <ListChecks size={13} className="text-primary" /> Models picked from a list
+              </span>
             </div>
           </Reveal>
 
