@@ -41,10 +41,7 @@ export function GeneralSettings() {
               <option value="dark">Dark</option>
             </Select>
           </Field>
-          <Field
-            label="Daily focus target"
-            hint="Focus minutes per day"
-          >
+          <Field label="Daily focus target" hint="Focus minutes per day">
             <DeferredNumberInput
               min={0}
               fallback={240}
@@ -55,7 +52,7 @@ export function GeneralSettings() {
             />
           </Field>
         </div>
-        <div className="mt-4 border-t border-border pt-1">
+        <div className="mt-4 border-t border-border pt-3">
           <SettingRow
             label="Start week on Monday"
             value={settings.startWeekOnMonday}

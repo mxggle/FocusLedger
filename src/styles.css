@@ -595,6 +595,24 @@ html[data-platform="windows"] :focus-visible {
   scrollbar-gutter: stable;
 }
 
+/* The fixed-height counterpart, for routes whose layout fills the viewport and
+   never scrolls as a whole (Today, Life). They need no scrollbar of their own,
+   but they must reserve the same gutter as `.page-scroll` — otherwise the page
+   is 11px wider on Today than on Backlog and every centred column steps
+   sideways as you navigate between them.
+
+   `overflow-y: scroll` is the reservation (identical to `.page-scroll`, so the
+   two agree on every engine including WKWebViews that predate
+   `scrollbar-gutter`); no thumb ever appears because these layouts size
+   themselves to the box. `overflow-x: hidden` keeps the horizontal axis
+   clipping the way these layouts already assumed. */
+.page-fixed {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
 /* ─── Scrollbar ──────────────────────────────────────────────────────────── */
 /* Thin, unobtrusive bars on both platforms.
 

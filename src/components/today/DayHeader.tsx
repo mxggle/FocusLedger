@@ -51,7 +51,7 @@ export function DayHeader() {
   }, 0);
 
   return (
-    <header className="shrink-0 px-5 pb-3 pt-0.5">
+    <header className="shrink-0 px-5 pb-3 pt-5">
       <div className="flex items-end justify-between gap-4">
         <div className="min-w-0">
           <h1 className="truncate text-2xl font-bold leading-tight tracking-tight">

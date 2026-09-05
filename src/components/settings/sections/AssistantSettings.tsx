@@ -1,14 +1,14 @@
-import { Bell, Bot, Brain, Eye, EyeOff, SlidersHorizontal, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { Bell, Bot, Brain, SlidersHorizontal, Sparkles } from "lucide-react";
 import { AI_LANGUAGES } from "../../../services/ai/languages";
 import { DEFAULT_SOUL } from "../../../services/ai/assistant/soul";
-import { DEFAULT_MODELS, PROVIDER_LABELS, resolveModel } from "../../../services/ai/providers";
+import { planProviderFieldChange } from "../../../services/ai/credentials";
+import { DEFAULT_MODELS, resolveModel } from "../../../services/ai/providers";
 import { useSettingsStore } from "../../../stores/settingsStore";
-import type { AiProvider } from "../../../types";
 import type { PermissionLevel } from "../../../services/ai/assistant/agentTools/types";
 import { Field, Input, Select, Textarea } from "../../ui/Field";
 import { SettingsSection } from "../../ui/PageHeader";
 import { SegmentedControl } from "../../ui/SegmentedControl";
+import { AiProviderFields } from "../AiProviderFields";
 import { MemoryManager } from "../MemoryManager";
 import { ModelPicker } from "../ModelPicker";
 import { SettingRow } from "../controls";
@@ -22,93 +22,40 @@ const PERMISSION_SEGMENTS: { value: PermissionLevel; label: string; icon: typeof
 export function AssistantSettings() {
   const settings = useSettingsStore((state) => state.settings);
   const updateSetting = useSettingsStore((state) => state.updateSetting);
-  const [showApiKey, setShowApiKey] = useState(false);
+  const updateSettings = useSettingsStore((state) => state.updateSettings);
 
+  // `aiProviderConfigs` rides along so a catalog lookup can name the account a
+  // signed-in token belongs to, and can renew that token when it has expired.
   const aiSettings = {
     aiProvider: settings.aiProvider,
     aiApiKey: settings.aiApiKey,
     aiModel: settings.aiModel,
-    aiBaseUrl: settings.aiBaseUrl
+    aiBaseUrl: settings.aiBaseUrl,
+    aiProviderConfigs: settings.aiProviderConfigs
   };
-
-  // Model ids belong to one provider, so a switch drops the ones that were
-  // picked for the old one rather than leaving a request that can only 404.
-  async function changeProvider(next: AiProvider) {
-    if (next === settings.aiProvider) return;
-    await updateSetting("aiProvider", next);
-    if (settings.aiModel !== "") await updateSetting("aiModel", "");
-    if (settings.assistantMemoryModel !== "") await updateSetting("assistantMemoryModel", "");
-  }
 
   return (
     <div className="grid gap-4">
       <SettingsSection
         icon={Sparkles}
         title="Provider"
-        description="Bring your own API key to power AI features like the daily debrief. Your key is only sent to the provider you choose."
+        description="Choose who answers, and sign in or bring your own API key. Your credentials are only ever sent to the provider you pick."
       >
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Provider">
-            <Select
-              value={settings.aiProvider}
-              onChange={(event) => void changeProvider(event.target.value as AiProvider)}
-            >
-              {(Object.keys(PROVIDER_LABELS) as AiProvider[]).map((provider) => (
-                <option key={provider} value={provider}>
-                  {PROVIDER_LABELS[provider]}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="API key">
-            <div className="relative">
-              <Input
-                type={showApiKey ? "text" : "password"}
-                autoComplete="off"
-                placeholder="Paste your API key"
-                value={settings.aiApiKey}
-                onChange={(event) => void updateSetting("aiApiKey", event.target.value)}
-                className="pr-9"
-              />
-              <button
-                type="button"
-                aria-label={showApiKey ? "Hide API key" : "Show API key"}
-                title={showApiKey ? "Hide API key" : "Show API key"}
-                onClick={() => setShowApiKey((value) => !value)}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground outline-none transition-colors duration-fast hover:text-foreground focus-visible:shadow-ring"
-              >
-                {showApiKey ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-          </Field>
+          <AiProviderFields />
           <ModelPicker
             label="Model"
             settings={aiSettings}
             value={settings.aiModel}
-            onChange={(model) => void updateSetting("aiModel", model)}
+            onChange={(model) =>
+              void updateSettings(planProviderFieldChange(settings, "aiModel", model))
+            }
             emptyLabel={
               DEFAULT_MODELS[settings.aiProvider]
                 ? `Default (${DEFAULT_MODELS[settings.aiProvider]})`
                 : "Not set — pick a model your endpoint serves"
             }
           />
-          {settings.aiProvider === "custom" ? (
-            <Field
-              label="Base URL"
-              hint="OpenAI-compatible endpoint, e.g. http://localhost:11434/v1"
-            >
-              <Input
-                type="text"
-                placeholder="https://your-endpoint/v1"
-                value={settings.aiBaseUrl}
-                onChange={(event) => void updateSetting("aiBaseUrl", event.target.value)}
-              />
-            </Field>
-          ) : null}
           <Field
             label="Output language"
             hint="The language AI features write in, e.g. the daily debrief"

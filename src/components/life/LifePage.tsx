@@ -109,7 +109,7 @@ export function LifePage({ onNavigate }: LifePageProps) {
   const activeWeek = hoveredWeek ?? selectedWeek ?? defaultWeek;
 
   return (
-    <div className="flex h-full flex-col px-6 py-5">
+    <div className="page-fixed flex flex-col px-6 py-5">
       <PageHeader
         icon={Hourglass}
         eyebrow="Memento Mori"

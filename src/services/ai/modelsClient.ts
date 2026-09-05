@@ -1,4 +1,5 @@
 import { fetch } from "@tauri-apps/plugin-http";
+import { withFreshCredential } from "./authSession";
 import { buildModelsRequest, parseModelsResponse, type ModelOption } from "./models";
 import { extractErrorMessage, providerHttpError, type AiSettings } from "./providers";
 
@@ -35,10 +36,13 @@ export function invalidateModels(settings: AiSettings): void {
   cache.delete(cacheKey(settings));
 }
 
-async function loadModels(settings: AiSettings): Promise<ModelOption[]> {
+async function loadModels(stored: AiSettings): Promise<ModelOption[]> {
+  const settings = await withFreshCredential(stored);
   const request = buildModelsRequest(settings);
   if (!request) {
-    throw new Error("Add an API key to load the models this provider offers");
+    throw new Error(
+      "Add an API key — or an endpoint, for a local model — to list what this provider offers"
+    );
   }
 
   let response: Response;

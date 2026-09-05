@@ -67,9 +67,10 @@ function RestReadout({
         >
           Time's up
         </div>
-        <SubLine size={size}>
-          Rested {formatDurationCompact(p.elapsedSeconds)} · ready when you are
-        </SubLine>
+        {/* Just the total. Both rest surfaces already print "No rush. Come
+            back whenever you're ready." beside the clock, and the longer line
+            wrapped out of the circular faces. */}
+        <SubLine size={size}>Rested {formatDurationCompact(p.elapsedSeconds)}</SubLine>
       </>
     );
   }

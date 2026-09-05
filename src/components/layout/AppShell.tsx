@@ -88,7 +88,15 @@ export function AppShell<T extends string>({
         {/* One sheet holds the page and the docked rail, so the rail's divider
             reads as an internal split rather than a second floating panel. */}
         <div className="content-region flex min-w-0 flex-1 overflow-hidden">
-          <main className="min-w-0 flex-1 overflow-auto">{children}</main>
+          {/* `overflow-hidden`, deliberately not `auto`: every route root is its
+              own scroll container (`.page-scroll` / `.page-fixed`), each with a
+              reserved gutter. A second scroller here would have no gutter, and
+              the route entrance — a 4px `translateY` on a full-height child —
+              pushes exactly 4px of *transform* overflow past this box, which is
+              enough to pop an 11px scrollbar for the length of the animation
+              and snap the page sideways on every navigation. Clipping here
+              costs nothing, since nothing inside is sized to overflow it. */}
+          <main className="min-w-0 flex-1 overflow-hidden">{children}</main>
           {rightRail}
         </div>
       </div>

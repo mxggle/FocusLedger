@@ -38,6 +38,32 @@ describe("buildModelsRequest", () => {
     expect(request?.url).toBe("http://localhost:11434/v1/models");
   });
 
+  it("names the client version and account the Codex catalog demands", () => {
+    const request = buildModelsRequest(
+      settings({
+        aiProvider: "chatgpt",
+        aiApiKey: "token-123",
+        aiProviderConfigs: { chatgpt: { accountId: "acct-9" } }
+      })
+    );
+    // Without `client_version` the endpoint answers 400, not an empty list.
+    expect(request?.url).toMatch(
+      /^https:\/\/chatgpt\.com\/backend-api\/codex\/models\?client_version=.+/
+    );
+    expect(request?.headers).toMatchObject({
+      Authorization: "Bearer token-123",
+      "chatgpt-account-id": "acct-9",
+      originator: "codex_cli_rs"
+    });
+  });
+
+  it("asks the Codex catalog without an account when none is known", () => {
+    const request = buildModelsRequest(
+      settings({ aiProvider: "chatgpt", aiApiKey: "token-123" })
+    );
+    expect(request?.headers["chatgpt-account-id"]).toBeUndefined();
+  });
+
   it("returns null when there is nothing to ask with", () => {
     expect(buildModelsRequest(settings({ aiApiKey: "  " }))).toBeNull();
     expect(buildModelsRequest(settings({ aiProvider: "custom", aiBaseUrl: "" }))).toBeNull();
@@ -81,6 +107,21 @@ describe("parseModelsResponse", () => {
       ]
     });
     expect(options).toEqual([{ id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" }]);
+  });
+
+  it("reads Codex slugs and leaves the catalog's hidden entries out", () => {
+    const options = parseModelsResponse("chatgpt", {
+      models: [
+        { slug: "gpt-5.6-sol", display_name: "GPT-5.6-Sol", visibility: "list" },
+        { slug: "gpt-5.5", visibility: "list" },
+        { slug: "codex-auto-review", display_name: "Codex Auto Review", visibility: "hide" },
+        { display_name: "no slug", visibility: "list" }
+      ]
+    });
+    expect(options).toEqual([
+      { id: "gpt-5.6-sol", label: "GPT-5.6-Sol" },
+      { id: "gpt-5.5", label: "gpt-5.5" }
+    ]);
   });
 
   it("survives a payload it does not recognise", () => {

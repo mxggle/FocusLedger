@@ -1,3 +1,5 @@
+mod oauth;
+
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -601,6 +603,7 @@ pub fn run() {
             });
             app.manage(NotificationPayloads(Mutex::new(HashMap::new())));
             app.manage(Quitting(AtomicBool::new(false)));
+            app.manage(oauth::OauthListeners::default());
 
             // Left-click opens the dropdown menu on both platforms; the window
             // is reached via the menu's "Show Yolo" item.
@@ -726,7 +729,10 @@ pub fn run() {
             take_notification_payload,
             reveal_notification_window,
             close_notification_window,
-            window_material
+            window_material,
+            oauth::oauth_start,
+            oauth::oauth_wait,
+            oauth::oauth_cancel
         ])
         .run(tauri::generate_context!())
         .expect("error while running Yolo");

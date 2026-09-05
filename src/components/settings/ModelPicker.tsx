@@ -1,7 +1,13 @@
 import { Loader2, RefreshCw } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
-import { CURATED_MODELS, mergeModelOptions, type ModelOption } from "../../services/ai/models";
+import {
+  buildModelsRequest,
+  CURATED_MODELS,
+  mergeModelOptions,
+  type ModelOption
+} from "../../services/ai/models";
+import { requiresApiKey } from "../../services/ai/providerCatalog";
 import { fetchModels, invalidateModels } from "../../services/ai/modelsClient";
 import type { AiSettings } from "../../services/ai/providers";
 import { Input, Select } from "../ui/Field";
@@ -38,12 +44,18 @@ export function ModelPicker({
   const selectId = useId();
   const [customOpen, setCustomOpen] = useState(false);
 
-  const hasKey = settings.aiApiKey.trim().length > 0;
+  // Local runtimes take no key, so they can be asked for their catalog right
+  // away; everyone else needs one first.
+  const needsKey = requiresApiKey(settings.aiProvider);
+  const hasCredential = settings.aiApiKey.trim().length > 0 || !needsKey;
+  // Some endpoints publish no catalog at all (the Codex backend); asking would
+  // only produce a failure where the curated shortlist is the honest answer.
+  const listable = buildModelsRequest({ ...settings, aiApiKey: "probe" }) !== null;
   const catalog = useAsyncResource<ModelOption[]>(
     () => fetchModels(settings),
     [],
     [settings.aiProvider, settings.aiApiKey, settings.aiBaseUrl],
-    { enabled: hasKey }
+    { enabled: hasCredential && listable }
   );
 
   const options = useMemo(
@@ -113,7 +125,8 @@ export function ModelPicker({
       <div className="flex items-center justify-between gap-3">
         {hint ? <span className="text-xs text-subtle">{hint}</span> : <span />}
         <CatalogStatus
-          hasKey={hasKey}
+          listable={listable}
+          hasKey={hasCredential}
           loading={catalog.loading}
           error={catalog.error}
           count={catalog.data.length}
@@ -134,21 +147,27 @@ function optionLabel(option: ModelOption): string {
 
 /** Says where the list came from, and offers a re-fetch when it's stale. */
 function CatalogStatus({
+  listable,
   hasKey,
   loading,
   error,
   count,
   onRefresh
 }: {
+  listable: boolean;
   hasKey: boolean;
   loading: boolean;
   error: boolean;
   count: number;
   onRefresh: () => void;
 }) {
+  if (!listable) {
+    return <span className="shrink-0 text-xs text-subtle">Recommended models</span>;
+  }
   if (!hasKey) {
     return <span className="shrink-0 text-xs text-subtle">Add a key to list every model</span>;
   }
+
   if (loading) {
     return (
       <span className="flex shrink-0 items-center gap-1.5 text-xs text-subtle">

@@ -1,5 +1,5 @@
 import { useReducedMotion } from "framer-motion";
-import { Coffee, Maximize2, Play, Plus } from "lucide-react";
+import { ArrowRight, Coffee, Maximize2, Play, Plus } from "lucide-react";
 import { getRestElapsedSeconds, useRestStore } from "../../stores/restStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTaskStore } from "../../stores/taskStore";
@@ -160,6 +160,9 @@ export function RestCard({ onExpand }: { onExpand?: () => void } = {}) {
             title={backLabel}
             onClick={() => void endRest()}
           >
+            {/* Needs an icon: narrow panes hide `.focus-control-label`, and
+                without one this button collapsed to an empty pill. */}
+            <ArrowRight className="h-4 w-4 shrink-0" />
             <span className="focus-control-label truncate">{backLabel}</span>
           </FocusButton>
         )}
