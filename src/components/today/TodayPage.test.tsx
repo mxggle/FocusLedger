@@ -1,6 +1,7 @@
 import { cleanup, render, act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useUiStore } from "../../stores/uiStore";
+import { TooltipProvider } from "../ui/Tooltip";
 
 // The panes' contents are irrelevant here — this covers the responsive
 // auto-collapse wiring, not what the panes render.
@@ -56,7 +57,13 @@ afterEach(() => {
 
 async function mount() {
   const { TodayPage } = await import("./TodayPage");
-  render(<TodayPage />);
+  // The pane toggles are tooltip triggers; the real tree provides the
+  // provider at the app root.
+  render(
+    <TooltipProvider>
+      <TodayPage />
+    </TooltipProvider>
+  );
 }
 
 const panes = () => useUiStore.getState().todayPanes;
